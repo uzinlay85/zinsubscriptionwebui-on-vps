@@ -78,6 +78,98 @@ export async function addClient(formData: FormData) {
   return { success: true };
 }
 
+export async function addBulkClients(formData: FormData) {
+  const baseName = formData.get("baseName") as string;
+  const quantityStr = formData.get("quantity") as string;
+  const expiryDate = formData.get("expiryDate") as string || null;
+
+  const quantity = parseInt(quantityStr, 10);
+
+  if (!baseName || !quantity || isNaN(quantity) || quantity <= 0) {
+    return { error: "Valid Base Name and Quantity are required" };
+  }
+
+  if (quantity > 50) {
+    return { error: "Maximum 50 clients allowed per bulk request to prevent timeouts." };
+  }
+
+  // 1. Fetch all existing servers
+  const { data: serversData } = await supabase.from("servers").select("*");
+  const servers = (serversData as any[]) || [];
+
+  const createdClients: Array<{ name: string; sub_token: string }> = [];
+  let totalFailedKeys = 0;
+
+  // Process sequentially to avoid overwhelming the APIs and DB
+  for (let i = 1; i <= quantity; i++) {
+    const clientName = `${baseName}-${i}`;
+
+    // 2. Create the client record
+    const { data: newClient, error: clientError } = await supabase
+      .from("clients")
+      .insert({ name: clientName, expiry_date: expiryDate })
+      .select()
+      .single();
+
+    if (clientError || !newClient) {
+      console.error(`Failed to create client ${clientName}:`, clientError);
+      continue; // Skip to next
+    }
+
+    const client = newClient as any;
+    createdClients.push({ name: client.name, sub_token: client.sub_token });
+
+    // 3. Generate keys for this client on all servers
+    const results = await Promise.allSettled(
+      servers.map(async (server) => {
+        let keyId = "";
+        let accessUrl = "";
+
+        if (server.type === "outline" || !server.type) {
+          const keyName = `${server.name} - ${client.name}`;
+          const key = await createOutlineKey(server.api_url, keyName);
+          keyId = key.id;
+          accessUrl = key.accessUrl;
+        } else if (server.type === "hysteria2") {
+          const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
+          const userPass = crypto.randomBytes(3).toString('hex');
+          
+          let expiryDays = null;
+          if (expiryDate) {
+            const diffTime = new Date(expiryDate).getTime() - new Date().getTime();
+            expiryDays = diffTime > 0 ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : 0;
+          }
+
+          await createHysteriaUser(server.api_url, token, client.name, userPass, expiryDays);
+          
+          keyId = userPass;
+          accessUrl = buildHysteriaUri(server.api_url, client.name, userPass, `${server.name} - ${client.name}`);
+        }
+
+        await supabase.from("client_keys").insert({
+          client_id: client.id,
+          server_id: server.id,
+          outline_key_id: keyId,
+          access_url: accessUrl,
+        });
+      })
+    );
+
+    totalFailedKeys += results.filter((r) => r.status === "rejected").length;
+  }
+
+  revalidatePath("/clients");
+  
+  if (createdClients.length === 0) {
+    return { error: "Failed to create any clients." };
+  }
+
+  if (totalFailedKeys > 0) {
+    return { success: true, clients: createdClients, warning: `Created ${createdClients.length} clients, but ${totalFailedKeys} key generations failed across servers.` };
+  }
+  
+  return { success: true, clients: createdClients };
+}
 
 export async function updateClient(formData: FormData) {
   const id = formData.get("id") as string;

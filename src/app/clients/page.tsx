@@ -130,7 +130,7 @@ export default async function ClientsPage() {
               </div>
               
               <div className="flex flex-col sm:flex-row items-center gap-3">
-                <CopyLinkButton token={client.sub_token} />
+                <CopyLinkButton token={client.sub_token} name={client.name} />
 
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <Link 

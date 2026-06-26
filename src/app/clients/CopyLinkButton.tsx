@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Link2, Copy, Check } from "lucide-react";
 
-export function CopyLinkButton({ token }: { token: string }) {
+export function CopyLinkButton({ token, name }: { token: string, name: string }) {
   const [copied, setCopied] = useState(false);
   const [fullUrl, setFullUrl] = useState("");
 
@@ -15,7 +15,8 @@ export function CopyLinkButton({ token }: { token: string }) {
   async function handleCopy() {
     if (!fullUrl) return;
     try {
-      await navigator.clipboard.writeText(fullUrl);
+      const textToCopy = `${name}: ${fullUrl}`;
+      await navigator.clipboard.writeText(textToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
