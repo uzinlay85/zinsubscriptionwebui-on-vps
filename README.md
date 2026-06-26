@@ -68,9 +68,12 @@ CREATE TABLE client_keys (
 #### 2. Deploy to Vercel
 1. Push this repository to your GitHub account.
 2. Import the repository into Vercel.
-3. In the **Environment Variables** section, add:
+3. In the **Environment Variables** section, add the following:
    - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase Project URL
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anon public key
+   - `ADMIN_USERNAME`: Username to login to this dashboard (e.g., `admin`)
+   - `ADMIN_PASSWORD`: Password to login to this dashboard
+   - `AUTH_SECRET`: A random long string for session encryption
 4. Deploy!
 
 ### ⚠️ Important Notes
@@ -142,9 +145,12 @@ CREATE TABLE client_keys (
 #### ၂။ Vercel ပေါ်သို့ တင်ခြင်း (Deployment)
 1. ဤ Repository ကို မိမိ၏ GitHub အကောင့်ထဲသို့ Push လုပ်ပါ။
 2. Vercel ထဲသို့ ဝင်ပြီး ထို Repository ကို **Import** လုပ်ပါ။
-3. Build မလုပ်ခင် **Environment Variables** နေရာတွင် အောက်ပါ ၂ ခုကို ဖြည့်ပေးပါ-
+3. Build မလုပ်ခင် **Environment Variables** နေရာတွင် အောက်ပါတို့ကို ဖြည့်ပေးပါ-
    - `NEXT_PUBLIC_SUPABASE_URL` (Supabase Project Settings > API မှ ယူပါ)
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Supabase မှ `anon public` Key ကို ယူပါ)
+   - `ADMIN_USERNAME`: Admin Panel သို့ ဝင်ရန် မိမိထားလိုသော Username (ဥပမာ - `admin`)
+   - `ADMIN_PASSWORD`: Admin Panel သို့ ဝင်ရန် မိမိထားလိုသော Password
+   - `AUTH_SECRET`: လုံခြုံရေးအတွက် မိမိစိတ်ကြိုက် အင်္ဂလိပ်စာလုံး ရှည်ရှည်တစ်ခု (ဥပမာ - `my_super_secret_key_123`)
 4. **Deploy** ကို နှိပ်လိုက်ပါက အသင့် အသုံးပြုနိုင်ပါပြီ။
 
 ### ⚠️ အရေးကြီးသော အသိပေးချက် (Important Notes)
