@@ -21,6 +21,7 @@ CREATE TABLE clients (
   name TEXT NOT NULL,
   sub_token UUID DEFAULT gen_random_uuid() UNIQUE NOT NULL, -- Subscription link အတွက်
   status TEXT DEFAULT 'active' NOT NULL,
+  expiry_date TIMESTAMP WITH TIME ZONE NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
