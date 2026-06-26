@@ -60,10 +60,10 @@ export function Sidebar() {
       </div>
 
       <div className="p-4 border-t border-white/5 space-y-1">
-        <button className="flex w-full items-center gap-3 px-4 py-3 text-zinc-400 hover:text-white hover:bg-white/5 rounded-xl transition-all duration-200 group">
-          <Settings size={20} className="group-hover:text-zinc-300" />
+        <Link href="/settings" className={`flex w-full items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${pathname === '/settings' ? 'bg-white/10 text-white border border-white/10 shadow-sm' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}>
+          <Settings size={20} className={pathname === '/settings' ? 'text-blue-400' : 'group-hover:text-zinc-300'} />
           <span className="font-medium">Settings</span>
-        </button>
+        </Link>
         <button 
           onClick={handleLogout}
           className="flex w-full items-center gap-3 px-4 py-3 text-red-400/80 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all duration-200 group"
