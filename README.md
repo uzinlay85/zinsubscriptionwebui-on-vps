@@ -27,7 +27,28 @@ A modern, fast, and feature-rich unified web panel to manage both Outline and Hy
    - *Tip: SSH into your Outline VPS and run `cat /opt/outline/access.txt` to find these details.*
 4. **Hysteria2 Server**: Must be running the Hysteria2 Express Backend Admin API.
 
-### 🚀 Installation & Deployment
+### 🌍 How to Add Servers to the Panel
+
+### 1. Outline Server
+To connect an Outline server, you need the API URL and Certificate SHA-256. You can find these on your Outline VPS by running:
+```bash
+cat /opt/outline/access.txt
+```
+Copy the values and fill them in the "Add Server" form:
+- **Server Name**: Any name you want (e.g. `Singapore Premium`). *Note: The panel will auto-detect the IP and add a country flag for you!*
+- **API URL**: Paste the `apiUrl` here (e.g. `https://123.45.67.89:4490/secret_token`).
+- **Cert SHA-256**: Paste the `certSha256` here.
+
+### 2. Hysteria2 Server
+To connect a Hysteria2 server, you must have the **Express Admin API** installed on your server alongside Hysteria2.
+- **Server Name**: Any name you want.
+- **API URL**: The URL of your Express API (e.g. `http://123.45.67.89:3000`).
+- **Admin User**: The `ADMIN_USERNAME` you set in the Express API `.env` file.
+- **Admin Pass**: The `ADMIN_PASSWORD` you set in the Express API `.env` file.
+
+---
+
+## 🚀 Installation & Deployment
 
 #### 1. Setup Supabase Database
 1. Create a new project on [Supabase](https://supabase.com).
@@ -127,7 +148,28 @@ Outline နှင့် Hysteria2 ဆာဗာ နှစ်မျိုးစလ
    - **Outline**: VPS သို့ ဝင်ပြီး `cat /opt/outline/access.txt` ဟု ရိုက်ထည့်ကာ `apiUrl` နှင့် `certSha256` ကို ကူးယူထားပါ။
    - **Hysteria2**: ဆာဗာဘက်တွင် Express Backend API ကို အသင့် Run ထားရပါမည်။
 
-### 🚀 တပ်ဆင်ခြင်း နှင့် အသုံးပြုနည်း (Installation & Deployment)
+### 🌍 Panel သို့ ဆာဗာများ ထည့်သွင်းချိတ်ဆက်နည်း
+
+### ၁။ Outline ဆာဗာ ထည့်နည်း
+Outline ဆာဗာကို ချိတ်ဆက်ရန်အတွက် API URL နှင့် Certificate SHA-256 တို့ လိုအပ်ပါသည်။ သင်၏ Outline VPS အတွင်းသို့ ဝင်၍ အောက်ပါ command ကို ရိုက်ထည့်ပါ -
+```bash
+cat /opt/outline/access.txt
+```
+ထိုအခါ ကျလာသော စာကြောင်းများထဲမှ တန်ဖိုးများကို ယူ၍ Panel ၏ "Add Server" တွင် ဖြည့်ပါ -
+- **Server Name**: မိမိကြိုက်နှစ်သက်ရာ နာမည်ပေးနိုင်ပါသည်။ (မှတ်ချက် - ဆာဗာ၏ IP ကိုကြည့်၍ နိုင်ငံအလံကို အလိုအလျောက် တပ်ပေးသွားမည် ဖြစ်သည်!)
+- **API URL**: `apiUrl` ကို ကူးထည့်ပါ (ဥပမာ - `https://123.45.67.89:4490/secret_token`)။
+- **Cert SHA-256**: `certSha256` ကို ကူးထည့်ပါ။
+
+### ၂။ Hysteria2 ဆာဗာ ထည့်နည်း
+Hysteria2 ဆာဗာကို ချိတ်ဆက်ရန်အတွက် သင်၏ ဆာဗာတွင် Hysteria2 အပြင် **Express Admin API** ကိုပါ ထည့်သွင်းထားရန် လိုအပ်ပါသည်။
+- **Server Name**: မိမိကြိုက်နှစ်သက်ရာ နာမည်ပေးပါ။
+- **API URL**: သင်၏ Express API လင့်ခ်ကို ထည့်ပါ (ဥပမာ - `http://123.45.67.89:3000`)။
+- **Admin User**: Express API ၏ `.env` ထဲတွင် ပေးခဲ့သော `ADMIN_USERNAME` ကို ထည့်ပါ။
+- **Admin Pass**: Express API ၏ `.env` ထဲတွင် ပေးခဲ့သော `ADMIN_PASSWORD` ကို ထည့်ပါ။
+
+---
+
+## 🚀 ထည့်သွင်းနည်း လမ်းညွှန် (Vercel ဖြင့် အခမဲ့တင်နည်း) (Installation & Deployment)
 
 #### ၁။ Supabase Database တည်ဆောက်ခြင်း
 1. [Supabase](https://supabase.com) တွင် Project အသစ်တစ်ခု ဖန်တီးပါ။
