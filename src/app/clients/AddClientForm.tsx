@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { addClient, addBulkClients } from "./actions";
 import { Plus, X, Loader2, Copy, Check, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export function AddClientForm() {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +21,8 @@ export function AddClientForm() {
     setError(null);
     setCreatedClients(null);
     setCopiedAll(false);
+    // Refresh the page data so the new clients show up in the background list
+    router.refresh();
   }
 
   async function handleSubmit(formData: FormData) {

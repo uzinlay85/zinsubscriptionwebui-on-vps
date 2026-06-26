@@ -69,9 +69,8 @@ export async function addClient(formData: FormData) {
     })
   );
 
-  const failed = results.filter((r) => r.status === "rejected").length;
+    const failed = results.filter((r) => r.status === "rejected").length;
 
-  revalidatePath("/clients");
   if (failed > 0) {
     return { success: true, warning: `${failed} server(s) failed to generate keys.` };
   }
@@ -157,8 +156,6 @@ export async function addBulkClients(formData: FormData) {
 
     totalFailedKeys += results.filter((r) => r.status === "rejected").length;
   }
-
-  revalidatePath("/clients");
   
   if (createdClients.length === 0) {
     return { error: "Failed to create any clients." };
