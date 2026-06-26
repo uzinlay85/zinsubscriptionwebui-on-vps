@@ -56,10 +56,12 @@ function makeRequest(
 
 export async function login3xui(apiUrl: string, username?: string, password?: string): Promise<string> {
   const cleanUrl = apiUrl.replace(/\/$/, "");
-  const body = JSON.stringify({ username, password });
+  const body = `username=${encodeURIComponent(username || "")}&password=${encodeURIComponent(password || "")}`;
   const res = await makeRequest(`${cleanUrl}/login`, "POST", {
-    "Content-Type": "application/json",
+    "Content-Type": "application/x-www-form-urlencoded",
     "Content-Length": Buffer.byteLength(body).toString(),
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json, text/plain, */*"
   }, body);
 
   if (res.status !== 200 || !res.data || !res.data.success) {
