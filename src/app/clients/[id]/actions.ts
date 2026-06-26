@@ -87,5 +87,6 @@ export async function removeClientKey(id: string, clientId: string) {
   const { error } = await supabase.from("client_keys").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/clients");
   return { success: true };
 }

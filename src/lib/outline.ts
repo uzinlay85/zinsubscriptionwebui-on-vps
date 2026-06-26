@@ -60,7 +60,8 @@ export async function deleteOutlineKey(
 ): Promise<void> {
   return new Promise((resolve) => {
     try {
-      const url = new URL(`${apiUrl}/access-keys/${keyId}`);
+      const cleanUrl = apiUrl.endsWith("/") ? apiUrl.slice(0, -1) : apiUrl;
+      const url = new URL(`${cleanUrl}/access-keys/${keyId}`);
 
       const options = {
         hostname: url.hostname,
@@ -71,13 +72,31 @@ export async function deleteOutlineKey(
       };
 
       const req = https.request(options, (res) => {
-        res.on("data", () => {});
-        res.on("end", () => resolve()); // always resolve
+        let data = "";
+        res.on("data", (chunk) => data += chunk);
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 400 && res.statusCode !== 404) {
+             console.error(`Outline API delete failed with status ${res.statusCode}:`, data);
+          }
+          resolve();
+        });
       });
 
-      req.on("error", () => resolve()); // silently ignore errors
+      req.on("error", (err) => {
+        console.error("Outline API delete request error:", err);
+        resolve();
+      });
+      
+      // Add timeout to prevent hanging requests
+      req.setTimeout(5000, () => {
+        console.error("Outline API delete request timed out");
+        req.destroy();
+        resolve();
+      });
+      
       req.end();
-    } catch {
+    } catch (err) {
+      console.error("Outline API delete exception:", err);
       resolve();
     }
   });
