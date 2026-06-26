@@ -1,7 +1,8 @@
 import { supabase } from "@/lib/supabase";
 import { AddClientForm } from "./AddClientForm";
 import { CopyLinkButton } from "./CopyLinkButton";
-import { Users, Trash2, Key, Link2, Copy } from "lucide-react";
+import { EditClientForm } from "./EditClientForm";
+import { Users, Trash2, Key } from "lucide-react";
 import Link from "next/link";
 
 export const revalidate = 0; // Disable caching
@@ -61,6 +62,8 @@ export default async function ClientsPage() {
                   >
                     Manage Keys
                   </Link>
+
+                  <EditClientForm client={{ id: client.id, name: client.name }} />
 
                   <form action={async () => {
                     "use server";
