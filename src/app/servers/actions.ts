@@ -12,11 +12,12 @@ export async function addServer(formData: FormData) {
     return { error: "All fields are required" };
   }
 
+  // @ts-expect-error - bypass strict type checking for insert payload
   const { error } = await supabase.from("servers").insert({
     name,
     api_url: apiUrl,
     cert_sha256: certSha256,
-  } as any);
+  });
 
   if (error) {
     return { error: error.message };

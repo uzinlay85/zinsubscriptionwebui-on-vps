@@ -10,9 +10,10 @@ export async function addClient(formData: FormData) {
     return { error: "Name is required" };
   }
 
+  // @ts-expect-error - bypass strict type checking for insert payload
   const { error } = await supabase.from("clients").insert({
     name,
-  } as any);
+  });
 
   if (error) {
     return { error: error.message };
@@ -33,7 +34,8 @@ export async function deleteClient(id: string) {
 
 export async function toggleClientStatus(id: string, currentStatus: string) {
   const newStatus = currentStatus === "active" ? "inactive" : "active";
-  const { error } = await supabase.from("clients").update({ status: newStatus } as any).eq("id", id);
+  // @ts-expect-error - bypass strict type checking for update payload
+  const { error } = await supabase.from("clients").update({ status: newStatus }).eq("id", id);
   
   if (error) {
     return { error: error.message };
