@@ -30,7 +30,7 @@ export async function addServer(formData: FormData) {
     .insert({ 
       name, 
       api_url: apiUrl, 
-      cert_sha256: certSha256 || null,
+      cert_sha256: certSha256 || "none",
       type,
       auth_username: authUsername || null,
       auth_password: authPassword || null
