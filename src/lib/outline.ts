@@ -1,0 +1,52 @@
+import https from "https";
+
+/**
+ * Creates a new access key on an Outline server via its Management API.
+ * Returns { id, accessUrl } on success, or throws on error.
+ */
+export async function createOutlineKey(
+  apiUrl: string,
+  keyName: string
+): Promise<{ id: string; accessUrl: string }> {
+  return new Promise((resolve, reject) => {
+    try {
+      const url = new URL(`${apiUrl}/access-keys`);
+      const body = JSON.stringify({ name: keyName });
+
+      const options = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+        },
+        rejectUnauthorized: false,
+      };
+
+      const req = https.request(options, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+              resolve({ id: String(json.id), accessUrl: json.accessUrl });
+            } else {
+              reject(new Error(`Outline API error: ${data}`));
+            }
+          } catch {
+            reject(new Error("Failed to parse Outline API response"));
+          }
+        });
+      });
+
+      req.on("error", (e) => reject(e));
+      req.write(body);
+      req.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
