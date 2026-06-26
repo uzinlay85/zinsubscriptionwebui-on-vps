@@ -1,17 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LayoutDashboard, Server, Users, Settings } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { LayoutDashboard, Server, Users, Settings, LogOut } from "lucide-react";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
 
   const navItems = [
     { name: "Overview", href: "/", icon: LayoutDashboard },
     { name: "Servers", href: "/servers", icon: Server },
     { name: "Clients", href: "/clients", icon: Users },
   ];
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  };
+
+  // Do not render sidebar on login page
+  if (pathname === "/login") return null;
 
   return (
     <div className="w-64 glass border-r border-white/5 flex flex-col h-screen fixed left-0 top-0">
@@ -49,10 +59,17 @@ export function Sidebar() {
         })}
       </div>
 
-      <div className="p-4 border-t border-white/5">
+      <div className="p-4 border-t border-white/5 space-y-1">
         <button className="flex w-full items-center gap-3 px-4 py-3 text-zinc-400 hover:text-white hover:bg-white/5 rounded-xl transition-all duration-200 group">
           <Settings size={20} className="group-hover:text-zinc-300" />
           <span className="font-medium">Settings</span>
+        </button>
+        <button 
+          onClick={handleLogout}
+          className="flex w-full items-center gap-3 px-4 py-3 text-red-400/80 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all duration-200 group"
+        >
+          <LogOut size={20} className="group-hover:text-red-400" />
+          <span className="font-medium">Logout</span>
         </button>
       </div>
     </div>
