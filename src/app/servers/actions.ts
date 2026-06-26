@@ -134,6 +134,47 @@ export async function deleteServer(id: string) {
   return { success: true };
 }
 
+export async function updateServer(formData: FormData) {
+  const id = formData.get("id") as string;
+  const type = formData.get("type") as string;
+  const name = formData.get("name") as string;
+  const apiUrl = formData.get("apiUrl") as string;
+  const certSha256 = formData.get("certSha256") as string;
+  const authUsername = formData.get("authUsername") as string;
+  const authPassword = formData.get("authPassword") as string;
+
+  if (!id || !name || !apiUrl) {
+    return { error: "ID, Name, and API URL are required" };
+  }
+
+  // Verify Hysteria2 credentials if type is hysteria2
+  if (type === "hysteria2") {
+    try {
+      await loginHysteria(apiUrl, authUsername, authPassword);
+    } catch (err: any) {
+      return { error: `Failed to authenticate with Hysteria2 Server. ${err.message}` };
+    }
+  }
+
+  const { error } = await supabase
+    .from("servers")
+    .update({ 
+      name, 
+      api_url: apiUrl, 
+      cert_sha256: certSha256 || "none",
+      auth_username: authUsername || null,
+      auth_password: authPassword || null
+    })
+    .eq("id", id);
+
+  if (error) {
+    return { error: error.message };
+  }
+  
+  revalidatePath("/servers");
+  return { success: true };
+}
+
 export async function syncServerKeys(serverId: string) {
   // 1. Fetch server details
   const { data: serverData, error: serverError } = await supabase
