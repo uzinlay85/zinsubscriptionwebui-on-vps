@@ -20,7 +20,14 @@ export interface HysteriaUser {
  * @returns JWT token string
  */
 export async function loginHysteria(apiUrl: string, username?: string, password?: string): Promise<string> {
-  const url = `${apiUrl}/api/login`;
+  let baseOrigin = apiUrl;
+  try {
+    baseOrigin = new URL(apiUrl).origin;
+  } catch (e) {
+    // Ignore invalid URL parsing errors
+  }
+  
+  const url = `${baseOrigin}/api/login`;
   
   const res = await fetch(url, {
     method: "POST",
@@ -44,7 +51,9 @@ export async function loginHysteria(apiUrl: string, username?: string, password?
  * Create a new user in Hysteria2
  */
 export async function createHysteriaUser(apiUrl: string, token: string, userUsername: string, userPassword: string): Promise<number> {
-  const url = `${apiUrl}/api/users`;
+  let baseOrigin = apiUrl;
+  try { baseOrigin = new URL(apiUrl).origin; } catch(e) {}
+  const url = `${baseOrigin}/api/users`;
   
   const res = await fetch(url, {
     method: "POST",
@@ -73,8 +82,11 @@ export async function createHysteriaUser(apiUrl: string, token: string, userUser
  * We need to find their ID first by fetching all users and matching the username/password
  */
 export async function deleteHysteriaUser(apiUrl: string, token: string, userPassword: string): Promise<void> {
+  let baseOrigin = apiUrl;
+  try { baseOrigin = new URL(apiUrl).origin; } catch(e) {}
+  
   // 1. Fetch all users
-  const url = `${apiUrl}/api/users`;
+  const url = `${baseOrigin}/api/users`;
   const res = await fetch(url, {
     headers: { "Authorization": `Bearer ${token}` }
   });
@@ -88,7 +100,7 @@ export async function deleteHysteriaUser(apiUrl: string, token: string, userPass
   
   if (targetUser) {
     // 3. Delete the user
-    await fetch(`${apiUrl}/api/users/${targetUser.id}`, {
+    await fetch(`${baseOrigin}/api/users/${targetUser.id}`, {
       method: "DELETE",
       headers: { "Authorization": `Bearer ${token}` }
     });
