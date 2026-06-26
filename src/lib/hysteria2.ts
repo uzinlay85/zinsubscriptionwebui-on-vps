@@ -50,7 +50,7 @@ export async function loginHysteria(apiUrl: string, username?: string, password?
 /**
  * Create a new user in Hysteria2
  */
-export async function createHysteriaUser(apiUrl: string, token: string, userUsername: string, userPassword: string): Promise<number> {
+export async function createHysteriaUser(apiUrl: string, token: string, userUsername: string, userPassword: string, expiryDays?: number | null): Promise<number> {
   let baseOrigin = apiUrl;
   try { baseOrigin = new URL(apiUrl).origin; } catch(e) {}
   const url = `${baseOrigin}/api/users`;
@@ -64,7 +64,7 @@ export async function createHysteriaUser(apiUrl: string, token: string, userUser
     body: JSON.stringify({
       username: userUsername,
       password: userPassword,
-      // No expiry or limit for now, can be added later
+      expiry_days: expiryDays
     })
   });
 
@@ -75,6 +75,47 @@ export async function createHysteriaUser(apiUrl: string, token: string, userUser
 
   const data = await res.json();
   return data.id; // Returns the DB ID of the created user
+}
+
+/**
+ * Update an existing user in Hysteria2 (e.g. to extend expiry)
+ */
+export async function updateHysteriaUser(
+  apiUrl: string, 
+  token: string, 
+  userPassword: string, 
+  userUsername: string, 
+  expiryDays?: number | null
+): Promise<void> {
+  let baseOrigin = apiUrl;
+  try { baseOrigin = new URL(apiUrl).origin; } catch(e) {}
+  
+  // 1. Fetch all users to find the ID by password
+  const url = `${baseOrigin}/api/users`;
+  const res = await fetch(url, {
+    headers: { "Authorization": `Bearer ${token}` }
+  });
+
+  if (!res.ok) return;
+
+  const users: HysteriaUser[] = await res.json();
+  const targetUser = users.find(u => u.password === userPassword);
+  
+  if (targetUser) {
+    // 2. Update the user
+    await fetch(`${baseOrigin}/api/users/${targetUser.id}`, {
+      method: "PUT",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}` 
+      },
+      body: JSON.stringify({
+        username: userUsername,
+        password: userPassword,
+        expiry_days: expiryDays
+      })
+    });
+  }
 }
 
 /**

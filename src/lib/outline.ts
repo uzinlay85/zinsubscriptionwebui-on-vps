@@ -82,3 +82,74 @@ export async function deleteOutlineKey(
     }
   });
 }
+
+/**
+ * Sets a data limit for an access key.
+ */
+export async function setOutlineDataLimit(
+  apiUrl: string,
+  keyId: string,
+  limitBytes: number
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      const url = new URL(`${apiUrl}/access-keys/${keyId}/data-limit`);
+      const body = JSON.stringify({ limit: { bytes: limitBytes } });
+
+      const options = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+        },
+        rejectUnauthorized: false,
+      };
+
+      const req = https.request(options, (res) => {
+        res.on("data", () => {});
+        res.on("end", () => resolve());
+      });
+
+      req.on("error", (e) => reject(e));
+      req.write(body);
+      req.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+/**
+ * Removes the data limit for an access key.
+ */
+export async function removeOutlineDataLimit(
+  apiUrl: string,
+  keyId: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      const url = new URL(`${apiUrl}/access-keys/${keyId}/data-limit`);
+
+      const options = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        method: "DELETE",
+        rejectUnauthorized: false,
+      };
+
+      const req = https.request(options, (res) => {
+        res.on("data", () => {});
+        res.on("end", () => resolve());
+      });
+
+      req.on("error", (e) => reject(e));
+      req.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}

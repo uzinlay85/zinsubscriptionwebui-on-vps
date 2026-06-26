@@ -2,12 +2,13 @@
 
 import { supabase } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
-import { createOutlineKey, deleteOutlineKey } from "@/lib/outline";
-import { loginHysteria, createHysteriaUser, buildHysteriaUri, deleteHysteriaUser } from "@/lib/hysteria2";
+import { createOutlineKey, deleteOutlineKey, setOutlineDataLimit, removeOutlineDataLimit } from "@/lib/outline";
+import { loginHysteria, createHysteriaUser, buildHysteriaUri, deleteHysteriaUser, updateHysteriaUser } from "@/lib/hysteria2";
 import crypto from "crypto";
 
 export async function addClient(formData: FormData) {
   const name = formData.get("name") as string;
+  const expiryDate = formData.get("expiryDate") as string || null;
 
   if (!name) {
     return { error: "Name is required" };
@@ -16,7 +17,7 @@ export async function addClient(formData: FormData) {
   // 1. Create the client record
   const { data: newClient, error: clientError } = await supabase
     .from("clients")
-    .insert({ name })
+    .insert({ name, expiry_date: expiryDate })
     .select()
     .single();
 
@@ -46,7 +47,14 @@ export async function addClient(formData: FormData) {
         const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
         // Generate random password for Hysteria2 user
         const userPass = crypto.randomBytes(3).toString('hex');
-        await createHysteriaUser(server.api_url, token, name, userPass);
+        
+        let expiryDays = null;
+        if (expiryDate) {
+          const diffTime = new Date(expiryDate).getTime() - new Date().getTime();
+          expiryDays = diffTime > 0 ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : 0;
+        }
+
+        await createHysteriaUser(server.api_url, token, name, userPass, expiryDays);
         
         keyId = userPass;
         accessUrl = buildHysteriaUri(server.api_url, name, userPass, `${server.name} - ${name}`);
@@ -74,16 +82,69 @@ export async function addClient(formData: FormData) {
 export async function updateClient(formData: FormData) {
   const id = formData.get("id") as string;
   const name = formData.get("name") as string;
+  const expiryDate = formData.get("expiryDate") as string || null;
 
   if (!id || !name) {
     return { error: "ID and Name are required" };
   }
 
-  const { error } = await supabase.from("clients").update({ name }).eq("id", id);
+  // 1. Update the client in Supabase
+  const { error } = await supabase
+    .from("clients")
+    .update({ name, expiry_date: expiryDate })
+    .eq("id", id);
 
   if (error) {
     return { error: error.message };
   }
+
+  // 2. Fetch all keys to update them on servers
+  const { data: keysData } = await supabase
+    .from("client_keys")
+    .select("*, servers(api_url, type, auth_username, auth_password)")
+    .eq("client_id", id);
+    
+  const keys = (keysData as any[]) || [];
+
+  // Calculate new expiry_days
+  let expiryDays = null;
+  const isExpired = expiryDate ? new Date(expiryDate).getTime() <= new Date().getTime() : false;
+  
+  if (expiryDate && !isExpired) {
+    const diffTime = new Date(expiryDate).getTime() - new Date().getTime();
+    expiryDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  } else if (isExpired) {
+    expiryDays = 0;
+  }
+
+  // If we just extended a previously expired client, mark them as active again
+  if (!isExpired) {
+    await supabase.from("clients").update({ status: "active" }).eq("id", id);
+  }
+
+  await Promise.allSettled(
+    keys.map(async (key) => {
+      const server = key.servers;
+      if (!server || !key.outline_key_id) return;
+
+      if (server.type === "outline" || !server.type) {
+        // If not expired, ensure data limit is removed so they can reconnect
+        // (If expired, cron job will handle blocking them, but we could also block here)
+        if (!isExpired) {
+          await removeOutlineDataLimit(server.api_url, key.outline_key_id).catch(() => {});
+        } else {
+          await setOutlineDataLimit(server.api_url, key.outline_key_id, 1).catch(() => {});
+        }
+      } else if (server.type === "hysteria2") {
+        try {
+          const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
+          await updateHysteriaUser(server.api_url, token, key.outline_key_id, name, expiryDays);
+        } catch (err) {
+          console.error("Failed to update Hysteria user", err);
+        }
+      }
+    })
+  );
 
   revalidatePath("/clients");
   return { success: true };

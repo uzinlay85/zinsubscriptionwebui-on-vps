@@ -113,6 +113,11 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             <span className={`text-sm px-2.5 py-0.5 rounded-full ${client.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-400'}`}>
               {client.status.toUpperCase()}
             </span>
+            {client.expiry_date && (
+              <span className={`text-sm px-2.5 py-0.5 rounded-full ${new Date(client.expiry_date) < new Date() ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-blue-500/10 text-blue-400'}`}>
+                {new Date(client.expiry_date) < new Date() ? "EXPIRED" : `Valid till ${new Date(client.expiry_date).toLocaleDateString()}`}
+              </span>
+            )}
           </h1>
           <p className="text-zinc-400 mt-2 font-mono text-sm bg-white/5 inline-block px-3 py-1 rounded-lg">
             Subscription Token: {client.sub_token}

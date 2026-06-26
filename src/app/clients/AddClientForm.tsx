@@ -63,6 +63,16 @@ export function AddClientForm() {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-1">Expiry Date (Optional)</label>
+                <input 
+                  type="date" 
+                  name="expiryDate" 
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors [color-scheme:dark]"
+                />
+                <p className="text-xs text-zinc-500 mt-1">If set, access will be revoked after this date.</p>
+              </div>
+
               <div className="pt-4 flex justify-end gap-3">
                 <button 
                   type="button" 

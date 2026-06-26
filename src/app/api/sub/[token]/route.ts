@@ -18,7 +18,7 @@ export async function GET(
     .eq("sub_token", token)
     .single();
 
-  const client = data as { id: string; name: string; status: string } | null;
+  const client = data as { id: string; name: string; status: string; expiry_date: string | null } | null;
 
   if (clientError || !client) {
     return new NextResponse("Invalid subscription token", { status: 401 });
@@ -26,6 +26,10 @@ export async function GET(
 
   if (client.status !== "active") {
     return new NextResponse("Subscription is inactive", { status: 403 });
+  }
+
+  if (client.expiry_date && new Date(client.expiry_date).getTime() <= new Date().getTime()) {
+    return new NextResponse("Subscription has expired. Please renew.", { status: 403 });
   }
 
   // Fetch all access keys for this client, joined with server name

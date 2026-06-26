@@ -115,6 +115,11 @@ export default async function ClientsPage() {
                     <span className="text-xs text-zinc-500 flex items-center gap-1">
                       <Key size={12} /> {keysCount} key{keysCount !== 1 ? 's' : ''}
                     </span>
+                    {client.expiry_date && (
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${new Date(client.expiry_date) < new Date() ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-blue-500/10 text-blue-400'}`}>
+                        {new Date(client.expiry_date) < new Date() ? "EXPIRED" : `Valid till ${new Date(client.expiry_date).toLocaleDateString()}`}
+                      </span>
+                    )}
                     {/* Live Usage Badge */}
                     <span className="text-xs flex items-center gap-1 bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-mono font-medium">
                       <Activity size={11} />
@@ -135,7 +140,7 @@ export default async function ClientsPage() {
                     Manage Keys
                   </Link>
 
-                  <EditClientForm client={{ id: client.id, name: client.name }} />
+                  <EditClientForm client={{ id: client.id, name: client.name, expiry_date: client.expiry_date }} />
 
                   <form action={async () => {
                     "use server";
