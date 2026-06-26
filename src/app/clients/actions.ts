@@ -33,7 +33,7 @@ export async function deleteClient(id: string) {
 
 export async function toggleClientStatus(id: string, currentStatus: string) {
   const newStatus = currentStatus === "active" ? "inactive" : "active";
-  const { error } = await supabase.from("clients").update({ status: newStatus }).eq("id", id);
+  const { error } = await supabase.from("clients").update({ status: newStatus } as any).eq("id", id);
   
   if (error) {
     return { error: error.message };
