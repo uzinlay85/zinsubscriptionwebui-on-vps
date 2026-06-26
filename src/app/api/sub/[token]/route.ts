@@ -87,8 +87,6 @@ export async function GET(
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-store, max-age=0",
       ...(userinfoHeader ? { "Subscription-Userinfo": userinfoHeader } : {}),
-      "profile-update-interval": "12",
-      "profile-title": client.name,
     },
   });
 }
