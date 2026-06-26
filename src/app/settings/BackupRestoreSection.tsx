@@ -261,12 +261,15 @@ export function BackupRestoreSection() {
               value={webdavUrl}
               onChange={(e) => setWebdavUrl(e.target.value)}
               className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-purple-500 transition-colors text-sm"
-              placeholder="e.g. https://app.koofr.net/dav/Koofr/Backups/"
+              placeholder="e.g. https://app.koofr.net/dav/Koofr"
               required
             />
+            <p className="text-xs text-zinc-500 mt-1.5">
+              * Koofr URL format: <code className="text-purple-400 bg-purple-500/10 px-1 rounded">https://app.koofr.net/dav/Koofr</code> or add your folder name at the end.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
             <div>
               <label className="block text-sm font-medium text-zinc-400 mb-1">Username</label>
               <input
@@ -274,11 +277,12 @@ export function BackupRestoreSection() {
                 value={webdavUser}
                 onChange={(e) => setWebdavUser(e.target.value)}
                 className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-purple-500 transition-colors text-sm"
+                placeholder="email@example.com"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">Password / App Password</label>
+              <label className="block text-sm font-medium text-zinc-400 mb-1">App Password</label>
               <input
                 type="password"
                 value={webdavPass}
@@ -286,6 +290,9 @@ export function BackupRestoreSection() {
                 className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-purple-500 transition-colors text-sm"
                 required
               />
+              <p className="text-[11px] text-zinc-500 mt-1.5 leading-tight">
+                * Must use an <strong>App Password</strong> generated from Koofr Settings &gt; Password. Do not use your main login password.
+              </p>
             </div>
           </div>
 

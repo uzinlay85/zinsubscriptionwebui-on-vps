@@ -92,6 +92,16 @@ ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
 - **Vercel Cron Limit**: The automatic Outline key blocking feature uses Vercel Cron (`vercel.json`). On Vercel's free **Hobby plan**, cron jobs can only run **once per day**. Expiry enforcement will happen daily.
 - **Hysteria2 Backend**: Your Hysteria2 servers must be running the matching Express Admin API for this panel to communicate with them.
 
+### ☁️ Cloud Backup Setup (WebDAV / Koofr)
+The panel supports daily automated database backups to WebDAV services like Koofr or Nextcloud.
+1. Create a free account on [Koofr](https://koofr.eu).
+2. Go to Koofr **Preferences > Password > App Passwords** and generate a new password (e.g., name it "Outline Panel").
+3. In your panel's **Settings > Backup & Restore**:
+   - **URL**: `https://app.koofr.net/dav/Koofr` (Add `/FolderName` at the end if you want to save to a specific folder).
+   - **Username**: Your Koofr email address.
+   - **Password**: The **App Password** you just generated.
+4. Turn on **Enable Daily Auto Backup** and click **Save Settings**. 
+
 ---
 
 ## 🇲🇲 မြန်မာဘာသာ လမ်းညွှန်
@@ -181,3 +191,13 @@ ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
 ### ⚠️ အရေးကြီးသော အသိပေးချက် (Important Notes)
 - **Vercel Cron Limit**: Outline Key များကို သက်တမ်းစစ်ဆေးပြီး အလိုအလျောက် ပိတ်ပေးမည့်စနစ် (Cron Job) သည် Vercel ၏ Free (Hobby) Plan အရ **တစ်နေ့လျှင် (၁) ကြိမ်သာ** အလုပ်လုပ်ပါမည်။ (တစ်ရက်လျှင် တစ်ကြိမ် ပုံမှန် စစ်ဆေးပိတ်ချပေးသွားမည် ဖြစ်သည်။)
 - **Hysteria2 API**: Hysteria2 ကို ဤ Panel နှင့် ချိတ်ဆက်အသုံးပြုရန်အတွက် ဆာဗာတွင် Express Backend API ကို သွင်းထားရန် လိုအပ်ပါသည်။
+
+### ☁️ Cloud Auto Backup ထည့်သွင်းနည်း (WebDAV / Koofr)
+Database တစ်ခုလုံးကို Cloud ပေါ်သို့ နေ့စဉ် အလိုအလျောက် သိမ်းဆည်းပေးမည့် (Auto Backup) စနစ်ကို WebDAV အသုံးပြု၍ ပြုလုပ်နိုင်ပါသည်။
+1. [Koofr](https://koofr.eu) တွင် အခမဲ့ အကောင့်တစ်ခု ဖွင့်ပါ။
+2. Koofr ၏ **Preferences > Password > App Passwords** သို့သွားကာ Password အသစ်တစ်ခု ထုတ်ယူပါ (ဥပမာ "Outline Panel" ဟု နာမည်ပေးပါ)။
+3. သင်၏ Panel ရှိ **Settings > Backup & Restore** သို့သွားပြီး-
+   - **URL**: `https://app.koofr.net/dav/Koofr` (Folder သီးသန့်ခွဲထားလိုပါက နောက်တွင် `/FolderName` ထည့်ပေးပါ)။
+   - **Username**: သင်၏ Koofr အကောင့် (Email)
+   - **Password**: ခုနက အသစ်ထုတ်ထားသော **App Password** 
+4. **Enable Daily Auto Backup** ကို ဖွင့်ပြီး **Save Settings** နှိပ်လိုက်ပါ။ နေ့စဉ် ညဘက်တိုင်း အလိုအလျောက် သိမ်းပေးသွားပါမည်။
