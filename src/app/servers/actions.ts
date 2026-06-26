@@ -24,7 +24,17 @@ export async function addServer(formData: FormData) {
     return { error: "Admin Username and Password are required for Hysteria2" };
   }
 
-  // 1. Create the server record
+  // 1. Authenticate with Hysteria2 FIRST to prevent dangling servers
+  let hy2Token = "";
+  if (type === "hysteria2") {
+    try {
+      hy2Token = await loginHysteria(apiUrl, authUsername, authPassword);
+    } catch (err: any) {
+      return { error: `Failed to authenticate with Hysteria2 Server. ${err.message}` };
+    }
+  }
+
+  // 2. Create the server record
   const { data: newServer, error: serverError } = await supabase
     .from("servers")
     .insert({ 
@@ -44,22 +54,14 @@ export async function addServer(formData: FormData) {
 
   const server = newServer as any;
 
-  // 2. Fetch all existing active clients
+  // 3. Fetch all existing active clients
   const { data: clientsData } = await supabase
     .from("clients")
     .select("*")
     .eq("status", "active");
   const clients = (clientsData as any[]) || [];
 
-  // 3. Auto-generate a key on this new server for every existing client
-  let hy2Token = "";
-  if (type === "hysteria2" && clients.length > 0) {
-    try {
-      hy2Token = await loginHysteria(apiUrl, authUsername, authPassword);
-    } catch (err) {
-      return { error: "Failed to authenticate with Hysteria2 Server" };
-    }
-  }
+  // 4. Auto-generate a key on this new server for every existing client
 
   const results = await Promise.allSettled(
     clients.map(async (client) => {
