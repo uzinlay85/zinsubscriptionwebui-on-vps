@@ -6,6 +6,8 @@ export async function GET(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
+  const url = new URL(request.url);
+  const format = url.searchParams.get("format") || "base64"; // base64 or text
 
   if (!token) {
     return new NextResponse("Token is missing", { status: 400 });
@@ -80,15 +82,34 @@ export async function GET(
       try {
         const fetchUrl = `${apiUrl}/sub/${uuid}`;
         // Revalidate sublinks every 60 seconds so it doesn't block constantly
-        const res = await fetch(fetchUrl, { next: { revalidate: 60 } });
+        // Add User-Agent to avoid 3x-ui blocking the request
+        const res = await fetch(fetchUrl, { 
+          next: { revalidate: 60 },
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+          }
+        });
         if (res.ok) {
-           const b64 = await res.text();
-           const decoded = Buffer.from(b64, "base64").toString("utf-8");
+           const bodyText = await res.text();
+           let decoded = bodyText;
+           // 3x-ui can return base64 OR plain text depending on User-Agent.
+           // If the text does not contain '://', we assume it's base64 encoded.
+           if (!bodyText.includes("://")) {
+             try {
+               decoded = Buffer.from(bodyText, "base64").toString("utf-8");
+             } catch (e) {
+               // Ignore decode error and fallback to bodyText
+             }
+           }
+           
            const links = decoded.split("\n").filter(l => l.trim().length > 0);
            return links.map(l => {
              const baseUrl = l.split("#")[0];
              return `${baseUrl}#${encodeURIComponent(keyLabel)}`;
            }).join("\n");
+        } else {
+           console.error(`3x-ui sub fetch failed with status ${res.status}`);
         }
       } catch (err) {
         console.error("Failed to fetch 3x-ui sub link", err);
@@ -102,6 +123,17 @@ export async function GET(
 
   const urls = urlsArray.filter(u => u !== null).join("\n");
   const finalUrls = dummyNode + urls;
+
+  if (format === "text") {
+    return new NextResponse(finalUrls, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store, max-age=0",
+        ...(userinfoHeader ? { "Subscription-Userinfo": userinfoHeader } : {}),
+      },
+    });
+  }
 
   // Base64 encode the string (standard for V2Ray / Shadowsocks subscriptions)
   const base64Urls = Buffer.from(finalUrls).toString("base64");
