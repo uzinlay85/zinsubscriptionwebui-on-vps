@@ -29,10 +29,12 @@ export async function GET(
   }
 
   // Fetch all access URLs for this client
-  const { data: clientKeys, error: keysError } = await supabase
+  const { data: keysData, error: keysError } = await supabase
     .from("client_keys")
-    .select("access_url")
+    .select("*")
     .eq("client_id", client.id);
+
+  const clientKeys = keysData as { access_url: string }[] | null;
 
   if (keysError || !clientKeys) {
     return new NextResponse("Error fetching keys", { status: 500 });
