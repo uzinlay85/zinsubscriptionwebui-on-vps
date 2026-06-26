@@ -32,7 +32,7 @@ export function Sidebar() {
             <div className="bg-primary p-2 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
               <Server size={24} />
             </div>
-            <h1 className="font-bold text-xl tracking-tight">Outline Panel</h1>
+            <h1 className="font-bold text-xl tracking-tight">Universal Panel</h1>
           </div>
         </div>
 

@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Outline Subscription Panel",
-  description: "Manage your Outline servers and clients securely.",
+  title: "Universal Proxy Panel",
+  description: "Manage your Outline and Hysteria2 servers securely.",
 };
 
 export default function RootLayout({
