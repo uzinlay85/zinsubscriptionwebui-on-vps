@@ -28,6 +28,10 @@ async function fetchServerMetrics(apiUrl: string): Promise<Record<string, number
           }
         });
       });
+      req.setTimeout(3000, () => {
+        req.destroy();
+        resolve({});
+      });
       req.on("error", () => resolve({}));
       req.end();
     } catch {

@@ -97,7 +97,7 @@ export function ClientList({ clients, servers, initialUsage }: { clients: any[],
                     </span>
                   ) : (
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isStatusActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-400'}`}>
-                      {client.status.toUpperCase()}
+                      {(client.status || 'ACTIVE').toUpperCase()}
                     </span>
                   )}
 
