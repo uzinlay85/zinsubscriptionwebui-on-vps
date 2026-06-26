@@ -19,11 +19,14 @@ export function AddServerForm() {
       
       if (result?.error) {
         setError(result.error);
+        window.alert("Error adding server: " + result.error);
       } else {
+        window.alert("Server added successfully!");
         setIsOpen(false);
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
+      window.alert("Exception: " + (err.message || "An unexpected error occurred."));
     } finally {
       setLoading(false);
     }
