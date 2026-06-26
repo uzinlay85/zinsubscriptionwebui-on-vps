@@ -2,7 +2,6 @@ import https from "https";
 
 /**
  * Creates a new access key on an Outline server via its Management API.
- * Returns { id, accessUrl } on success, or throws on error.
  */
 export async function createOutlineKey(
   apiUrl: string,
@@ -47,6 +46,39 @@ export async function createOutlineKey(
       req.end();
     } catch (e) {
       reject(e);
+    }
+  });
+}
+
+/**
+ * Deletes an access key from an Outline server via its Management API.
+ * Silently succeeds even if the key doesn't exist on the server.
+ */
+export async function deleteOutlineKey(
+  apiUrl: string,
+  keyId: string
+): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      const url = new URL(`${apiUrl}/access-keys/${keyId}`);
+
+      const options = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        method: "DELETE",
+        rejectUnauthorized: false,
+      };
+
+      const req = https.request(options, (res) => {
+        res.on("data", () => {});
+        res.on("end", () => resolve()); // always resolve
+      });
+
+      req.on("error", () => resolve()); // silently ignore errors
+      req.end();
+    } catch {
+      resolve();
     }
   });
 }

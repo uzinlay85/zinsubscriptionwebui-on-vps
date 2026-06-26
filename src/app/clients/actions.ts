@@ -2,7 +2,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
-import { createOutlineKey } from "@/lib/outline";
+import { createOutlineKey, deleteOutlineKey } from "@/lib/outline";
 
 export async function addClient(formData: FormData) {
   const name = formData.get("name") as string;
@@ -71,6 +71,25 @@ export async function updateClient(formData: FormData) {
 }
 
 export async function deleteClient(id: string) {
+  // 1. Fetch all keys for this client with server details
+  const { data: keysData } = await supabase
+    .from("client_keys")
+    .select("*, servers(api_url)")
+    .eq("client_id", id);
+
+  const keys = (keysData as any[]) || [];
+
+  // 2. Delete each key from the Outline server in parallel
+  await Promise.allSettled(
+    keys.map(async (key) => {
+      const apiUrl = key.servers?.api_url;
+      if (apiUrl && key.outline_key_id) {
+        await deleteOutlineKey(apiUrl, key.outline_key_id);
+      }
+    })
+  );
+
+  // 3. Delete the client from DB (client_keys will cascade or be deleted too)
   const { error } = await supabase.from("clients").delete().eq("id", id);
   if (error) {
     return { error: error.message };

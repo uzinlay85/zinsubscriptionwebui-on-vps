@@ -2,7 +2,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
-import { createOutlineKey } from "@/lib/outline";
+import { createOutlineKey, deleteOutlineKey } from "@/lib/outline";
 
 export async function assignServerToClient(formData: FormData) {
   const clientId = formData.get("clientId") as string;
@@ -46,6 +46,21 @@ export async function assignServerToClient(formData: FormData) {
 }
 
 export async function removeClientKey(id: string, clientId: string) {
+  // 1. Fetch key with server details before deleting
+  const { data: keyData } = await supabase
+    .from("client_keys")
+    .select("*, servers(api_url)")
+    .eq("id", id)
+    .single();
+
+  const key = keyData as any;
+
+  // 2. Delete from Outline server first
+  if (key?.servers?.api_url && key?.outline_key_id) {
+    await deleteOutlineKey(key.servers.api_url, key.outline_key_id);
+  }
+
+  // 3. Delete from DB
   const { error } = await supabase.from("client_keys").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath(`/clients/${clientId}`);
