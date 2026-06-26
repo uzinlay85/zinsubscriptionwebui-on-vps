@@ -68,6 +68,18 @@ export async function removeClientKey(id: string, clientId: string) {
       } catch (err) {
         console.error("Failed to delete Hysteria user", err);
       }
+    } else if (server.type === "3x-ui") {
+      try {
+        const { login3xui, deleteClient3xui } = await import("@/lib/3x-ui");
+        const cookie = await login3xui(server.api_url, server.auth_username, server.auth_password);
+        const serverDetails = await supabase.from("servers").select("inbound_id").eq("id", key.server_id).single();
+        const inboundId = serverDetails.data?.inbound_id;
+        if (inboundId) {
+          await deleteClient3xui(server.api_url, cookie, inboundId, key.outline_key_id);
+        }
+      } catch (err) {
+        console.error("Failed to delete 3x-ui user", err);
+      }
     }
   }
 

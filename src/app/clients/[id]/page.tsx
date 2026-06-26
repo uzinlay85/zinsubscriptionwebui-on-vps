@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { AddClientKeyForm } from "./AddClientKeyForm";
 import { SyncClientButton } from "./SyncClientButton";
+import { DeleteKeyButton } from "./DeleteKeyButton";
 import { ArrowLeft, Key, Server, Trash2, Activity, BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -187,14 +188,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                       </p>
                     </div>
                     
-                    <form action={async () => {
-                      "use server";
-                      await supabase.from("client_keys").delete().eq("id", key.id);
-                    }}>
-                      <button type="submit" className="text-zinc-500 hover:text-red-400 p-2 hover:bg-red-400/10 rounded-xl transition-colors mt-4 md:mt-0" title="Remove Access">
-                        <Trash2 size={18} />
-                      </button>
-                    </form>
+                    <DeleteKeyButton keyId={key.id} clientId={client.id} />
                   </div>
                 </div>
 
