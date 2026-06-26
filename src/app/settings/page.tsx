@@ -1,4 +1,5 @@
 import { KeyRound, Shield, AlertTriangle } from "lucide-react";
+import { BackupRestoreSection } from "./BackupRestoreSection";
 
 export const revalidate = 0;
 
@@ -71,6 +72,8 @@ export default function SettingsPage() {
           </div>
 
         </div>
+        
+        <BackupRestoreSection />
       </div>
     </div>
   );
