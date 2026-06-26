@@ -78,7 +78,7 @@ export async function addServer(formData: FormData) {
         const userPass = crypto.randomBytes(3).toString('hex');
         await createHysteriaUser(apiUrl, hy2Token, client.name, userPass);
         keyId = userPass; // Use password as key ID since it's unique
-        accessUrl = buildHysteriaUri(apiUrl, userPass, `${name} - ${client.name}`);
+        accessUrl = buildHysteriaUri(apiUrl, client.name, userPass, `${name} - ${client.name}`);
       }
 
       await supabase.from("client_keys").insert({

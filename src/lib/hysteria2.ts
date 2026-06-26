@@ -110,15 +110,15 @@ export async function deleteHysteriaUser(apiUrl: string, token: string, userPass
 /**
  * Build a hysteria2:// URI
  */
-export function buildHysteriaUri(domainUrl: string, password: string, name: string): string {
+export function buildHysteriaUri(domainUrl: string, username: string, password: string, name: string): string {
   try {
     const url = new URL(domainUrl);
     // Remove protocol and add hysteria2://
     const host = url.hostname;
-    // Default port is 443
-    return `hysteria2://${password}@${host}:443/?sni=${host}&name=${encodeURIComponent(name)}`;
+    // Default port is 443. Append standard port hopping (mport=20000-50000) for Hysteria2
+    return `hysteria2://${username}:${password}@${host}:443/?sni=${host}&mport=20000-50000#${encodeURIComponent(name)}`;
   } catch (e) {
     // Fallback if domainUrl is invalid
-    return `hysteria2://${password}@${domainUrl}:443/?sni=${domainUrl}&name=${encodeURIComponent(name)}`;
+    return `hysteria2://${username}:${password}@${domainUrl}:443/?sni=${domainUrl}&mport=20000-50000#${encodeURIComponent(name)}`;
   }
 }

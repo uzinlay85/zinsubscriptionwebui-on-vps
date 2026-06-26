@@ -49,7 +49,7 @@ export async function addClient(formData: FormData) {
         await createHysteriaUser(server.api_url, token, name, userPass);
         
         keyId = userPass;
-        accessUrl = buildHysteriaUri(server.api_url, userPass, `${server.name} - ${name}`);
+        accessUrl = buildHysteriaUri(server.api_url, name, userPass, `${server.name} - ${name}`);
       }
 
       await supabase.from("client_keys").insert({

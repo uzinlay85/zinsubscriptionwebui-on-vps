@@ -48,21 +48,6 @@ export async function GET(
     const serverName = k.servers?.name ?? "Server";
     const keyLabel = `${serverName} - ${client.name}`;
     const baseUrl = k.access_url.split("#")[0];
-
-    // If it's a Hysteria2 link, it uses ?name= instead of #
-    if (baseUrl.startsWith("hysteria2://")) {
-      // Assuming buildHysteriaUri already set the name, we can just return it.
-      // But if we want to enforce it:
-      try {
-        const urlObj = new URL(baseUrl);
-        urlObj.searchParams.set("name", keyLabel);
-        return urlObj.toString();
-      } catch (e) {
-        return baseUrl;
-      }
-    }
-    
-    // Default Outline Shadowsocks behavior
     return `${baseUrl}#${encodeURIComponent(keyLabel)}`;
   }).join("\n");
 
