@@ -120,7 +120,7 @@ export function ClientList({ clients, servers, initialUsage }: { clients: any[],
               </div>
             </div>
             
-            <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
               <CopyLinkButton token={client.sub_token} name={client.name} />
 
               <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -131,22 +131,24 @@ export function ClientList({ clients, servers, initialUsage }: { clients: any[],
                   Manage Keys
                 </Link>
                 
-                <EditClientForm client={{ id: client.id, name: client.name, expiry_date: client.expiry_date }} />
+                <div className="shrink-0 flex items-center gap-1 sm:gap-2">
+                  <EditClientForm client={{ id: client.id, name: client.name, expiry_date: client.expiry_date }} />
 
-                <form action={deleteClient} onSubmit={(e) => {
-                  if (!confirm("Are you sure you want to delete this client? All their keys will also be permanently deleted. This action cannot be undone.")) {
-                    e.preventDefault();
-                  }
-                }}>
-                  <input type="hidden" name="id" value={client.id} />
-                  <button 
-                    type="submit" 
-                    className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors w-full sm:w-auto flex justify-center"
-                    title="Delete Client"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </form>
+                  <form action={deleteClient} onSubmit={(e) => {
+                    if (!confirm("Are you sure you want to delete this client? All their keys will also be permanently deleted. This action cannot be undone.")) {
+                      e.preventDefault();
+                    }
+                  }} className="shrink-0 m-0 p-0 flex">
+                    <input type="hidden" name="id" value={client.id} />
+                    <button 
+                      type="submit" 
+                      className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors flex justify-center"
+                      title="Delete Client"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </form>
+                </div>
               </div>
             </div>
           </div>

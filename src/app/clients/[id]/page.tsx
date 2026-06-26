@@ -172,23 +172,25 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                     </div>
                   </div>
                   
-                  <div className="w-full md:w-auto flex items-center gap-4">
+                  <div className="w-full md:w-auto flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 sm:gap-4 mt-3 md:mt-0">
                     {/* Usage Badge */}
-                    <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-lg">
+                    <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-lg shrink-0">
                       <Activity size={14} className="text-emerald-400" />
                       <span className="text-sm font-mono font-medium text-white">
                         {formatBytes(keyUsage)}
                       </span>
                     </div>
 
-                    <div className="flex-1 md:flex-none">
+                    <div className="flex-1 min-w-[150px]">
                       <p className="text-xs text-zinc-500 mb-1">Access URL</p>
-                      <p className="text-sm font-mono text-zinc-300 truncate max-w-[200px] lg:max-w-[300px] bg-white/5 px-2 py-1.5 rounded-md">
+                      <p className="text-sm font-mono text-zinc-300 truncate max-w-full bg-white/5 px-2 py-1.5 rounded-md">
                         {key.access_url}
                       </p>
                     </div>
                     
-                    <DeleteKeyButton keyId={key.id} clientId={client.id} />
+                    <div className="shrink-0">
+                      <DeleteKeyButton keyId={key.id} clientId={client.id} />
+                    </div>
                   </div>
                 </div>
 

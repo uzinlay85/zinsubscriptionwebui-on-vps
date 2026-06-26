@@ -23,7 +23,7 @@ export function DeleteKeyButton({ keyId, clientId }: { keyId: string; clientId: 
       type="button"
       onClick={handleDelete}
       disabled={isPending}
-      className="text-zinc-500 hover:text-red-400 p-2 hover:bg-red-400/10 rounded-xl transition-colors mt-4 md:mt-0 disabled:opacity-50"
+      className="text-zinc-500 hover:text-red-400 p-2 hover:bg-red-400/10 rounded-xl transition-colors disabled:opacity-50"
       title="Remove Access"
     >
       {isPending ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}

@@ -40,7 +40,7 @@ export function EditClientForm({ client }: { client: { id: string; name: string;
 
       {isOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in">
-          <div className="glass-card w-full max-w-md p-6 relative">
+          <div className="glass-card w-full max-w-md p-5 sm:p-6 relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsOpen(false)}
               className="absolute right-4 top-4 text-zinc-400 hover:text-white transition-colors"
