@@ -2,24 +2,53 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const PUBLIC_PATHS = [
-  "/login",
-  "/api/auth/login",
-  "/api/auth/logout",
   "/api/sub", // subscription links must be public
 ];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow public paths
+  // 1. Always allow public paths
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }
 
-  // Check for auth cookie
-  const authCookie = request.cookies.get("admin_auth");
+  const secretPath = process.env.ADMIN_SECRET_PATH;
+  const pathAuthCookie = request.cookies.get("path_auth");
 
-  if (!authCookie || authCookie.value !== process.env.AUTH_SECRET) {
+  // 2. If the user hits the exact secret path
+  if (secretPath && pathname === `/${secretPath}`) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    const response = NextResponse.redirect(url);
+    // Set cookie to remember they passed the secret gate
+    response.cookies.set("path_auth", "valid", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+    return response;
+  }
+
+  // 3. If they don't have the path_auth cookie, block access (return 404)
+  if (secretPath && pathAuthCookie?.value !== "valid") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/404";
+    return NextResponse.rewrite(url);
+  }
+
+  // --- User has passed the secret path gate ---
+
+  // 4. Handle Username/Password Auth for protected admin routes
+  const adminAuthCookie = request.cookies.get("admin_auth");
+
+  // Allow access to login page
+  if (pathname === "/login" || pathname.startsWith("/api/auth/")) {
+    return NextResponse.next();
+  }
+
+  if (!adminAuthCookie || adminAuthCookie.value !== process.env.AUTH_SECRET) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("from", pathname);
     return NextResponse.redirect(loginUrl);
