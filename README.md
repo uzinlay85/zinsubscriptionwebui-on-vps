@@ -65,6 +65,12 @@ CREATE TABLE client_keys (
   access_url TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Create Settings Table (For WebDAV & General Settings)
+CREATE TABLE settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 ```
 
 #### 2. Deploy to Vercel
@@ -144,6 +150,12 @@ CREATE TABLE client_keys (
   outline_key_id TEXT NOT NULL,
   access_url TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Create Settings Table (For WebDAV & General Settings)
+CREATE TABLE settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
 );
 ```
 
