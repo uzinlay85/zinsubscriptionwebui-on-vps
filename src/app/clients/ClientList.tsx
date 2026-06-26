@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Users, Key, Activity, Wifi } from "lucide-react";
+import { Users, Key, Activity, Wifi, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { EditClientForm } from "./EditClientForm";
