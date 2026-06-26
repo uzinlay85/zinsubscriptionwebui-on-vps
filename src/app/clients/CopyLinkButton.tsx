@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { Link2, Copy, Check } from "lucide-react";
 
 export function CopyLinkButton({ token, name }: { token: string, name: string }) {
-  const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedFull, setCopiedFull] = useState(false);
   const [fullUrl, setFullUrl] = useState("");
 
   useEffect(() => {
@@ -12,13 +13,24 @@ export function CopyLinkButton({ token, name }: { token: string, name: string })
     setFullUrl(`${window.location.origin}/api/sub/${token}`);
   }, [token]);
 
-  async function handleCopy() {
+  async function handleCopyLink() {
+    if (!fullUrl) return;
+    try {
+      await navigator.clipboard.writeText(fullUrl);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy text: ", err);
+    }
+  }
+
+  async function handleCopyFull() {
     if (!fullUrl) return;
     try {
       const textToCopy = `${name}: ${fullUrl}`;
       await navigator.clipboard.writeText(textToCopy);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopiedFull(true);
+      setTimeout(() => setCopiedFull(false), 2000);
     } catch (err) {
       console.error("Failed to copy text: ", err);
     }
@@ -32,13 +44,22 @@ export function CopyLinkButton({ token, name }: { token: string, name: string })
           {token}
         </span>
       </div>
-      <button 
-        onClick={handleCopy}
-        className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition-all shrink-0"
-        title="Copy Subscription URL"
-      >
-        {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
-      </button>
+      <div className="flex items-center gap-1 shrink-0">
+        <button 
+          onClick={handleCopyLink}
+          className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
+          title="Copy Link Only"
+        >
+          {copiedLink ? <Check size={16} className="text-emerald-400" /> : <Link2 size={16} />}
+        </button>
+        <button 
+          onClick={handleCopyFull}
+          className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
+          title="Copy With Name"
+        >
+          {copiedFull ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+        </button>
+      </div>
     </div>
   );
 }

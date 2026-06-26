@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { addClient, addBulkClients } from "./actions";
-import { Plus, X, Loader2, Copy, Check, Users } from "lucide-react";
+import { Plus, X, Loader2, Copy, Check, Users, Link2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export function AddClientForm() {
@@ -50,7 +50,19 @@ export function AddClientForm() {
     }
   }
 
-  async function handleCopyAll() {
+  async function handleCopyLinksOnly() {
+    if (!createdClients) return;
+    const textToCopy = createdClients.map(c => `${window.location.origin}/api/sub/${c.sub_token}`).join('\n');
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy", err);
+    }
+  }
+
+  async function handleCopyAllFull() {
     if (!createdClients) return;
     const textToCopy = createdClients.map(c => `${c.name}: ${window.location.origin}/api/sub/${c.sub_token}`).join('\n');
     try {
@@ -110,11 +122,20 @@ export function AddClientForm() {
                     Close
                   </button>
                   <button 
-                    onClick={handleCopyAll}
-                    className="flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-xl transition-colors font-medium w-full sm:w-auto"
+                    onClick={handleCopyLinksOnly}
+                    className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl transition-colors font-medium w-full sm:w-auto"
+                    title="Copy just the links for pasting into VPN apps"
+                  >
+                    {copiedAll ? <Check size={18} /> : <Link2 size={18} />}
+                    {copiedAll ? "Copied!" : "Copy Links Only"}
+                  </button>
+                  <button 
+                    onClick={handleCopyAllFull}
+                    className="flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl transition-colors font-medium w-full sm:w-auto"
+                    title="Copy links with client names included"
                   >
                     {copiedAll ? <Check size={18} /> : <Copy size={18} />}
-                    {copiedAll ? "Copied!" : "Copy All Links"}
+                    {copiedAll ? "Copied!" : "Copy With Names"}
                   </button>
                 </div>
               </div>
