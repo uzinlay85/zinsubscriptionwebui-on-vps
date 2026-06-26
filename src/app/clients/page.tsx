@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import { AddClientForm } from "./AddClientForm";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { EditClientForm } from "./EditClientForm";
+import { deleteClient } from "./actions";
 import { Users, Trash2, Key, Activity } from "lucide-react";
 import Link from "next/link";
 import https from "https";
@@ -138,7 +139,7 @@ export default async function ClientsPage() {
 
                   <form action={async () => {
                     "use server";
-                    await supabase.from("clients").delete().eq("id", client.id);
+                    await deleteClient(client.id);
                   }}>
                     <button type="submit" className="text-zinc-500 hover:text-red-400 hover:bg-red-400/10 p-2 rounded-xl transition-colors" title="Delete Client">
                       <Trash2 size={18} />

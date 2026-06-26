@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { AddServerForm } from "./AddServerForm";
+import { deleteServer } from "./actions";
 import { Server as ServerIcon, Trash2, Activity } from "lucide-react";
 
 export const revalidate = 0; // Disable caching to always get fresh data
@@ -50,7 +51,7 @@ export default async function ServersPage() {
             <div className="pt-4 mt-4 border-t border-white/5 flex justify-end">
               <form action={async () => {
                 "use server";
-                await supabase.from("servers").delete().eq("id", server.id);
+                await deleteServer(server.id);
               }}>
                 <button type="submit" className="text-zinc-500 hover:text-red-400 hover:bg-red-400/10 p-2 rounded-lg transition-colors" title="Delete Server">
                   <Trash2 size={16} />
