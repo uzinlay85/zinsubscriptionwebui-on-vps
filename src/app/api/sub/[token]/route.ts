@@ -18,7 +18,7 @@ export async function GET(
     .eq("sub_token", token)
     .single();
 
-  const client = data as { id: string; status: string } | null;
+  const client = data as { id: string; name: string; status: string } | null;
 
   if (clientError || !client) {
     return new NextResponse("Invalid subscription token", { status: 401 });
@@ -28,20 +28,29 @@ export async function GET(
     return new NextResponse("Subscription is inactive", { status: 403 });
   }
 
-  // Fetch all access URLs for this client
+  // Fetch all access keys for this client, joined with server name
   const { data: keysData, error: keysError } = await supabase
     .from("client_keys")
-    .select("*")
+    .select("*, servers(name)")
     .eq("client_id", client.id);
 
-  const clientKeys = keysData as { access_url: string }[] | null;
+  const clientKeys = keysData as {
+    access_url: string;
+    servers: { name: string } | null;
+  }[] | null;
 
   if (keysError || !clientKeys) {
     return new NextResponse("Error fetching keys", { status: 500 });
   }
 
-  // Extract URLs and join them with newline
-  const urls = clientKeys.map((k) => k.access_url).join("\n");
+  // Build URL list: append #ServerName - ClientName as fragment
+  const urls = clientKeys.map((k) => {
+    const serverName = k.servers?.name ?? "Server";
+    const keyLabel = `${serverName} - ${client.name}`;
+    // Remove existing fragment if any, then append new label
+    const baseUrl = k.access_url.split("#")[0];
+    return `${baseUrl}#${encodeURIComponent(keyLabel)}`;
+  }).join("\n");
 
   // Base64 encode the string (standard for V2Ray / Shadowsocks subscriptions)
   const base64Urls = Buffer.from(urls).toString("base64");
