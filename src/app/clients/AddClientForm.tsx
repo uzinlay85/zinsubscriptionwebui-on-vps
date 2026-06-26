@@ -157,8 +157,8 @@ export function AddClientForm() {
                       />
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-1">
                         <label className="block text-sm font-medium text-zinc-400 mb-1">Base Name</label>
                         <input 
                           type="text" 
@@ -169,20 +169,30 @@ export function AddClientForm() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-zinc-400 mb-1">Quantity (Max 50)</label>
+                        <label className="block text-sm font-medium text-zinc-400 mb-1">Start No.</label>
                         <input 
                           type="number" 
-                          name="quantity" 
+                          name="startNumber" 
                           min="1"
-                          max="50"
+                          required
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                          placeholder="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-400 mb-1">End No.</label>
+                        <input 
+                          type="number" 
+                          name="endNumber" 
+                          min="1"
                           required
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
                           placeholder="10"
                         />
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-1 sm:col-span-3">
                         <p className="text-xs text-zinc-500">
-                          This will generate clients named: <code className="text-purple-400">vip-1, vip-2...</code>
+                          (Max 50 at once). Example: Start 11, End 20 generates <code className="text-purple-400">vip-11</code> to <code className="text-purple-400">vip-20</code>.
                         </p>
                       </div>
                     </div>

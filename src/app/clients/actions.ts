@@ -79,16 +79,18 @@ export async function addClient(formData: FormData) {
 
 export async function addBulkClients(formData: FormData) {
   const baseName = formData.get("baseName") as string;
-  const quantityStr = formData.get("quantity") as string;
+  const startStr = formData.get("startNumber") as string;
+  const endStr = formData.get("endNumber") as string;
   const expiryDate = formData.get("expiryDate") as string || null;
 
-  const quantity = parseInt(quantityStr, 10);
+  const startNo = parseInt(startStr, 10);
+  const endNo = parseInt(endStr, 10);
 
-  if (!baseName || !quantity || isNaN(quantity) || quantity <= 0) {
-    return { error: "Valid Base Name and Quantity are required" };
+  if (!baseName || isNaN(startNo) || isNaN(endNo) || startNo < 1 || endNo < startNo) {
+    return { error: "Valid Base Name, Start Number, and End Number are required" };
   }
 
-  if (quantity > 50) {
+  if (endNo - startNo + 1 > 50) {
     return { error: "Maximum 50 clients allowed per bulk request to prevent timeouts." };
   }
 
@@ -100,7 +102,7 @@ export async function addBulkClients(formData: FormData) {
   let totalFailedKeys = 0;
 
   // Process sequentially to avoid overwhelming the APIs and DB
-  for (let i = 1; i <= quantity; i++) {
+  for (let i = startNo; i <= endNo; i++) {
     const clientName = `${baseName}-${i}`;
 
     // 2. Create the client record
