@@ -35,12 +35,12 @@ export async function GET(
   // Fetch all access keys for this client, joined with server name
   const { data: keysData, error: keysError } = await supabase
     .from("client_keys")
-    .select("*, servers(name)")
+    .select("*, servers(name, api_url, type)")
     .eq("client_id", client.id);
 
   const clientKeys = keysData as {
     access_url: string;
-    servers: { name: string } | null;
+    servers: { name: string; api_url: string; type: string } | null;
   }[] | null;
 
   if (keysError || !clientKeys) {
@@ -69,13 +69,38 @@ export async function GET(
   }
 
   // Build URL list
-  const urls = clientKeys.map((k) => {
+  const urlsArray = await Promise.all(clientKeys.map(async (k) => {
     const serverName = k.servers?.name ?? "Server";
     const keyLabel = `${serverName} - ${client.name}`;
-    const baseUrl = k.access_url.split("#")[0];
-    return `${baseUrl}#${encodeURIComponent(keyLabel)}`;
-  }).join("\n");
+    
+    if (k.access_url.startsWith("3x-ui-sub:")) {
+      const uuid = k.access_url.split(":")[1];
+      const apiUrl = k.servers?.api_url;
+      if (!apiUrl) return null;
+      try {
+        const fetchUrl = `${apiUrl}/sub/${uuid}`;
+        // Revalidate sublinks every 60 seconds so it doesn't block constantly
+        const res = await fetch(fetchUrl, { next: { revalidate: 60 } });
+        if (res.ok) {
+           const b64 = await res.text();
+           const decoded = Buffer.from(b64, "base64").toString("utf-8");
+           const links = decoded.split("\n").filter(l => l.trim().length > 0);
+           return links.map(l => {
+             const baseUrl = l.split("#")[0];
+             return `${baseUrl}#${encodeURIComponent(keyLabel)}`;
+           }).join("\n");
+        }
+      } catch (err) {
+        console.error("Failed to fetch 3x-ui sub link", err);
+      }
+      return null;
+    } else {
+      const baseUrl = k.access_url.split("#")[0];
+      return `${baseUrl}#${encodeURIComponent(keyLabel)}`;
+    }
+  }));
 
+  const urls = urlsArray.filter(u => u !== null).join("\n");
   const finalUrls = dummyNode + urls;
 
   // Base64 encode the string (standard for V2Ray / Shadowsocks subscriptions)

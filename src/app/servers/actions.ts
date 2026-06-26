@@ -45,17 +45,34 @@ export async function addServer(formData: FormData) {
   if (type === "outline" && !certSha256) {
     return { error: "Cert SHA-256 is required for Outline" };
   }
-  if (type === "hysteria2" && (!authUsername || !authPassword)) {
-    return { error: "Admin Username and Password are required for Hysteria2" };
+  if ((type === "hysteria2" || type === "3x-ui") && (!authUsername || !authPassword)) {
+    return { error: "Username and Password are required for this server type" };
   }
 
-  // 1. Authenticate with Hysteria2 FIRST to prevent dangling servers
+  const inboundIdStr = formData.get("inboundId") as string;
+  let inboundId: number | null = null;
   let hy2Token = "";
-  if (type === "hysteria2") {
+  let cookie3xui = "";
+
+  if (type === "3x-ui") {
+    inboundId = parseInt(inboundIdStr, 10);
+    if (isNaN(inboundId)) {
+      return { error: "Valid Inbound ID is required for 3x-ui" };
+    }
+    
+    // Verify 3x-ui connection
+    try {
+      const { login3xui } = await import("@/lib/3x-ui");
+      cookie3xui = await login3xui(apiUrl, authUsername, authPassword);
+    } catch (err: any) {
+      return { error: `Failed to connect to 3x-ui panel: ${err.message}` };
+    }
+  } else if (type === "hysteria2") {
+    // Verify Hysteria2 connection
     try {
       hy2Token = await loginHysteria(apiUrl, authUsername, authPassword);
     } catch (err: any) {
-      return { error: `Failed to authenticate with Hysteria2 Server. ${err.message}` };
+      return { error: `Failed to connect to Hysteria2 server: ${err.message}` };
     }
   }
 
@@ -68,7 +85,8 @@ export async function addServer(formData: FormData) {
       cert_sha256: certSha256 || "none",
       type,
       auth_username: authUsername || null,
-      auth_password: authPassword || null
+      auth_password: authPassword || null,
+      inbound_id: inboundId
     })
     .select()
     .single();
@@ -104,6 +122,13 @@ export async function addServer(formData: FormData) {
         await createHysteriaUser(apiUrl, hy2Token, client.name, userPass);
         keyId = userPass; // Use password as key ID since it's unique
         accessUrl = buildHysteriaUri(apiUrl, client.name, userPass, `${name} - ${client.name}`);
+      } else if (type === "3x-ui") {
+        const { addClient3xui } = await import("@/lib/3x-ui");
+        const uuid = crypto.randomUUID();
+        // client.name is the email identifier for 3x-ui
+        await addClient3xui(apiUrl, cookie3xui, inboundId as number, client.name, uuid);
+        keyId = uuid;
+        accessUrl = `3x-ui-sub:${uuid}`; // Custom scheme to let the API know it needs to fetch the sub
       }
 
       await supabase.from("client_keys").insert({
@@ -171,8 +196,21 @@ export async function updateServer(formData: FormData) {
   }
   // -----------------------
 
-  // Verify Hysteria2 credentials if type is hysteria2
-  if (type === "hysteria2") {
+  const inboundIdStr = formData.get("inboundId") as string;
+  let inboundId: number | null = null;
+
+  if (type === "3x-ui") {
+    inboundId = parseInt(inboundIdStr, 10);
+    if (isNaN(inboundId)) {
+      return { error: "Valid Inbound ID is required for 3x-ui" };
+    }
+    try {
+      const { login3xui } = await import("@/lib/3x-ui");
+      await login3xui(apiUrl, authUsername, authPassword);
+    } catch (err: any) {
+      return { error: `Failed to connect to 3x-ui panel: ${err.message}` };
+    }
+  } else if (type === "hysteria2") {
     try {
       await loginHysteria(apiUrl, authUsername, authPassword);
     } catch (err: any) {
@@ -187,7 +225,8 @@ export async function updateServer(formData: FormData) {
       api_url: apiUrl, 
       cert_sha256: certSha256 || "none",
       auth_username: authUsername || null,
-      auth_password: authPassword || null
+      auth_password: authPassword || null,
+      inbound_id: inboundId
     })
     .eq("id", id);
 
@@ -236,11 +275,19 @@ export async function syncServerKeys(serverId: string) {
 
   // 5. Generate keys for missing clients
   let hy2Token = "";
+  let cookie3xui = "";
   if (server.type === "hysteria2") {
     try {
       hy2Token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
     } catch (err: any) {
       return { error: `Failed to authenticate with Hysteria2 Server. ${err.message}` };
+    }
+  } else if (server.type === "3x-ui") {
+    try {
+      const { login3xui } = await import("@/lib/3x-ui");
+      cookie3xui = await login3xui(server.api_url, server.auth_username, server.auth_password);
+    } catch (err: any) {
+      return { error: `Failed to authenticate with 3x-ui panel. ${err.message}` };
     }
   }
 
@@ -259,6 +306,13 @@ export async function syncServerKeys(serverId: string) {
         await createHysteriaUser(server.api_url, hy2Token, client.name, userPass);
         keyId = userPass;
         accessUrl = buildHysteriaUri(server.api_url, client.name, userPass, `${server.name} - ${client.name}`);
+      } else if (server.type === "3x-ui") {
+        const { addClient3xui } = await import("@/lib/3x-ui");
+        const uuid = crypto.randomUUID();
+        // client.name is the email identifier for 3x-ui
+        await addClient3xui(server.api_url, cookie3xui, server.inbound_id, client.name, uuid);
+        keyId = uuid;
+        accessUrl = `3x-ui-sub:${uuid}`; // Custom scheme to let the API know it needs to fetch the sub
       }
 
       await supabase.from("client_keys").insert({

@@ -43,21 +43,23 @@ export async function addClient(formData: FormData) {
         keyId = key.id;
         accessUrl = key.accessUrl;
       } else if (server.type === "hysteria2") {
-        // Authenticate with Hysteria2 Express backend
         const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
-        // Generate random password for Hysteria2 user
         const userPass = crypto.randomBytes(3).toString('hex');
-        
         let expiryDays = null;
         if (expiryDate) {
           const diffTime = new Date(expiryDate).getTime() - new Date().getTime();
           expiryDays = diffTime > 0 ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : 0;
         }
-
         await createHysteriaUser(server.api_url, token, name, userPass, expiryDays);
-        
         keyId = userPass;
         accessUrl = buildHysteriaUri(server.api_url, name, userPass, `${server.name} - ${name}`);
+      } else if (server.type === "3x-ui") {
+        const { login3xui, addClient3xui } = await import("@/lib/3x-ui");
+        const cookie = await login3xui(server.api_url, server.auth_username, server.auth_password);
+        const uuid = crypto.randomUUID();
+        await addClient3xui(server.api_url, cookie, server.inbound_id, name, uuid);
+        keyId = uuid;
+        accessUrl = `3x-ui-sub:${uuid}`;
       }
 
       await supabase.from("client_keys").insert({
@@ -145,6 +147,13 @@ export async function addBulkClients(formData: FormData) {
           
           keyId = userPass;
           accessUrl = buildHysteriaUri(server.api_url, client.name, userPass, `${server.name} - ${client.name}`);
+        } else if (server.type === "3x-ui") {
+          const { login3xui, addClient3xui } = await import("@/lib/3x-ui");
+          const cookie = await login3xui(server.api_url, server.auth_username, server.auth_password);
+          const uuid = crypto.randomUUID();
+          await addClient3xui(server.api_url, cookie, server.inbound_id, client.name, uuid);
+          keyId = uuid;
+          accessUrl = `3x-ui-sub:${uuid}`;
         }
 
         await supabase.from("client_keys").insert({
@@ -256,13 +265,27 @@ export async function deleteClient(id: string) {
       const server = key.servers;
       if (server?.api_url && key.outline_key_id) {
         if (server.type === "outline" || !server.type) {
-          await deleteOutlineKey(server.api_url, key.outline_key_id);
+          await deleteOutlineKey(server.api_url, key.outline_key_id).catch(console.error);
         } else if (server.type === "hysteria2") {
           try {
             const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
-            await deleteHysteriaUser(server.api_url, token, key.outline_key_id); // we used password as outline_key_id
+            await deleteHysteriaUser(server.api_url, token, key.outline_key_id);
           } catch (err) {
             console.error("Failed to delete Hysteria user", err);
+          }
+        } else if (server.type === "3x-ui") {
+          try {
+            const { login3xui, deleteClient3xui } = await import("@/lib/3x-ui");
+            const cookie = await login3xui(server.api_url, server.auth_username, server.auth_password);
+            // We need inbound_id here, let's fetch it if it's missing in `servers` joined query!
+            // Wait, I need to make sure inbound_id is selected in the query above!
+            const serverDetails = await supabase.from("servers").select("inbound_id").eq("id", key.server_id).single();
+            const inboundId = serverDetails.data?.inbound_id;
+            if (inboundId) {
+              await deleteClient3xui(server.api_url, cookie, inboundId, key.outline_key_id); // we used uuid as outline_key_id
+            }
+          } catch (err) {
+            console.error("Failed to delete 3x-ui user", err);
           }
         }
       }

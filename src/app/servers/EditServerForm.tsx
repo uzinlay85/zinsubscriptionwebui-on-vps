@@ -90,29 +90,47 @@ export function EditServerForm({ server }: { server: any }) {
                 </div>
               )}
 
-              {server.type === "hysteria2" && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Admin User</label>
-                    <input 
-                      type="text" 
-                      name="authUsername" 
-                      defaultValue={server.auth_username}
-                      required
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                    />
+              {(server.type === "hysteria2" || server.type === "3x-ui") && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">
+                        {server.type === "hysteria2" ? "Auth Username (optional)" : "Panel Username"}
+                      </label>
+                      <input 
+                        type="text" 
+                        name="authUsername" 
+                        defaultValue={server.auth_username}
+                        required={server.type === "3x-ui"}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">
+                        {server.type === "hysteria2" ? "Auth Password" : "Panel Password"}
+                      </label>
+                      <input 
+                        type="text" 
+                        name="authPassword" 
+                        defaultValue={server.auth_password}
+                        required
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Admin Pass</label>
-                    <input 
-                      type="text" 
-                      name="authPassword" 
-                      defaultValue={server.auth_password}
-                      required
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                    />
-                  </div>
-                </div>
+                  {server.type === "3x-ui" && (
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">Inbound ID</label>
+                      <input 
+                        type="number" 
+                        name="inboundId" 
+                        defaultValue={server.inbound_id}
+                        required
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                      />
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="pt-4 flex justify-end gap-3">

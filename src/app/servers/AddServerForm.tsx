@@ -56,22 +56,29 @@ export function AddServerForm() {
             <form action={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-400 mb-1">Server Type</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setServerType("outline")}
-                    className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${serverType === "outline" ? "bg-blue-500/20 text-blue-400 border border-blue-500/30" : "bg-white/5 text-zinc-400 border border-transparent hover:bg-white/10"}`}
-                  >
-                    Outline
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setServerType("hysteria2")}
-                    className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${serverType === "hysteria2" ? "bg-purple-500/20 text-purple-400 border border-purple-500/30" : "bg-white/5 text-zinc-400 border border-transparent hover:bg-white/10"}`}
-                  >
-                    Hysteria2
-                  </button>
-                </div>
+                <div className="flex flex-col sm:flex-row bg-zinc-900/50 p-1 rounded-xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => setServerType("outline")}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${serverType === "outline" ? "bg-blue-500/20 text-blue-400 border border-blue-500/30 shadow-sm" : "text-zinc-400 border border-transparent hover:bg-white/5"}`}
+                >
+                  Outline
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setServerType("hysteria2")}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${serverType === "hysteria2" ? "bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-sm" : "text-zinc-400 border border-transparent hover:bg-white/5"}`}
+                >
+                  Hysteria2
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setServerType("3x-ui")}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${serverType === "3x-ui" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm" : "text-zinc-400 border border-transparent hover:bg-white/5"}`}
+                >
+                  3x-ui
+                </button>
+              </div>
               </div>
 
               <div>
@@ -87,51 +94,72 @@ export function AddServerForm() {
               
               <div>
                 <label className="block text-sm font-medium text-zinc-400 mb-1">
-                  {serverType === "outline" ? "Management API URL" : "Web UI Base URL"}
+                  {serverType === "outline" ? "Outline API URL" : serverType === "hysteria2" ? "Server Node Address (IP:Port)" : "3x-ui Panel URL (with port)"}
                 </label>
                 <input 
-                  type="url" 
+                  type="text" 
                   name="apiUrl" 
                   required
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-primary transition-colors"
-                  placeholder={serverType === "outline" ? "https://ip:port/secret" : "https://vpn.yourdomain.com/admin_123"}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                  placeholder={serverType === "outline" ? "https://123.45.67.89:12345/xxxx" : serverType === "hysteria2" ? "123.45.67.89:443" : "http://123.45.67.89:2053"}
                 />
               </div>
 
-              {serverType === "outline" ? (
+              {serverType === "outline" && (
                 <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">certSha256</label>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">Certificate SHA-256</label>
                   <input 
                     type="text" 
                     name="certSha256" 
                     required
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-primary transition-colors font-mono text-sm"
-                    placeholder="API Cert SHA-256 Hash"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                    placeholder="e.g. 4A:2B:..."
                   />
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Admin User</label>
-                    <input 
-                      type="text" 
-                      name="authUsername" 
-                      required
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-primary transition-colors text-sm"
-                      placeholder="e.g. admin"
-                    />
+              )}
+
+              {(serverType === "hysteria2" || serverType === "3x-ui") && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">
+                        {serverType === "hysteria2" ? "Auth Username (optional)" : "Panel Username"}
+                      </label>
+                      <input 
+                        type="text" 
+                        name="authUsername" 
+                        required={serverType === "3x-ui"}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                        placeholder={serverType === "hysteria2" ? "e.g. admin" : "admin"}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">
+                        {serverType === "hysteria2" ? "Auth Password" : "Panel Password"}
+                      </label>
+                      <input 
+                        type="password" 
+                        name="authPassword" 
+                        required
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                        placeholder="e.g. strongpassword123"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Admin Pass</label>
-                    <input 
-                      type="password" 
-                      name="authPassword" 
-                      required
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-primary transition-colors text-sm"
-                      placeholder="••••••"
-                    />
-                  </div>
-                </div>
+                  {serverType === "3x-ui" && (
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">Inbound ID</label>
+                      <input 
+                        type="number" 
+                        name="inboundId" 
+                        required
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                        placeholder="e.g. 1"
+                      />
+                      <p className="text-xs text-zinc-500 mt-1">The ID of the inbound where clients will be added.</p>
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="pt-4 flex justify-end gap-3">
