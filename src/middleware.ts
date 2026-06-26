@@ -33,9 +33,7 @@ export function middleware(request: NextRequest) {
 
   // 3. If they don't have the path_auth cookie, block access (return 404)
   if (secretPath && pathAuthCookie?.value !== "valid") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/404";
-    return NextResponse.rewrite(url);
+    return new NextResponse("404 Not Found", { status: 404 });
   }
 
   // --- User has passed the secret path gate ---
