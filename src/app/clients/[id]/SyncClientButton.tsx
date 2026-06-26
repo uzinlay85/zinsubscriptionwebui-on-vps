@@ -9,7 +9,7 @@ export function SyncClientButton({ clientId }: { clientId: string }) {
 
   async function handleSync() {
     setLoading(true);
-    const result = await syncClientKeys(clientId);
+    const result = await syncClientKeys(clientId) as any;
     setLoading(false);
     
     if (result?.error) {
