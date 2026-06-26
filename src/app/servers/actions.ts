@@ -108,3 +108,84 @@ export async function deleteServer(id: string) {
   revalidatePath("/servers");
   return { success: true };
 }
+
+export async function syncServerKeys(serverId: string) {
+  // 1. Fetch server details
+  const { data: serverData, error: serverError } = await supabase
+    .from("servers")
+    .select("*")
+    .eq("id", serverId)
+    .single();
+
+  if (serverError || !serverData) {
+    return { error: "Server not found" };
+  }
+  const server = serverData as any;
+
+  // 2. Fetch all active clients
+  const { data: clientsData } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("status", "active");
+  const clients = (clientsData as any[]) || [];
+
+  // 3. Fetch existing keys for this server
+  const { data: existingKeysData } = await supabase
+    .from("client_keys")
+    .select("client_id")
+    .eq("server_id", serverId);
+  const existingKeys = (existingKeysData as any[]) || [];
+  const existingClientIds = new Set(existingKeys.map(k => k.client_id));
+
+  // 4. Find clients that don't have a key on this server
+  const missingClients = clients.filter(c => !existingClientIds.has(c.id));
+
+  if (missingClients.length === 0) {
+    return { success: true, message: "All active clients already have keys on this server." };
+  }
+
+  // 5. Generate keys for missing clients
+  let hy2Token = "";
+  if (server.type === "hysteria2") {
+    try {
+      hy2Token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
+    } catch (err: any) {
+      return { error: `Failed to authenticate with Hysteria2 Server. ${err.message}` };
+    }
+  }
+
+  const results = await Promise.allSettled(
+    missingClients.map(async (client) => {
+      let keyId = "";
+      let accessUrl = "";
+
+      if (server.type === "outline" || !server.type) {
+        const keyName = `${server.name} - ${client.name}`;
+        const key = await createOutlineKey(server.api_url, keyName);
+        keyId = key.id;
+        accessUrl = key.accessUrl;
+      } else if (server.type === "hysteria2") {
+        const userPass = crypto.randomBytes(3).toString('hex');
+        await createHysteriaUser(server.api_url, hy2Token, client.name, userPass);
+        keyId = userPass;
+        accessUrl = buildHysteriaUri(server.api_url, client.name, userPass, `${server.name} - ${client.name}`);
+      }
+
+      await supabase.from("client_keys").insert({
+        client_id: client.id,
+        server_id: server.id,
+        outline_key_id: keyId,
+        access_url: accessUrl,
+      });
+    })
+  );
+
+  const failed = results.filter((r) => r.status === "rejected").length;
+  revalidatePath("/servers");
+  revalidatePath("/clients");
+  
+  if (failed > 0) {
+    return { success: true, warning: `Synced ${missingClients.length - failed} clients. ${failed} failed.` };
+  }
+  return { success: true, message: `Successfully synced keys for ${missingClients.length} clients.` };
+}

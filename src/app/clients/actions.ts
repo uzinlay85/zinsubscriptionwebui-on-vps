@@ -136,3 +136,78 @@ export async function toggleClientStatus(id: string, currentStatus: string) {
   revalidatePath("/clients");
   return { success: true };
 }
+
+export async function syncClientKeys(clientId: string) {
+  // 1. Fetch client details
+  const { data: clientData, error: clientError } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("id", clientId)
+    .single();
+
+  if (clientError || !clientData) {
+    return { error: "Client not found" };
+  }
+  const client = clientData as any;
+
+  if (client.status !== "active") {
+    return { error: "Cannot sync keys for an inactive client." };
+  }
+
+  // 2. Fetch all servers
+  const { data: serversData } = await supabase.from("servers").select("*");
+  const servers = (serversData as any[]) || [];
+
+  // 3. Fetch existing keys for this client
+  const { data: existingKeysData } = await supabase
+    .from("client_keys")
+    .select("server_id")
+    .eq("client_id", clientId);
+  const existingKeys = (existingKeysData as any[]) || [];
+  const existingServerIds = new Set(existingKeys.map(k => k.server_id));
+
+  // 4. Find servers that don't have a key for this client
+  const missingServers = servers.filter(s => !existingServerIds.has(s.id));
+
+  if (missingServers.length === 0) {
+    return { success: true, message: "Client already has keys on all servers." };
+  }
+
+  // 5. Generate keys on missing servers
+  const results = await Promise.allSettled(
+    missingServers.map(async (server) => {
+      let keyId = "";
+      let accessUrl = "";
+
+      if (server.type === "outline" || !server.type) {
+        const keyName = `${server.name} - ${client.name}`;
+        const key = await createOutlineKey(server.api_url, keyName);
+        keyId = key.id;
+        accessUrl = key.accessUrl;
+      } else if (server.type === "hysteria2") {
+        const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
+        const userPass = crypto.randomBytes(3).toString('hex');
+        await createHysteriaUser(server.api_url, token, client.name, userPass);
+        
+        keyId = userPass;
+        accessUrl = buildHysteriaUri(server.api_url, client.name, userPass, `${server.name} - ${client.name}`);
+      }
+
+      await supabase.from("client_keys").insert({
+        client_id: client.id,
+        server_id: server.id,
+        outline_key_id: keyId,
+        access_url: accessUrl,
+      });
+    })
+  );
+
+  const failed = results.filter((r) => r.status === "rejected").length;
+  revalidatePath("/clients");
+  revalidatePath(`/clients/${clientId}`);
+  
+  if (failed > 0) {
+    return { success: true, warning: `Synced keys on ${missingServers.length - failed} servers. ${failed} failed.` };
+  }
+  return { success: true, message: `Successfully synced keys on ${missingServers.length} servers.` };
+}

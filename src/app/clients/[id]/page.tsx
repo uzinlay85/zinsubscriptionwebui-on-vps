@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { AddClientKeyForm } from "./AddClientKeyForm";
+import { SyncClientButton } from "./SyncClientButton";
 import { ArrowLeft, Key, Server, Trash2, Activity, BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -117,7 +118,10 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             Subscription Token: {client.sub_token}
           </p>
         </div>
-        <AddClientKeyForm clientId={client.id} servers={servers || []} />
+        <div className="flex items-center gap-2">
+          <SyncClientButton clientId={client.id} />
+          <AddClientKeyForm clientId={client.id} servers={servers || []} />
+        </div>
       </div>
 
       {/* Total Usage Card */}

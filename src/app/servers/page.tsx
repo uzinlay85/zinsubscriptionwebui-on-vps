@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { AddServerForm } from "./AddServerForm";
 import { deleteServer } from "./actions";
+import { SyncServerButton } from "./SyncServerButton";
 import { Server as ServerIcon, Trash2, Activity } from "lucide-react";
 
 export const revalidate = 0; // Disable caching to always get fresh data
@@ -61,7 +62,8 @@ export default async function ServersPage() {
               )}
             </div>
 
-            <div className="pt-4 mt-4 border-t border-white/5 flex justify-end">
+            <div className="pt-4 mt-4 border-t border-white/5 flex justify-end gap-2">
+              <SyncServerButton serverId={server.id} />
               <form action={async () => {
                 "use server";
                 await deleteServer(server.id);
