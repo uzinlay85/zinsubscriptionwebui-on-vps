@@ -55,14 +55,21 @@ function makeRequest(
 }
 
 export async function login3xui(apiUrl: string, username?: string, password?: string): Promise<string> {
+  const cleanUrl = apiUrl.replace(/\/$/, "");
   const body = JSON.stringify({ username, password });
-  const res = await makeRequest(`${apiUrl}/login`, "POST", {
+  const res = await makeRequest(`${cleanUrl}/login`, "POST", {
     "Content-Type": "application/json",
     "Content-Length": Buffer.byteLength(body).toString(),
   }, body);
 
-  if (res.status !== 200 || !res.data.success) {
-    throw new Error(res.data?.msg || "Login failed");
+  if (res.status !== 200 || !res.data || !res.data.success) {
+    let msg = "Login failed";
+    if (res.data && res.data.msg) {
+      msg = res.data.msg;
+    } else if (res.status !== 200) {
+      msg = `Login failed with status ${res.status}`;
+    }
+    throw new Error(msg);
   }
 
   // Extract session cookie
@@ -81,8 +88,9 @@ export async function addClient3xui(
   clientEmail: string,
   uuid: string
 ): Promise<void> {
+  const cleanUrl = apiUrl.replace(/\/$/, "");
   // 1. First, we need to fetch the existing inbound to append the client
-  const getRes = await makeRequest(`${apiUrl}/panel/api/inbounds/get/${inboundId}`, "GET", {
+  const getRes = await makeRequest(`${cleanUrl}/panel/api/inbounds/get/${inboundId}`, "GET", {
     "Cookie": cookie,
   });
 
@@ -117,7 +125,7 @@ export async function addClient3xui(
     settings: JSON.stringify({ clients: [newClient] })
   });
 
-  const addRes = await makeRequest(`${apiUrl}/panel/api/inbounds/addClient`, "POST", {
+  const addRes = await makeRequest(`${cleanUrl}/panel/api/inbounds/addClient`, "POST", {
     "Content-Type": "application/json",
     "Cookie": cookie,
     "Content-Length": Buffer.byteLength(addBody).toString(),
@@ -134,8 +142,9 @@ export async function deleteClient3xui(
   inboundId: number,
   uuid: string
 ): Promise<void> {
+  const cleanUrl = apiUrl.replace(/\/$/, "");
   // UUID is often used to delete in 3x-ui API
-  const delRes = await makeRequest(`${apiUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`, "POST", {
+  const delRes = await makeRequest(`${cleanUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`, "POST", {
     "Cookie": cookie,
   });
 
@@ -145,7 +154,8 @@ export async function deleteClient3xui(
 }
 
 export async function getClientTraffics(apiUrl: string, cookie: string): Promise<any[]> {
-  const res = await makeRequest(`${apiUrl}/panel/api/inbounds/clientTraffics`, "GET", {
+  const cleanUrl = apiUrl.replace(/\/$/, "");
+  const res = await makeRequest(`${cleanUrl}/panel/api/inbounds/clientTraffics`, "GET", {
     "Cookie": cookie,
   });
 
@@ -153,5 +163,5 @@ export async function getClientTraffics(apiUrl: string, cookie: string): Promise
     throw new Error("Failed to get traffics");
   }
 
-  return res.data.obj;
+  return res.data.obj || [];
 }

@@ -8,19 +8,23 @@ export function AddServerForm() {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [serverType, setServerType] = useState<"outline" | "hysteria2">("outline");
+  const [serverType, setServerType] = useState<"outline" | "hysteria2" | "3x-ui">("outline");
 
   async function handleSubmit(formData: FormData) {
-    setLoading(true);
-    setError(null);
-    formData.append("type", serverType);
-    const result = await addServer(formData);
-    
-    if (result?.error) {
-      setError(result.error);
-      setLoading(false);
-    } else {
-      setIsOpen(false);
+    try {
+      setLoading(true);
+      setError(null);
+      formData.append("type", serverType);
+      const result = await addServer(formData);
+      
+      if (result?.error) {
+        setError(result.error);
+      } else {
+        setIsOpen(false);
+      }
+    } catch (err: any) {
+      setError(err.message || "An unexpected error occurred.");
+    } finally {
       setLoading(false);
     }
   }

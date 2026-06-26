@@ -10,15 +10,19 @@ export function EditServerForm({ server }: { server: any }) {
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(formData: FormData) {
-    setLoading(true);
-    setError(null);
-    const result = await updateServer(formData);
-    
-    if (result?.error) {
-      setError(result.error);
-      setLoading(false);
-    } else {
-      setIsOpen(false);
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await updateServer(formData);
+      
+      if (result?.error) {
+        setError(result.error);
+      } else {
+        setIsOpen(false);
+      }
+    } catch (err: any) {
+      setError(err.message || "An unexpected error occurred.");
+    } finally {
       setLoading(false);
     }
   }
