@@ -23,7 +23,8 @@ A modern, fast, and feature-rich unified web panel to manage both Outline and Hy
 ### 📋 Prerequisites
 1. **Supabase Account**: For the PostgreSQL database.
 2. **Vercel Account**: For free hosting and serverless functions.
-3. **Outline Server**: Must have the Management API URL (with trailing `/` or proper endpoint).
+3. **Outline Server**: Must have the Management API URL and Cert SHA-256. 
+   - *Tip: SSH into your Outline VPS and run `cat /opt/outline/access.txt` to find these details.*
 4. **Hysteria2 Server**: Must be running the Hysteria2 Express Backend Admin API.
 
 ### 🚀 Installation & Deployment
@@ -102,7 +103,9 @@ Outline နှင့် Hysteria2 ဆာဗာ နှစ်မျိုးစလ
 ### 📋 လိုအပ်ချက်များ (Prerequisites)
 1. **Supabase Account**: Database အတွက် [Supabase](https://supabase.com) တွင် အကောင့်ရှိရပါမည်။
 2. **Vercel Account**: Web Panel ကို အခမဲ့ တင်ရန် (Hosting) [Vercel](https://vercel.com) အကောင့်ရှိရပါမည်။
-3. **Servers**: Outline API URL နှင့် Hysteria2 Backend API တို့ကို အသင့် ပြင်ဆင်ထားရပါမည်။
+3. **Servers**: Outline နှင့် Hysteria2 ကို ချိတ်ဆက်ရန် အောက်ပါတို့ကို ပြင်ဆင်ထားရပါမည်။
+   - **Outline**: VPS သို့ ဝင်ပြီး `cat /opt/outline/access.txt` ဟု ရိုက်ထည့်ကာ `apiUrl` နှင့် `certSha256` ကို ကူးယူထားပါ။
+   - **Hysteria2**: ဆာဗာဘက်တွင် Express Backend API ကို အသင့် Run ထားရပါမည်။
 
 ### 🚀 တပ်ဆင်ခြင်း နှင့် အသုံးပြုနည်း (Installation & Deployment)
 
