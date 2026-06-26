@@ -8,7 +8,7 @@ import crypto from "crypto";
 
 export async function addServer(formData: FormData) {
   const type = formData.get("type") as string || "outline";
-  const name = formData.get("name") as string;
+  let name = formData.get("name") as string;
   const apiUrl = formData.get("apiUrl") as string;
   const certSha256 = formData.get("certSha256") as string;
   const authUsername = formData.get("authUsername") as string;
@@ -17,6 +17,31 @@ export async function addServer(formData: FormData) {
   if (!name || !apiUrl) {
     return { error: "Name and API URL are required" };
   }
+
+  // --- Auto GeoIP Flag ---
+  try {
+    const urlObj = new URL(apiUrl);
+    const hostname = urlObj.hostname;
+    const geoRes = await fetch(`http://ip-api.com/json/${hostname}?fields=status,countryCode`, { next: { revalidate: 3600 } });
+    const geoData = await geoRes.json();
+    if (geoData.status === "success" && geoData.countryCode) {
+      // Convert 2-letter code to Emoji Flag
+      const codePoints = geoData.countryCode
+        .toUpperCase()
+        .split('')
+        .map((char: string) => 127397 + char.charCodeAt(0));
+      const flag = String.fromCodePoint(...codePoints);
+      
+      // Only prepend if the user hasn't already added a flag or the same text
+      if (!name.includes(flag)) {
+        name = `${flag} ${name}`;
+      }
+    }
+  } catch (err) {
+    // Ignore geo lookup errors to not block server creation
+    console.error("GeoIP lookup failed:", err);
+  }
+  // -----------------------
   if (type === "outline" && !certSha256) {
     return { error: "Cert SHA-256 is required for Outline" };
   }
