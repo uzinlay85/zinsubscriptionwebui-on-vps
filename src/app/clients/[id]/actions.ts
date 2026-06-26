@@ -13,7 +13,6 @@ export async function assignServerToClient(formData: FormData) {
     return { error: "All fields are required" };
   }
 
-  // @ts-expect-error - bypass strict type checking for insert payload
   const { error } = await supabase.from("client_keys").insert({
     client_id: clientId,
     server_id: serverId,
