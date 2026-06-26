@@ -250,7 +250,10 @@ export async function updateClient(formData: FormData) {
   return { success: true };
 }
 
-export async function deleteClient(id: string) {
+export async function deleteClient(formData: FormData) {
+  const id = formData.get("id") as string;
+  if (!id) return { error: "ID is required" };
+
   // 1. Fetch all keys for this client with server details
   const { data: keysData } = await supabase
     .from("client_keys")

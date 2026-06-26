@@ -133,7 +133,11 @@ export function ClientList({ clients, servers, initialUsage }: { clients: any[],
                 
                 <EditClientForm client={{ id: client.id, name: client.name, expiry_date: client.expiry_date }} />
 
-                <form action={deleteClient}>
+                <form action={deleteClient} onSubmit={(e) => {
+                  if (!confirm("Are you sure you want to delete this client? All their keys will also be permanently deleted. This action cannot be undone.")) {
+                    e.preventDefault();
+                  }
+                }}>
                   <input type="hidden" name="id" value={client.id} />
                   <button 
                     type="submit" 
