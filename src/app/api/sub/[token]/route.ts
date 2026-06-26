@@ -14,7 +14,7 @@ export async function GET(
   // Fetch the client using the token
   const { data: client, error: clientError } = await supabase
     .from("clients")
-    .select("id, status")
+    .select("*")
     .eq("sub_token", token)
     .single();
 
