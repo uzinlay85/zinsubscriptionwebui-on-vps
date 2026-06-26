@@ -23,22 +23,39 @@ export async function assignServerToClient(formData: FormData) {
     return { error: "Server not found" };
   }
 
-  const serverData = server as { api_url: string; cert_sha256: string };
+  // Fetch client name
+  const { data: client, error: clientError } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("id", clientId)
+    .single();
+
+  if (clientError || !client) {
+    return { error: "Client not found" };
+  }
+
+  const serverData = server as { name: string; api_url: string; cert_sha256: string };
+  const clientData = client as { name: string };
+
+  // Key name = "ServerName - ClientName"
+  const keyName = `${serverData.name} - ${clientData.name}`;
 
   try {
-    // Create a new access key via Outline Management API
-    // We use a custom https agent to handle self-signed certificates
+    // Create a new access key via Outline Management API with a name
     const outlineKey = await new Promise<{ id: string; accessUrl: string }>(
       (resolve, reject) => {
-        // Parse the API URL
         const url = new URL(`${serverData.api_url}/access-keys`);
+        const body = JSON.stringify({ name: keyName });
 
         const options = {
           hostname: url.hostname,
           port: url.port || 443,
           path: url.pathname,
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(body),
+          },
           // Bypass self-signed certificate verification
           rejectUnauthorized: false,
         };
@@ -61,6 +78,7 @@ export async function assignServerToClient(formData: FormData) {
         });
 
         req.on("error", (e) => reject(e));
+        req.write(body);
         req.end();
       }
     );
