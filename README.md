@@ -9,16 +9,17 @@ A modern, fast, and feature-rich unified web panel to manage both Outline and Hy
 ## 🇺🇸 English Documentation
 
 ### 🌟 Features
-- **Unified Management**: Control both Outline and Hysteria2 servers in one place.
-- **Universal Subscription Link**: Clients get a single link (`/api/sub/[token]`) that automatically serves all their assigned keys in standard base64 format (compatible with v2rayN, Nekobox, Shadowrocket, etc.).
-- **Live Data Usage**: Automatically fetches and aggregates live data transfer metrics from your servers.
-- **Expiry Control**: Set expiry dates for users. 
-  - Sublinks stop working immediately upon expiry.
-  - Hysteria2 users are automatically disabled on the backend.
-  - Outline users are blocked automatically via a Vercel Cron Job (sets data limit to 1 byte).
-  - Modern clients show remaining days natively via `Subscription-Userinfo` HTTP Headers and a fallback dummy proxy node at the top of the server list.
-- **Sync Keys**: Click a single button to automatically generate missing access keys across all servers for a user.
-- **Modern UI**: Built with Next.js 14 App Router, TailwindCSS, and Lucide Icons for a premium dark mode aesthetic.
+- 🚀 **Multi-Protocol Support**: Seamlessly manage both **Outline** and **Hysteria2** servers from a single dashboard.
+- 🔗 **Universal Subscription Links**: Generate a single subscription link (`/api/sub/[token]`) per client that serves both Sing-box JSON and Base64 (V2ray/Clash) formats automatically based on the user-agent.
+- ⏳ **Expiry Management & Auto-Suspension**: Set expiry dates for clients. A daily cron job automatically disables expired clients across all connected servers.
+  - *Note: Modern apps show remaining days natively via `Subscription-Userinfo` HTTP Headers and a fallback dummy proxy node.*
+- 📊 **Live Data Usage Tracking**: Monitor real-time data consumption directly from Outline and Hysteria2 server metrics.
+- 🔄 **Smart Key Synchronization**: A "Sync Keys" button to automatically deploy missing client keys across all servers with a single click.
+- ☁️ **Advanced Backup System**:
+  - **Local Backup**: Export and Import the entire Supabase database as a JSON file.
+  - **Cloud Auto-Backup**: Daily automated backups to WebDAV services (like Koofr or Nextcloud) ensuring your data is never lost.
+- 👥 **Bulk Client Creation**: Generate up to 50 clients at once using a base name (e.g., `vip-1, vip-2`) and copy all their subscription links instantly.
+- 🌍 **Auto GeoIP Flags**: Automatically detects the server's IP location during setup and prepends the country flag emoji (e.g. 🇸🇬) to the server name.
 
 ### 📋 Prerequisites
 1. **Supabase Account**: For the PostgreSQL database.
@@ -130,16 +131,17 @@ The panel supports daily automated database backups to WebDAV services like Koof
 Outline နှင့် Hysteria2 ဆာဗာ နှစ်မျိုးစလုံးကို နေရာတစ်တည်းကနေ ထိန်းချုပ်လို့ရမယ့် ခေတ်မီ Subscription Web Panel တစ်ခု ဖြစ်ပါတယ်။ အသုံးပြုသူ (Client) တွေအတွက် Sub Link တစ်ခုတည်း ပေးရုံနဲ့ ဆာဗာအားလုံးရဲ့ Key တွေကို အလွယ်တကူ ရယူအသုံးပြုနိုင်မှာပါ။
 
 ### 🌟 ပါဝင်သော လုပ်ဆောင်ချက်များ (Features)
-- **Unified Management**: Outline နဲ့ Hysteria2 ဆာဗာ နှစ်မျိုးစလုံးကို Dashboard တစ်ခုတည်းမှာ ပေါင်းပြီး ထိန်းချုပ်နိုင်ခြင်း။
-- **Universal Subscription Link**: Client တစ်ယောက်ကို Sub Link (`/api/sub/...`) တစ်ခုတည်း ပေးရုံဖြင့် သူပိုင်ဆိုင်သော ဆာဗာအမျိုးအစားစုံမှ Key အားလုံးကို v2rayN, Nekobox စတဲ့ App တွေက အလိုအလျောက် ဆွဲယူပေးနိုင်ခြင်း။
-- **Live Data Usage**: ဆာဗာတွေဆီကနေ Data သုံးစွဲမှု (Usage) ပမာဏကို Dashboard မှာ တိုက်ရိုက် ကြည့်ရှုနိုင်ခြင်း။
-- **Expiry Control (သက်တမ်းထိန်းချုပ်စနစ်)**: အသုံးပြုသူများကို သက်တမ်း ကန့်သတ်နိုင်ခြင်း။
-  - သက်တမ်းကုန်သွားပါက Sub Link ကြီးတစ်ခုလုံး အလိုအလျောက် ပိတ်သွားပါမည်။
-  - Hysteria2 တွင် ဆာဗာဘက်မှ အလိုအလျောက် ကန်ထုတ်ပါမည်။
-  - Outline တွင် Vercel Cron Job မှတစ်ဆင့် နေ့စဉ်စစ်ဆေးပြီး Data Limit ကို (1 Byte) အဖြစ် ပြောင်းလဲပိတ်ချပေးပါမည်။
-  - App ထဲတွင် ကျန်ရှိသော ရက်အရေအတွက်ကို `Subscription-Userinfo` ဖြင့် သေသပ်စွာ ပြသပေးမည့်အပြင် Dummy Node အဖြစ်လည်း အလိုအလျောက် ပြသပေးပါမည်။
-- **Sync Keys**: အသုံးပြုသူ တစ်ယောက်အတွက် ဆာဗာအားလုံးပေါ်မှာ Key တွေ ရှိမနေဘူးဆိုရင် ခလုတ်တစ်ချက်နှိပ်ရုံနဲ့ လိုအပ်တဲ့ Key တွေကို အလိုအလျောက် ဖန်တီးပေးခြင်း။
-- **Modern UI**: Next.js App Router, TailwindCSS တို့ဖြင့် ရေးသားထားပြီး Dark Mode အပြည့်အဝ ပါဝင်သော လှပသည့် ဒီဇိုင်း။
+- 🚀 **Multi-Protocol Support**: Outline နဲ့ Hysteria2 ဆာဗာ နှစ်မျိုးစလုံးကို Dashboard တစ်ခုတည်းမှာ ပေါင်းပြီး လွယ်ကူစွာ ထိန်းချုပ်နိုင်ခြင်း။
+- 🔗 **Universal Subscription Links**: Client တစ်ယောက်ကို Sub Link (`/api/sub/...`) တစ်ခုတည်း ပေးရုံဖြင့် Sing-box JSON နှင့် Base64 (V2ray/Clash) Format များကို App ပေါ်မူတည်၍ အလိုအလျောက် ပြောင်းလဲထုတ်ပေးနိုင်ခြင်း။
+- ⏳ **Expiry Management & Auto-Suspension (သက်တမ်းထိန်းချုပ်စနစ်)**: အသုံးပြုသူများကို သက်တမ်း ကန့်သတ်နိုင်ခြင်း။ နေ့စဉ်စစ်ဆေးပေးမည့် Cron Job မှ သက်တမ်းကုန်သွားသော Client များကို ဆာဗာအားလုံးတွင် အလိုအလျောက် ပိတ်ချပေးပါမည်။
+  - *မှတ်ချက်။ ။ ခေတ်မီ App များနှင့် ချိတ်ဆက်ပါက `Subscription-Userinfo` မှတစ်ဆင့် ကျန်ရှိသော ရက်အရေအတွက်ကို App မျက်နှာပြင်တွင် တိုက်ရိုက် ပြသပေးပါမည်။*
+- 📊 **Live Data Usage Tracking**: ဆာဗာတွေဆီကနေ Data သုံးစွဲမှု (Usage) ပမာဏကို Dashboard တွင် တိုက်ရိုက် ကြည့်ရှုနိုင်ခြင်း။
+- 🔄 **Smart Key Synchronization**: "Sync Keys" ခလုတ် တစ်ချက်နှိပ်ရုံဖြင့် Client တစ်ယောက်အတွက် လိုအပ်နေသော ဆာဗာများတွင် Key များကို အလိုအလျောက် အသစ်ဖန်တီး ထည့်သွင်းပေးခြင်း။
+- ☁️ **Advanced Backup System**:
+  - **Local Backup**: Database တစ်ခုလုံးကို JSON ဖိုင်အဖြစ် Download (Export) ရယူနိုင်ပြီး၊ ပြန်လည် ထည့်သွင်း (Import) နိုင်ခြင်း။
+  - **Cloud Auto-Backup**: နေ့စဉ် ညဘက်တိုင်း Koofr သို့မဟုတ် Nextcloud ကဲ့သို့ WebDAV စနစ်များသို့ အလိုအလျောက် Auto Backup တင်ပေးခြင်းကြောင့် Data ပျောက်ဆုံးမည်ကို ပူစရာမလိုခြင်း။
+- 👥 **Bulk Client Creation**: `vip` စသော နာမည်တစ်ခု ပေးရုံဖြင့် `vip-1, vip-2` စသည်ဖြင့် Client အယောက် ၅၀ အထိ တစ်ပြိုင်နက် ဖန်တီးပေးနိုင်ပြီး၊ ၎င်းတို့၏ Link အားလုံးကို "Copy All Links" ခလုတ်ဖြင့် တစ်ချက်တည်း Copy ယူနိုင်ခြင်း။
+- 🌍 **Auto GeoIP Flags**: ဆာဗာအသစ် ထည့်သွင်းချိန်တွင် IP ကိုဖတ်၍ နိုင်ငံကို အလိုအလျောက်ရှာဖွေပေးကာ၊ ဆာဗာနာမည်ရှေ့တွင် နိုင်ငံအလံလေးများ (ဥပမာ - 🇸🇬) တပ်ပေးသည့်စနစ် ပါဝင်ခြင်း။
 
 ### 📋 လိုအပ်ချက်များ (Prerequisites)
 1. **Supabase Account**: Database အတွက် [Supabase](https://supabase.com) တွင် အကောင့်ရှိရပါမည်။
