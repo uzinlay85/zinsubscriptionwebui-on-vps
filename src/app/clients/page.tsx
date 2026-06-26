@@ -2,18 +2,83 @@ import { supabase } from "@/lib/supabase";
 import { AddClientForm } from "./AddClientForm";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { EditClientForm } from "./EditClientForm";
-import { Users, Trash2, Key } from "lucide-react";
+import { Users, Trash2, Key, Activity } from "lucide-react";
 import Link from "next/link";
+import https from "https";
 
-export const revalidate = 0; // Disable caching
+export const revalidate = 0;
+
+async function fetchServerMetrics(apiUrl: string): Promise<Record<string, number>> {
+  return new Promise((resolve) => {
+    try {
+      const url = new URL(`${apiUrl}/metrics/transfer`);
+      const options = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        method: "GET",
+        rejectUnauthorized: false,
+      };
+      const req = https.request(options, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            resolve(json.bytesTransferredByUserId || {});
+          } catch { resolve({}); }
+        });
+      });
+      req.on("error", () => resolve({}));
+      req.end();
+    } catch { resolve({}); }
+  });
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
 
 export default async function ClientsPage() {
-  // Fetch clients and count their keys
-  const { data, error } = await supabase
+  // Fetch clients with their keys (including server info)
+  const { data } = await supabase
     .from("clients")
-    .select("*, client_keys(count)")
+    .select("*, client_keys(id, outline_key_id, server_id, servers(id, api_url))")
     .order("created_at", { ascending: false });
   const clients = data as any[];
+
+  // Collect all unique servers across all clients
+  const allServers = new Map<string, { id: string; api_url: string }>();
+  clients?.forEach((client) => {
+    client.client_keys?.forEach((key: any) => {
+      if (key.servers?.id) allServers.set(key.servers.id, key.servers);
+    });
+  });
+
+  // Fetch metrics from all servers in parallel
+  const metricsMap: Record<string, Record<string, number>> = {};
+  await Promise.all(
+    Array.from(allServers.values()).map(async (server) => {
+      metricsMap[server.id] = await fetchServerMetrics(server.api_url);
+    })
+  );
+
+  // Calculate total usage per client
+  const clientUsage: Record<string, number> = {};
+  clients?.forEach((client) => {
+    let total = 0;
+    client.client_keys?.forEach((key: any) => {
+      const serverId = key.servers?.id;
+      if (serverId && metricsMap[serverId]) {
+        total += metricsMap[serverId][key.outline_key_id] || 0;
+      }
+    });
+    clientUsage[client.id] = total;
+  });
 
   return (
     <div className="space-y-6 animate-in">
@@ -27,9 +92,10 @@ export default async function ClientsPage() {
 
       <div className="grid grid-cols-1 gap-4 mt-8">
         {clients?.map((client) => {
-          const keysCount = client.client_keys?.[0]?.count || 0;
+          const keysCount = client.client_keys?.length || 0;
           const isStatusActive = client.status === 'active';
-          
+          const usage = clientUsage[client.id] || 0;
+
           return (
             <div key={client.id} className="glass-card p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 group hover:border-white/10 transition-colors">
               
@@ -41,12 +107,17 @@ export default async function ClientsPage() {
                   <h3 className="text-xl font-semibold text-white group-hover:text-purple-400 transition-colors">
                     {client.name}
                   </h3>
-                  <div className="flex items-center gap-3 mt-1">
+                  <div className="flex items-center gap-3 mt-1 flex-wrap">
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isStatusActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-400'}`}>
                       {client.status.toUpperCase()}
                     </span>
                     <span className="text-xs text-zinc-500 flex items-center gap-1">
-                      <Key size={12} /> {keysCount} active keys
+                      <Key size={12} /> {keysCount} key{keysCount !== 1 ? 's' : ''}
+                    </span>
+                    {/* Live Usage Badge */}
+                    <span className="text-xs flex items-center gap-1 bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-mono font-medium">
+                      <Activity size={11} />
+                      {formatBytes(usage)}
                     </span>
                   </div>
                 </div>
@@ -93,3 +164,4 @@ export default async function ClientsPage() {
     </div>
   );
 }
+
