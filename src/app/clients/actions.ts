@@ -3,6 +3,8 @@
 import { supabase } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
 import { createOutlineKey, deleteOutlineKey } from "@/lib/outline";
+import { loginHysteria, createHysteriaUser, buildHysteriaUri, deleteHysteriaUser } from "@/lib/hysteria2";
+import crypto from "crypto";
 
 export async function addClient(formData: FormData) {
   const name = formData.get("name") as string;
@@ -31,13 +33,30 @@ export async function addClient(formData: FormData) {
   // 3. Auto-generate a key on every server for this new client
   const results = await Promise.allSettled(
     servers.map(async (server) => {
-      const keyName = `${server.name} - ${name}`;
-      const key = await createOutlineKey(server.api_url, keyName);
+      let keyId = "";
+      let accessUrl = "";
+
+      if (server.type === "outline" || !server.type) {
+        const keyName = `${server.name} - ${name}`;
+        const key = await createOutlineKey(server.api_url, keyName);
+        keyId = key.id;
+        accessUrl = key.accessUrl;
+      } else if (server.type === "hysteria2") {
+        // Authenticate with Hysteria2 Express backend
+        const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
+        // Generate random password for Hysteria2 user
+        const userPass = crypto.randomBytes(3).toString('hex');
+        await createHysteriaUser(server.api_url, token, name, userPass);
+        
+        keyId = userPass;
+        accessUrl = buildHysteriaUri(server.api_url, userPass, `${server.name} - ${name}`);
+      }
+
       await supabase.from("client_keys").insert({
         client_id: client.id,
         server_id: server.id,
-        outline_key_id: key.id,
-        access_url: key.accessUrl,
+        outline_key_id: keyId,
+        access_url: accessUrl,
       });
     })
   );
@@ -74,17 +93,26 @@ export async function deleteClient(id: string) {
   // 1. Fetch all keys for this client with server details
   const { data: keysData } = await supabase
     .from("client_keys")
-    .select("*, servers(api_url)")
+    .select("*, servers(api_url, type, auth_username, auth_password)")
     .eq("client_id", id);
 
   const keys = (keysData as any[]) || [];
 
-  // 2. Delete each key from the Outline server in parallel
+  // 2. Delete each key from the respective server in parallel
   await Promise.allSettled(
     keys.map(async (key) => {
-      const apiUrl = key.servers?.api_url;
-      if (apiUrl && key.outline_key_id) {
-        await deleteOutlineKey(apiUrl, key.outline_key_id);
+      const server = key.servers;
+      if (server?.api_url && key.outline_key_id) {
+        if (server.type === "outline" || !server.type) {
+          await deleteOutlineKey(server.api_url, key.outline_key_id);
+        } else if (server.type === "hysteria2") {
+          try {
+            const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
+            await deleteHysteriaUser(server.api_url, token, key.outline_key_id); // we used password as outline_key_id
+          } catch (err) {
+            console.error("Failed to delete Hysteria user", err);
+          }
+        }
       }
     })
   );

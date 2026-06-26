@@ -49,15 +49,26 @@ export async function removeClientKey(id: string, clientId: string) {
   // 1. Fetch key with server details before deleting
   const { data: keyData } = await supabase
     .from("client_keys")
-    .select("*, servers(api_url)")
+    .select("*, servers(api_url, type, auth_username, auth_password)")
     .eq("id", id)
     .single();
 
   const key = keyData as any;
+  const server = key?.servers;
 
-  // 2. Delete from Outline server first
-  if (key?.servers?.api_url && key?.outline_key_id) {
-    await deleteOutlineKey(key.servers.api_url, key.outline_key_id);
+  // 2. Delete from server first
+  if (server?.api_url && key?.outline_key_id) {
+    if (server.type === "outline" || !server.type) {
+      await deleteOutlineKey(server.api_url, key.outline_key_id);
+    } else if (server.type === "hysteria2") {
+      try {
+        const { loginHysteria, deleteHysteriaUser } = await import("@/lib/hysteria2");
+        const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
+        await deleteHysteriaUser(server.api_url, token, key.outline_key_id);
+      } catch (err) {
+        console.error("Failed to delete Hysteria user", err);
+      }
+    }
   }
 
   // 3. Delete from DB

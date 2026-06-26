@@ -3,20 +3,38 @@
 import { supabase } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
 import { createOutlineKey } from "@/lib/outline";
+import { loginHysteria, createHysteriaUser, buildHysteriaUri } from "@/lib/hysteria2";
+import crypto from "crypto";
 
 export async function addServer(formData: FormData) {
+  const type = formData.get("type") as string || "outline";
   const name = formData.get("name") as string;
   const apiUrl = formData.get("apiUrl") as string;
   const certSha256 = formData.get("certSha256") as string;
+  const authUsername = formData.get("authUsername") as string;
+  const authPassword = formData.get("authPassword") as string;
 
-  if (!name || !apiUrl || !certSha256) {
-    return { error: "All fields are required" };
+  if (!name || !apiUrl) {
+    return { error: "Name and API URL are required" };
+  }
+  if (type === "outline" && !certSha256) {
+    return { error: "Cert SHA-256 is required for Outline" };
+  }
+  if (type === "hysteria2" && (!authUsername || !authPassword)) {
+    return { error: "Admin Username and Password are required for Hysteria2" };
   }
 
   // 1. Create the server record
   const { data: newServer, error: serverError } = await supabase
     .from("servers")
-    .insert({ name, api_url: apiUrl, cert_sha256: certSha256 })
+    .insert({ 
+      name, 
+      api_url: apiUrl, 
+      cert_sha256: certSha256 || null,
+      type,
+      auth_username: authUsername || null,
+      auth_password: authPassword || null
+    })
     .select()
     .single();
 
@@ -34,15 +52,38 @@ export async function addServer(formData: FormData) {
   const clients = (clientsData as any[]) || [];
 
   // 3. Auto-generate a key on this new server for every existing client
+  let hy2Token = "";
+  if (type === "hysteria2" && clients.length > 0) {
+    try {
+      hy2Token = await loginHysteria(apiUrl, authUsername, authPassword);
+    } catch (err) {
+      return { error: "Failed to authenticate with Hysteria2 Server" };
+    }
+  }
+
   const results = await Promise.allSettled(
     clients.map(async (client) => {
-      const keyName = `${name} - ${client.name}`;
-      const key = await createOutlineKey(apiUrl, keyName);
+      let keyId = "";
+      let accessUrl = "";
+
+      if (type === "outline") {
+        const keyName = `${name} - ${client.name}`;
+        const key = await createOutlineKey(apiUrl, keyName);
+        keyId = key.id;
+        accessUrl = key.accessUrl;
+      } else if (type === "hysteria2") {
+        // Generate a random password for the user (6 chars)
+        const userPass = crypto.randomBytes(3).toString('hex');
+        await createHysteriaUser(apiUrl, hy2Token, client.name, userPass);
+        keyId = userPass; // Use password as key ID since it's unique
+        accessUrl = buildHysteriaUri(apiUrl, userPass, `${name} - ${client.name}`);
+      }
+
       await supabase.from("client_keys").insert({
         client_id: client.id,
         server_id: server.id,
-        outline_key_id: key.id,
-        access_url: key.accessUrl,
+        outline_key_id: keyId,
+        access_url: accessUrl,
       });
     })
   );

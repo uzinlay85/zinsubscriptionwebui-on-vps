@@ -39,13 +39,26 @@ export default async function ServersPage() {
             
             <div className="space-y-2 mt-2 flex-1">
               <div>
-                <p className="text-xs text-zinc-500 mb-1">API URL</p>
+                <p className="text-xs text-zinc-500 mb-1">{server.type === "hysteria2" ? "Web UI Base URL" : "API URL"}</p>
                 <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">{server.api_url}</p>
               </div>
-              <div>
-                <p className="text-xs text-zinc-500 mb-1">Cert SHA-256</p>
-                <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">{server.cert_sha256}</p>
-              </div>
+              {server.type === "outline" || !server.type ? (
+                <div>
+                  <p className="text-xs text-zinc-500 mb-1">Cert SHA-256</p>
+                  <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">{server.cert_sha256}</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-xs text-zinc-500 mb-1">Admin User</p>
+                    <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">{server.auth_username}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-zinc-500 mb-1">Admin Pass</p>
+                    <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">••••••</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="pt-4 mt-4 border-t border-white/5 flex justify-end">
