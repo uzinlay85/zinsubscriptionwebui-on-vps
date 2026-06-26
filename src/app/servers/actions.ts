@@ -16,7 +16,7 @@ export async function addServer(formData: FormData) {
     name,
     api_url: apiUrl,
     cert_sha256: certSha256,
-  });
+  } as any);
 
   if (error) {
     return { error: error.message };

@@ -12,7 +12,7 @@ export async function addClient(formData: FormData) {
 
   const { error } = await supabase.from("clients").insert({
     name,
-  });
+  } as any);
 
   if (error) {
     return { error: error.message };

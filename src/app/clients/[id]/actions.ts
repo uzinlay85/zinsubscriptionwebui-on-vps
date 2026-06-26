@@ -18,7 +18,7 @@ export async function assignServerToClient(formData: FormData) {
     server_id: serverId,
     outline_key_id: outlineKeyId,
     access_url: accessUrl,
-  });
+  } as any);
 
   if (error) {
     return { error: error.message };
