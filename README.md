@@ -38,6 +38,7 @@ CREATE TABLE servers (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   api_url TEXT NOT NULL,
+  cert_sha256 TEXT NOT NULL,
   auth_username TEXT, -- Hysteria2 admin username (optional for Outline)
   auth_password TEXT, -- Hysteria2 admin password (optional for Outline)
   type TEXT DEFAULT 'outline' NOT NULL, -- 'outline' or 'hysteria2'
@@ -115,6 +116,7 @@ CREATE TABLE servers (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   api_url TEXT NOT NULL,
+  cert_sha256 TEXT NOT NULL,
   auth_username TEXT,
   auth_password TEXT,
   type TEXT DEFAULT 'outline' NOT NULL,
