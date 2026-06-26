@@ -5,7 +5,8 @@ import { Server as ServerIcon, Trash2, Activity } from "lucide-react";
 export const revalidate = 0; // Disable caching to always get fresh data
 
 export default async function ServersPage() {
-  const { data: servers, error } = await supabase.from("servers").select("*").order("created_at", { ascending: false });
+  const { data, error } = await supabase.from("servers").select("*").order("created_at", { ascending: false });
+  const servers = data as any[];
 
   return (
     <div className="space-y-6 animate-in">

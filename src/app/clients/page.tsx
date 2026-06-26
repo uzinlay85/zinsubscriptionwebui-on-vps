@@ -8,10 +8,11 @@ export const revalidate = 0; // Disable caching
 
 export default async function ClientsPage() {
   // Fetch clients and count their keys
-  const { data: clients, error } = await supabase
+  const { data, error } = await supabase
     .from("clients")
     .select("*, client_keys(count)")
     .order("created_at", { ascending: false });
+  const clients = data as any[];
 
   return (
     <div className="space-y-6 animate-in">

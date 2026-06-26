@@ -10,25 +10,30 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const { id } = await params;
   
   // Fetch client details
-  const { data: client, error: clientError } = await supabase
+  const { data, error: clientError } = await supabase
     .from("clients")
     .select("*")
     .eq("id", id)
     .single();
+    
+  const client = data as any;
 
   if (clientError || !client) {
     notFound();
   }
 
   // Fetch client keys with associated server data
-  const { data: clientKeys } = await supabase
+  const { data: keysData } = await supabase
     .from("client_keys")
     .select("*, servers(name)")
     .eq("client_id", id)
     .order("created_at", { ascending: false });
+    
+  const clientKeys = keysData as any[];
 
   // Fetch all servers for the dropdown
-  const { data: servers } = await supabase.from("servers").select("id, name");
+  const { data: serversData } = await supabase.from("servers").select("id, name");
+  const servers = serversData as any[];
 
   return (
     <div className="space-y-6 animate-in">
