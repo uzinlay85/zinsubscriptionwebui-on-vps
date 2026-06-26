@@ -45,6 +45,7 @@ CREATE TABLE servers (
   type TEXT DEFAULT 'outline' NOT NULL, -- 'outline' or 'hysteria2'
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE servers DISABLE ROW LEVEL SECURITY;
 
 -- Create Clients Table
 CREATE TABLE clients (
@@ -55,6 +56,7 @@ CREATE TABLE clients (
   expiry_date TIMESTAMP WITH TIME ZONE NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE clients DISABLE ROW LEVEL SECURITY;
 
 -- Create Client_Keys Table
 CREATE TABLE client_keys (
@@ -65,12 +67,14 @@ CREATE TABLE client_keys (
   access_url TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE client_keys DISABLE ROW LEVEL SECURITY;
 
 -- Create Settings Table (For WebDAV & General Settings)
 CREATE TABLE settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
 ```
 
 #### 2. Deploy to Vercel
@@ -131,6 +135,7 @@ CREATE TABLE servers (
   type TEXT DEFAULT 'outline' NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE servers DISABLE ROW LEVEL SECURITY;
 
 -- Create Clients Table
 CREATE TABLE clients (
@@ -141,6 +146,7 @@ CREATE TABLE clients (
   expiry_date TIMESTAMP WITH TIME ZONE NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE clients DISABLE ROW LEVEL SECURITY;
 
 -- Create Client_Keys Table
 CREATE TABLE client_keys (
@@ -151,12 +157,14 @@ CREATE TABLE client_keys (
   access_url TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE client_keys DISABLE ROW LEVEL SECURITY;
 
 -- Create Settings Table (For WebDAV & General Settings)
 CREATE TABLE settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
 ```
 
 #### ၂။ Vercel ပေါ်သို့ တင်ခြင်း (Deployment)
