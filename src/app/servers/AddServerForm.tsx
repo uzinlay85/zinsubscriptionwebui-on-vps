@@ -7,6 +7,7 @@ import { Plus, X, Loader2 } from "lucide-react";
 export function AddServerForm() {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [serverType, setServerType] = useState<"outline" | "hysteria2">("outline");
 
   async function handleSubmit(formData: FormData) {
