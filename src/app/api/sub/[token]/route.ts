@@ -12,11 +12,13 @@ export async function GET(
   }
 
   // Fetch the client using the token
-  const { data: client, error: clientError } = await supabase
+  const { data, error: clientError } = await supabase
     .from("clients")
     .select("*")
     .eq("sub_token", token)
     .single();
+
+  const client = data as { id: string; status: string } | null;
 
   if (clientError || !client) {
     return new NextResponse("Invalid subscription token", { status: 401 });
