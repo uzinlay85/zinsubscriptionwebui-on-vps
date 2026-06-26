@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { updateClient } from "./actions";
 import { Pencil, X, Loader2, Check } from "lucide-react";
 
@@ -37,8 +38,8 @@ export function EditClientForm({ client }: { client: { id: string; name: string;
         <Pencil size={18} />
       </button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in">
+      {isOpen && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in">
           <div className="glass-card w-full max-w-md p-6 relative">
             <button
               onClick={() => setIsOpen(false)}
@@ -111,7 +112,8 @@ export function EditClientForm({ client }: { client: { id: string; name: string;
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
