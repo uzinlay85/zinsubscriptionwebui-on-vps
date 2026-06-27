@@ -7,21 +7,14 @@ export async function login3xui(apiUrl: string, username?: string, password?: st
   body.append("username", username || "");
   body.append("password", password || "");
 
-  let res;
-  try {
-    // 1. Fetch ကို Try/Catch ဖြင့် အုပ်ထားခြင်း
-    res = await fetch(`${cleanUrl}/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-      body: body.toString(),
-    });
-  } catch (error: any) {
-    // 🔴 Vercel ကနေ IP သို့မဟုတ် Port ကို ချိတ်မရဘဲ ပြတ်ကျသွားပါက ဤနေရာတွင် Error ပြပါမည်
-    throw new Error(`Network Connection Failed: ${error.message}. (Vercel မှ Port 2053 ကို ပိတ်ထားခြင်း ဖြစ်နိုင်ပါသည်)`);
-  }
+  const res = await fetch(`${cleanUrl}/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Accept": "application/json"
+    },
+    body: body.toString(),
+  });
 
   const responseText = await res.text();
   let data;
@@ -29,12 +22,11 @@ export async function login3xui(apiUrl: string, username?: string, password?: st
   try {
     data = JSON.parse(responseText);
   } catch (err) {
-    // JSON မဟုတ်ဘဲ HTML တွေ ပြန်လာရင် ဘာစာတွေ ပြန်လာလဲဆိုတာပါ ဖော်ပြပေးပါမည်
-    throw new Error(`Invalid Response (Status: ${res.status}): ${responseText.substring(0, 100)}...`);
+    throw new Error(`Invalid Response (Status: ${res.status}): ${responseText.substring(0, 100)}`);
   }
 
-  if (!res.ok || !data.success) {
-    throw new Error(data.msg || `Login failed with status ${res.status}`);
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.msg || `Login failed with status ${res.status}`);
   }
 
   const setCookieHeader = res.headers.get("set-cookie");
