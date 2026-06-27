@@ -105,6 +105,7 @@ export async function addClient3xui(
   }
 
   // Define new client dynamically based on protocol
+  const randomSubId = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
   const newClient: any = {
     email: clientEmail,
     limitIp: 0,
@@ -112,7 +113,7 @@ export async function addClient3xui(
     expiryTime: 0,
     enable: true,
     tgId: 0,
-    subId: uuid,
+    subId: randomSubId.substring(0, 16),
     reset: 0,
     group: "",
     comment: ""
