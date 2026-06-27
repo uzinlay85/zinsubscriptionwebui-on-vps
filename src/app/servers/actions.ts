@@ -13,6 +13,11 @@ export async function addServer(formData: FormData) {
   const certSha256 = formData.get("certSha256") as string;
   const authUsername = formData.get("authUsername") as string;
   const authPassword = formData.get("authPassword") as string;
+  const username = formData.get("username") as string;
+  const password = formData.get("password") as string;
+
+  const finalUsername = type === "3x-ui" ? username : authUsername;
+  const finalPassword = type === "3x-ui" ? password : authPassword;
 
   if (!name || !apiUrl) {
     return { error: "Name and API URL are required" };
@@ -45,7 +50,7 @@ export async function addServer(formData: FormData) {
   if (type === "outline" && !certSha256) {
     return { error: "Cert SHA-256 is required for Outline" };
   }
-  if ((type === "hysteria2" || type === "3x-ui") && (!authUsername || !authPassword)) {
+  if ((type === "hysteria2" || type === "3x-ui") && (!finalUsername || !finalPassword)) {
     return { error: "Username and Password are required for this server type" };
   }
 
@@ -63,14 +68,14 @@ export async function addServer(formData: FormData) {
     // Verify 3x-ui connection
     try {
       const { login3xui } = await import("@/lib/3x-ui");
-      cookie3xui = await login3xui(apiUrl, authUsername, authPassword);
+      cookie3xui = await login3xui(apiUrl, finalUsername, finalPassword);
     } catch (err: any) {
       return { error: `Failed to connect to 3x-ui panel: ${err.message}` };
     }
   } else if (type === "hysteria2") {
     // Verify Hysteria2 connection
     try {
-      hy2Token = await loginHysteria(apiUrl, authUsername, authPassword);
+      hy2Token = await loginHysteria(apiUrl, finalUsername, finalPassword);
     } catch (err: any) {
       return { error: `Failed to connect to Hysteria2 server: ${err.message}` };
     }
@@ -84,8 +89,10 @@ export async function addServer(formData: FormData) {
       api_url: apiUrl, 
       cert_sha256: certSha256 || "none",
       type,
-      auth_username: authUsername || null,
-      auth_password: authPassword || null,
+      auth_username: finalUsername || null,
+      auth_password: finalPassword || null,
+      username: username || null,
+      password: password || null,
       inbound_id: inboundId
     })
     .select()
@@ -110,6 +117,7 @@ export async function addServer(formData: FormData) {
     clients.map(async (client) => {
       let keyId = "";
       let accessUrl = "";
+      let uuid = null;
 
       if (type === "outline") {
         const keyName = `${name} - ${client.name}`;
@@ -124,7 +132,7 @@ export async function addServer(formData: FormData) {
         accessUrl = buildHysteriaUri(apiUrl, client.name, userPass, `${name} - ${client.name}`);
       } else if (type === "3x-ui") {
         const { addClient3xui } = await import("@/lib/3x-ui");
-        const uuid = crypto.randomUUID();
+        uuid = crypto.randomUUID();
         // client.name is the email identifier for 3x-ui
         await addClient3xui(apiUrl, cookie3xui, inboundId as number, client.name, uuid);
         keyId = uuid;
@@ -136,6 +144,7 @@ export async function addServer(formData: FormData) {
         server_id: server.id,
         outline_key_id: keyId,
         access_url: accessUrl,
+        uuid: uuid
       });
     })
   );
@@ -167,6 +176,11 @@ export async function updateServer(formData: FormData) {
   const certSha256 = formData.get("certSha256") as string;
   const authUsername = formData.get("authUsername") as string;
   const authPassword = formData.get("authPassword") as string;
+  const username = formData.get("username") as string;
+  const password = formData.get("password") as string;
+
+  const finalUsername = type === "3x-ui" ? username : authUsername;
+  const finalPassword = type === "3x-ui" ? password : authPassword;
 
   if (!id || !name || !apiUrl) {
     return { error: "ID, Name, and API URL are required" };
@@ -206,13 +220,13 @@ export async function updateServer(formData: FormData) {
     }
     try {
       const { login3xui } = await import("@/lib/3x-ui");
-      await login3xui(apiUrl, authUsername, authPassword);
+      await login3xui(apiUrl, finalUsername, finalPassword);
     } catch (err: any) {
       return { error: `Failed to connect to 3x-ui panel: ${err.message}` };
     }
   } else if (type === "hysteria2") {
     try {
-      await loginHysteria(apiUrl, authUsername, authPassword);
+      await loginHysteria(apiUrl, finalUsername, finalPassword);
     } catch (err: any) {
       return { error: `Failed to authenticate with Hysteria2 Server. ${err.message}` };
     }
@@ -224,8 +238,10 @@ export async function updateServer(formData: FormData) {
       name, 
       api_url: apiUrl, 
       cert_sha256: certSha256 || "none",
-      auth_username: authUsername || null,
-      auth_password: authPassword || null,
+      auth_username: finalUsername || null,
+      auth_password: finalPassword || null,
+      username: username || null,
+      password: password || null,
       inbound_id: inboundId
     })
     .eq("id", id);
@@ -285,7 +301,10 @@ export async function syncServerKeys(serverId: string) {
   } else if (server.type === "3x-ui") {
     try {
       const { login3xui } = await import("@/lib/3x-ui");
-      cookie3xui = await login3xui(server.api_url, server.auth_username, server.auth_password);
+      // Use username/password if they exist, fallback to auth_username/auth_password
+      const finalUsername = server.username || server.auth_username;
+      const finalPassword = server.password || server.auth_password;
+      cookie3xui = await login3xui(server.api_url, finalUsername, finalPassword);
     } catch (err: any) {
       return { error: `Failed to authenticate with 3x-ui panel. ${err.message}` };
     }
@@ -295,6 +314,7 @@ export async function syncServerKeys(serverId: string) {
     missingClients.map(async (client) => {
       let keyId = "";
       let accessUrl = "";
+      let uuid = null;
 
       if (server.type === "outline" || !server.type) {
         const keyName = `${server.name} - ${client.name}`;
@@ -308,7 +328,7 @@ export async function syncServerKeys(serverId: string) {
         accessUrl = buildHysteriaUri(server.api_url, client.name, userPass, `${server.name} - ${client.name}`);
       } else if (server.type === "3x-ui") {
         const { addClient3xui } = await import("@/lib/3x-ui");
-        const uuid = crypto.randomUUID();
+        uuid = crypto.randomUUID();
         // client.name is the email identifier for 3x-ui
         await addClient3xui(server.api_url, cookie3xui, server.inbound_id, client.name, uuid);
         keyId = uuid;
@@ -320,6 +340,7 @@ export async function syncServerKeys(serverId: string) {
         server_id: server.id,
         outline_key_id: keyId,
         access_url: accessUrl,
+        uuid: uuid
       });
     })
   );

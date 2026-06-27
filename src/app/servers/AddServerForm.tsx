@@ -134,7 +134,7 @@ export function AddServerForm() {
                       </label>
                       <input 
                         type="text" 
-                        name="authUsername" 
+                        name={serverType === "3x-ui" ? "username" : "authUsername"} 
                         required={serverType === "3x-ui"}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
                         placeholder={serverType === "hysteria2" ? "e.g. admin" : "admin"}
@@ -146,7 +146,7 @@ export function AddServerForm() {
                       </label>
                       <input 
                         type="password" 
-                        name="authPassword" 
+                        name={serverType === "3x-ui" ? "password" : "authPassword"} 
                         required
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
                         placeholder="e.g. strongpassword123"

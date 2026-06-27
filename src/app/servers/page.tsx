@@ -15,8 +15,8 @@ export default async function ServersPage() {
     <div className="space-y-6 animate-in">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">Outline Servers</h1>
-          <p className="text-zinc-400 mt-1">Manage your Outline servers and API keys.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-white">VPN Servers</h1>
+          <p className="text-zinc-400 mt-1">Manage your VPN servers and API keys.</p>
         </div>
         <AddServerForm />
       </div>
@@ -41,7 +41,7 @@ export default async function ServersPage() {
             
             <div className="space-y-2 mt-2 flex-1">
               <div>
-                <p className="text-xs text-zinc-500 mb-1">{server.type === "hysteria2" ? "Web UI Base URL" : "API URL"}</p>
+                <p className="text-xs text-zinc-500 mb-1">{server.type === "hysteria2" ? "Web UI Base URL" : server.type === "3x-ui" ? "Panel URL" : "API URL"}</p>
                 <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">{server.api_url}</p>
               </div>
               {server.type === "outline" || !server.type ? (
@@ -52,13 +52,20 @@ export default async function ServersPage() {
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <p className="text-xs text-zinc-500 mb-1">Admin User</p>
-                    <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">{server.auth_username}</p>
+                    <p className="text-xs text-zinc-500 mb-1">{server.type === "3x-ui" ? "Panel User" : "Admin User"}</p>
+                    <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">{server.auth_username || server.username || ""}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-zinc-500 mb-1">Admin Pass</p>
-                    <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">••••••</p>
-                  </div>
+                  {server.type === "3x-ui" ? (
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-1">Inbound ID</p>
+                      <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">{server.inbound_id}</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-1">Admin Pass</p>
+                      <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">••••••</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -84,7 +91,7 @@ export default async function ServersPage() {
               <ServerIcon size={32} className="text-zinc-500" />
             </div>
             <h3 className="text-xl font-semibold text-white mb-2">No servers found</h3>
-            <p className="text-zinc-400 max-w-md">You haven't added any Outline servers yet. Click the "Add Server" button to get started.</p>
+            <p className="text-zinc-400 max-w-md">You haven't added any VPN servers yet. Click the "Add Server" button to get started.</p>
           </div>
         )}
       </div>

@@ -36,6 +36,7 @@ export async function addClient(formData: FormData) {
     servers.map(async (server) => {
       let keyId = "";
       let accessUrl = "";
+      let uuid = null;
 
       if (server.type === "outline" || !server.type) {
         const keyName = `${server.name} - ${name}`;
@@ -55,8 +56,10 @@ export async function addClient(formData: FormData) {
         accessUrl = buildHysteriaUri(server.api_url, name, userPass, `${server.name} - ${name}`);
       } else if (server.type === "3x-ui") {
         const { login3xui, addClient3xui } = await import("@/lib/3x-ui");
-        const cookie = await login3xui(server.api_url, server.auth_username, server.auth_password);
-        const uuid = crypto.randomUUID();
+        const finalUsername = server.username || server.auth_username;
+        const finalPassword = server.password || server.auth_password;
+        const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
+        uuid = crypto.randomUUID();
         await addClient3xui(server.api_url, cookie, server.inbound_id, name, uuid);
         keyId = uuid;
         accessUrl = `3x-ui-sub:${uuid}`;
@@ -67,6 +70,7 @@ export async function addClient(formData: FormData) {
         server_id: server.id,
         outline_key_id: keyId,
         access_url: accessUrl,
+        uuid: uuid
       });
     })
   );
@@ -127,6 +131,7 @@ export async function addBulkClients(formData: FormData) {
       servers.map(async (server) => {
         let keyId = "";
         let accessUrl = "";
+        let uuid = null;
 
         if (server.type === "outline" || !server.type) {
           const keyName = `${server.name} - ${client.name}`;
@@ -149,8 +154,10 @@ export async function addBulkClients(formData: FormData) {
           accessUrl = buildHysteriaUri(server.api_url, client.name, userPass, `${server.name} - ${client.name}`);
         } else if (server.type === "3x-ui") {
           const { login3xui, addClient3xui } = await import("@/lib/3x-ui");
-          const cookie = await login3xui(server.api_url, server.auth_username, server.auth_password);
-          const uuid = crypto.randomUUID();
+          const finalUsername = server.username || server.auth_username;
+          const finalPassword = server.password || server.auth_password;
+          const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
+          uuid = crypto.randomUUID();
           await addClient3xui(server.api_url, cookie, server.inbound_id, client.name, uuid);
           keyId = uuid;
           accessUrl = `3x-ui-sub:${uuid}`;
@@ -161,6 +168,7 @@ export async function addBulkClients(formData: FormData) {
           server_id: server.id,
           outline_key_id: keyId,
           access_url: accessUrl,
+          uuid: uuid
         });
       })
     );
@@ -279,7 +287,9 @@ export async function deleteClient(formData: FormData) {
         } else if (server.type === "3x-ui") {
           try {
             const { login3xui, deleteClient3xui } = await import("@/lib/3x-ui");
-            const cookie = await login3xui(server.api_url, server.auth_username, server.auth_password);
+            const finalUsername = server.username || server.auth_username;
+            const finalPassword = server.password || server.auth_password;
+            const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
             // We need inbound_id here, let's fetch it if it's missing in `servers` joined query!
             // Wait, I need to make sure inbound_id is selected in the query above!
             const serverDetails = await supabase.from("servers").select("inbound_id").eq("id", key.server_id).single();
@@ -356,6 +366,7 @@ export async function syncClientKeys(clientId: string) {
     missingServers.map(async (server) => {
       let keyId = "";
       let accessUrl = "";
+      let uuid = null;
 
       if (server.type === "outline" || !server.type) {
         const keyName = `${server.name} - ${client.name}`;
@@ -369,6 +380,15 @@ export async function syncClientKeys(clientId: string) {
         
         keyId = userPass;
         accessUrl = buildHysteriaUri(server.api_url, client.name, userPass, `${server.name} - ${client.name}`);
+      } else if (server.type === "3x-ui") {
+        const { login3xui, addClient3xui } = await import("@/lib/3x-ui");
+        const finalUsername = server.username || server.auth_username;
+        const finalPassword = server.password || server.auth_password;
+        const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
+        uuid = crypto.randomUUID();
+        await addClient3xui(server.api_url, cookie, server.inbound_id, client.name, uuid);
+        keyId = uuid;
+        accessUrl = `3x-ui-sub:${uuid}`;
       }
 
       await supabase.from("client_keys").insert({
@@ -376,6 +396,7 @@ export async function syncClientKeys(clientId: string) {
         server_id: server.id,
         outline_key_id: keyId,
         access_url: accessUrl,
+        uuid: uuid
       });
     })
   );

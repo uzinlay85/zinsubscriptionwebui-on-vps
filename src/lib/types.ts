@@ -16,6 +16,13 @@ export interface Database {
           api_url: string
           cert_sha256: string
           created_at: string
+          type?: string
+          auth_username?: string
+          auth_password?: string
+          server_type?: 'outline' | 'hysteria2' | '3x-ui'
+          username?: string
+          password?: string
+          inbound_id?: number
         }
         Insert: {
           id?: string
@@ -23,6 +30,13 @@ export interface Database {
           api_url: string
           cert_sha256: string
           created_at?: string
+          type?: string
+          auth_username?: string
+          auth_password?: string
+          server_type?: 'outline' | 'hysteria2' | '3x-ui'
+          username?: string
+          password?: string
+          inbound_id?: number
         }
         Update: {
           id?: string
@@ -30,6 +44,13 @@ export interface Database {
           api_url?: string
           cert_sha256?: string
           created_at?: string
+          type?: string
+          auth_username?: string
+          auth_password?: string
+          server_type?: 'outline' | 'hysteria2' | '3x-ui'
+          username?: string
+          password?: string
+          inbound_id?: number
         }
       }
       clients: {
@@ -63,6 +84,7 @@ export interface Database {
           outline_key_id: string
           access_url: string
           created_at: string
+          uuid?: string
         }
         Insert: {
           id?: string
@@ -71,6 +93,7 @@ export interface Database {
           outline_key_id: string
           access_url: string
           created_at?: string
+          uuid?: string
         }
         Update: {
           id?: string
@@ -79,6 +102,7 @@ export interface Database {
           outline_key_id?: string
           access_url?: string
           created_at?: string
+          uuid?: string
         }
       }
     }
