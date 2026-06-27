@@ -80,6 +80,7 @@ export async function addClient3xui(
     method: "GET",
     headers: {
       "Cookie": cookie,
+      "Accept": "application/json",
     }
   });
 
@@ -134,6 +135,7 @@ export async function addClient3xui(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Accept": "application/json",
       "Cookie": cookie,
       ...(csrfToken ? { "X-Csrf-Token": csrfToken } : {})
     },
@@ -167,6 +169,7 @@ export async function deleteClient3xui(
   const delRes = await fetch(`${cleanUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`, {
     method: "POST",
     headers: {
+      "Accept": "application/json",
       "Cookie": cookie,
       ...(csrfToken ? { "X-Csrf-Token": csrfToken } : {})
     }
