@@ -63,7 +63,8 @@ export async function addClient3xui(
   cookie: string,
   inboundId: number,
   clientEmail: string,
-  uuid: string
+  uuid: string,
+  serverName: string
 ): Promise<string> {
   const cleanUrl = apiUrl.replace(/\/$/, "");
   
@@ -166,7 +167,102 @@ export async function addClient3xui(
     throw new Error(`3x-ui Error: ${addData?.msg || 'None'}. Status: ${addRes.status}. Request: ${addBody}. Response: ${responseText.substring(0, 200)}`);
   }
 
-  return newClient.subId;
+  // Generate raw URI directly so we don't depend on 3x-ui's sub endpoints
+  return build3xuiLink(inbound, newClient, serverName, apiUrl);
+}
+
+function build3xuiLink(inbound: any, client: any, serverName: string, apiUrl: string): string {
+  const protocol = inbound.protocol;
+  let stream;
+  try {
+    stream = typeof inbound.streamSettings === "string" ? JSON.parse(inbound.streamSettings) : inbound.streamSettings;
+  } catch(e) {
+    stream = {};
+  }
+  
+  const net = stream.network || "tcp";
+  const sec = stream.security || "none";
+  
+  let host = "";
+  let path = "";
+  let sni = "";
+  let alpn = "";
+
+  if (net === "ws") {
+    path = stream.wsSettings?.path || "";
+    host = stream.wsSettings?.headers?.Host || "";
+  } else if (net === "grpc") {
+    path = stream.grpcSettings?.serviceName || "";
+  } else if (net === "tcp") {
+    if (stream.tcpSettings?.header?.type === "http") {
+      host = stream.tcpSettings?.header?.request?.headers?.Host?.[0] || "";
+      path = stream.tcpSettings?.header?.request?.path?.[0] || "";
+    }
+  }
+
+  if (sec === "tls" || sec === "reality") {
+    const tlsSet = sec === "reality" ? stream.realitySettings : stream.tlsSettings;
+    sni = tlsSet?.serverName || "";
+    if (tlsSet?.alpn && tlsSet.alpn.length > 0) {
+      alpn = tlsSet.alpn.join(",");
+    }
+  }
+
+  let address = sni || host;
+  if (!address) {
+    try {
+      address = new URL(apiUrl).hostname;
+    } catch(e) {
+      address = apiUrl;
+    }
+  }
+
+  let port = inbound.port;
+
+  const query = new URLSearchParams();
+  query.set("type", net);
+  if (sec !== "none") query.set("security", sec);
+  if (sni) query.set("sni", sni);
+  if (alpn) query.set("alpn", alpn);
+  if (host) query.set("host", host);
+  if (path) query.set("path", path);
+
+  if (protocol === "vless") {
+    query.set("encryption", "none");
+    if (sec === "reality") {
+      query.set("pbk", stream.realitySettings?.settings?.publicKey || "");
+      query.set("fp", stream.realitySettings?.settings?.fingerprint || "chrome");
+      if (stream.realitySettings?.settings?.spiderX) query.set("spx", stream.realitySettings.settings.spiderX);
+      if (stream.realitySettings?.serverNames && stream.realitySettings.serverNames.length > 0) {
+         query.set("sni", stream.realitySettings.serverNames[0]);
+      }
+    }
+    const qs = query.toString();
+    return `vless://${client.id}@${address}:${port}${qs ? "?" + qs : ""}#${encodeURIComponent(serverName)}`;
+  } else if (protocol === "vmess") {
+    const vmessObj = {
+      v: "2",
+      ps: serverName,
+      add: address,
+      port: port,
+      id: client.id,
+      aid: client.alterId || 0,
+      scy: "auto",
+      net: net,
+      type: "none",
+      host: host,
+      path: path,
+      tls: sec,
+      sni: sni,
+      alpn: alpn
+    };
+    return `vmess://${Buffer.from(JSON.stringify(vmessObj)).toString("base64")}`;
+  } else if (protocol === "trojan") {
+    const qs = query.toString();
+    return `trojan://${client.password}@${address}:${port}${qs ? "?" + qs : ""}#${encodeURIComponent(serverName)}`;
+  }
+
+  return "";
 }
 
 export async function deleteClient3xui(
