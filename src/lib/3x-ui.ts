@@ -316,29 +316,35 @@ export async function deleteClient3xui(
 ): Promise<void> {
   const cleanUrl = apiUrl.replace(/\/$/, "");
   
-  // Construct the URL exactly to see what variables are being passed
-  const targetUrl = `${cleanUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`;
+  // Path 1: Newer MHSanaei Versions
+  const path1 = `${cleanUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`;
+  // Path 2: Older versions or other forks (e.g., FranzKafkaYu)
+  const path2 = `${cleanUrl}/panel/api/inbounds/delClient/${uuid}`;
 
-  const res = await fetch(targetUrl, {
-    method: "POST",
-    headers: {
-      "Cookie": cookie,
-      "Accept": "application/json",
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    }
-  });
+  const headers = {
+    "Cookie": cookie,
+    "Accept": "application/json",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+  };
+
+  // Try Path 1
+  let res = await fetch(path1, { method: "POST", headers });
+
+  // If Path 1 doesn't exist (404 Not Found), fallback to Path 2
+  if (res.status === 404) {
+    res = await fetch(path2, { method: "POST", headers });
+  }
 
   const responseText = await res.text();
   let data;
   try {
     data = JSON.parse(responseText);
   } catch (err) {
-    // THIS WILL SHOW US EXACTLY WHAT URL WAS REQUESTED
-    throw new Error(`3x-ui API failed (Status: ${res.status}). Requested URL: ${targetUrl}`);
+    throw new Error(`3x-ui Delete API failed (Status: ${res.status}). Response: ${responseText.substring(0, 100)}`);
   }
 
   if (!res.ok || !data.success) {
-    throw new Error(data.msg || `Failed to delete from 3x-ui (Status ${res.status}). Requested URL: ${targetUrl}`);
+    throw new Error(data.msg || `Failed to delete from 3x-ui (Status ${res.status})`);
   }
 }
 
