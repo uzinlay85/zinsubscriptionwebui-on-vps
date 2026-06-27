@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { addServer } from "./actions";
 import { Plus, X, Loader2 } from "lucide-react";
 
@@ -9,6 +10,11 @@ export function AddServerForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serverType, setServerType] = useState<"outline" | "hysteria2" | "3x-ui">("outline");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   async function handleSubmit(formData: FormData) {
     try {
@@ -42,8 +48,8 @@ export function AddServerForm() {
         Add Server
       </button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in">
+      {isOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in">
           <div className="glass-card w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
             <button 
               onClick={() => setIsOpen(false)}
@@ -211,7 +217,8 @@ export function AddServerForm() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

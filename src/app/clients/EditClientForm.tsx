@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { createPortal } from "react-dom";
 import { updateClient } from "./actions";
 import { Pencil, X, Loader2, Check } from "lucide-react";
@@ -9,6 +10,11 @@ export function EditClientForm({ client }: { client: { id: string; name: string;
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Format existing expiry_date to YYYY-MM-DD for the input
   const defaultDate = client.expiry_date ? new Date(client.expiry_date).toISOString().split('T')[0] : "";
@@ -38,7 +44,7 @@ export function EditClientForm({ client }: { client: { id: string; name: string;
         <Pencil size={18} />
       </button>
 
-      {isOpen && typeof document !== "undefined" && createPortal(
+      {isOpen && mounted && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in">
           <div className="glass-card w-full max-w-md p-5 sm:p-6 relative max-h-[90vh] overflow-y-auto">
             <button

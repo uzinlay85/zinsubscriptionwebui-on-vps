@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { addClient, addBulkClients } from "./actions";
 import { Plus, X, Loader2, Copy, Check, Users, Link2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -11,6 +12,11 @@ export function AddClientForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"single" | "bulk">("single");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   
   // Success state for Bulk
   const [createdClients, setCreatedClients] = useState<Array<{name: string, sub_token: string}> | null>(null);
@@ -84,8 +90,8 @@ export function AddClientForm() {
         Add Client
       </button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in">
+      {isOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in">
           <div className="glass-card w-full max-w-md p-5 sm:p-6 relative max-h-[90vh] overflow-y-auto">
             <button 
               onClick={resetForm}
@@ -250,7 +256,8 @@ export function AddClientForm() {
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
