@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { createPortal } from "react-dom";
 import { updateClient } from "./actions";
 import { Pencil, X, Loader2, Check } from "lucide-react";
 
