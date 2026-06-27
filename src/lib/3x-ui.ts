@@ -92,7 +92,12 @@ export async function addClient3xui(
 
   const inbound = getData.obj;
   const protocol = inbound.protocol;
-  const settings = JSON.parse(inbound.settings);
+  let settings;
+  try {
+    settings = typeof inbound.settings === "string" ? JSON.parse(inbound.settings) : inbound.settings;
+  } catch (e) {
+    settings = { clients: [] };
+  }
   
   // Check if client already exists
   if (settings.clients && settings.clients.some((c: any) => c.email === clientEmail)) {
