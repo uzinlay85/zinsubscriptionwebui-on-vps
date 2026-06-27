@@ -98,8 +98,10 @@ export async function updateHysteriaUser(
 
   if (!res.ok) return;
 
-  const users: HysteriaUser[] = await res.json();
-  const targetUser = users.find(u => u.password === userPassword);
+  let usersData = await res.json();
+  let users: HysteriaUser[] = Array.isArray(usersData) ? usersData : (usersData.users || usersData.data || []);
+  
+  const targetUser = users.find(u => u.password === userPassword || u.username === userUsername);
   
   if (targetUser) {
     // 2. Update the user
@@ -122,7 +124,7 @@ export async function updateHysteriaUser(
  * Delete a user from Hysteria2
  * We need to find their ID first by fetching all users and matching the username/password
  */
-export async function deleteHysteriaUser(apiUrl: string, token: string, userPassword: string): Promise<void> {
+export async function deleteHysteriaUser(apiUrl: string, token: string, userPassword: string, username?: string): Promise<void> {
   let baseOrigin = apiUrl;
   try { baseOrigin = new URL(apiUrl).origin; } catch(e) {}
   
@@ -134,10 +136,11 @@ export async function deleteHysteriaUser(apiUrl: string, token: string, userPass
 
   if (!res.ok) return; // Silently fail or throw error
 
-  const users: HysteriaUser[] = await res.json();
+  let usersData = await res.json();
+  let users: HysteriaUser[] = Array.isArray(usersData) ? usersData : (usersData.users || usersData.data || []);
   
-  // 2. Find the user by password (password acts as unique key in Hysteria auth)
-  const targetUser = users.find(u => u.password === userPassword);
+  // 2. Find the user by password or username
+  const targetUser = users.find(u => u.password === userPassword || (username && u.username === username));
   
   if (targetUser) {
     // 3. Delete the user
@@ -178,6 +181,7 @@ export async function fetchHysteriaUsers(apiUrl: string, token: string): Promise
 
   if (!res.ok) return [];
 
-  const users: HysteriaUser[] = await res.json();
+  let usersData = await res.json();
+  let users: HysteriaUser[] = Array.isArray(usersData) ? usersData : (usersData.users || usersData.data || []);
   return users;
 }

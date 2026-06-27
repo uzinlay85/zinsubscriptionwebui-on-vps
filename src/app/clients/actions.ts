@@ -272,7 +272,7 @@ export async function deleteClient(formData: FormData) {
   // 1. Fetch all keys for this client with server details
   const { data: keysData } = await supabase
     .from("client_keys")
-    .select("*, servers(api_url, type, auth_username, auth_password, username, password, inbound_id)")
+    .select("*, servers(api_url, type, auth_username, auth_password, username, password, inbound_id), clients(name)")
     .eq("client_id", id);
 
   const keys = (keysData as any[]) || [];
@@ -287,7 +287,7 @@ export async function deleteClient(formData: FormData) {
         } else if (server.type === "hysteria2") {
           try {
             const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
-            await deleteHysteriaUser(server.api_url, token, key.outline_key_id);
+            await deleteHysteriaUser(server.api_url, token, key.outline_key_id, key.clients?.name);
           } catch (err) {
             console.error("Failed to delete Hysteria user", err);
           }
