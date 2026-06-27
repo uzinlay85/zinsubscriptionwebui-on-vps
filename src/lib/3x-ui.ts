@@ -2,23 +2,26 @@
 
 export async function login3xui(apiUrl: string, username?: string, password?: string): Promise<string> {
   const cleanUrl = apiUrl.replace(/\/$/, "");
-  const parsedUrl = new URL(cleanUrl);
   
   const body = new URLSearchParams();
   body.append("username", username || "");
   body.append("password", password || "");
 
-  const res = await fetch(`${cleanUrl}/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-      "Accept": "application/json, text/plain, */*",
-      "Origin": parsedUrl.origin,
-      "Referer": `${cleanUrl}/`,
-    },
-    body: body.toString(),
-  });
+  let res;
+  try {
+    // 1. Fetch ကို Try/Catch ဖြင့် အုပ်ထားခြင်း
+    res = await fetch(`${cleanUrl}/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+      body: body.toString(),
+    });
+  } catch (error: any) {
+    // 🔴 Vercel ကနေ IP သို့မဟုတ် Port ကို ချိတ်မရဘဲ ပြတ်ကျသွားပါက ဤနေရာတွင် Error ပြပါမည်
+    throw new Error(`Network Connection Failed: ${error.message}. (Vercel မှ Port 2053 ကို ပိတ်ထားခြင်း ဖြစ်နိုင်ပါသည်)`);
+  }
 
   const responseText = await res.text();
   let data;
@@ -26,7 +29,8 @@ export async function login3xui(apiUrl: string, username?: string, password?: st
   try {
     data = JSON.parse(responseText);
   } catch (err) {
-    throw new Error(`Cloudflare or WAF Blocked the connection (Status: ${res.status}). Please check your Cloudflare Bot Fight Mode.`);
+    // JSON မဟုတ်ဘဲ HTML တွေ ပြန်လာရင် ဘာစာတွေ ပြန်လာလဲဆိုတာပါ ဖော်ပြပေးပါမည်
+    throw new Error(`Invalid Response (Status: ${res.status}): ${responseText.substring(0, 100)}...`);
   }
 
   if (!res.ok || !data.success) {
