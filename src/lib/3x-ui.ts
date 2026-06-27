@@ -314,8 +314,8 @@ export async function deleteClient3xui(
   inboundId: number,
   uuid: string
 ): Promise<void> {
-  if (!uuid) {
-    throw new Error("Cannot delete 3x-ui client: UUID is missing in the database.");
+  if (!inboundId || !uuid) {
+    throw new Error("Missing inboundId or uuid for 3x-ui deletion. Please check database query.");
   }
 
   const cleanUrl = apiUrl.replace(/\/$/, "");

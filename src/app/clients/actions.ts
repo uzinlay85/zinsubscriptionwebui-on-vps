@@ -272,7 +272,7 @@ export async function deleteClient(formData: FormData) {
   // 1. Fetch all keys for this client with server details
   const { data: keysData } = await supabase
     .from("client_keys")
-    .select("*, servers(api_url, type, auth_username, auth_password, username, password, inbound_id), clients(name)")
+    .select("*, servers(id, api_url, type, auth_username, auth_password, username, password, inbound_id), clients(name)")
     .eq("client_id", id);
 
   const keys = (keysData as any[]) || [];
@@ -293,10 +293,7 @@ export async function deleteClient(formData: FormData) {
           const finalPassword = server.password || server.auth_password;
           const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
           
-          const inboundId = server.inbound_id;
-          if (inboundId) {
-            await deleteClient3xui(server.api_url, cookie, inboundId, key.outline_key_id); // we used uuid as outline_key_id
-          }
+          await deleteClient3xui(server.api_url, cookie, server.inbound_id, key.outline_key_id);
         }
       }
     })
