@@ -2,42 +2,48 @@
 
 export async function login3xui(apiUrl: string, username?: string, password?: string): Promise<string> {
   const cleanUrl = apiUrl.replace(/\/$/, "");
-  const body = `username=${encodeURIComponent(username || "")}&password=${encodeURIComponent(password || "")}`;
+  const parsedUrl = new URL(cleanUrl);
   
+  const body = new URLSearchParams();
+  body.append("username", username || "");
+  body.append("password", password || "");
+
   const res = await fetch(`${cleanUrl}/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      "Accept": "application/json, text/plain, */*"
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+      "Accept": "application/json, text/plain, */*",
+      "Origin": parsedUrl.origin,
+      "Referer": `${cleanUrl}/`,
     },
-    body: body
+    body: body.toString(),
   });
 
-  const data = await res.json().catch(() => null);
-
-  if (!res.ok || !data || !data.success) {
-    let msg = "Login failed";
-    if (data && data.msg) {
-      msg = data.msg;
-    } else if (!res.ok) {
-      msg = `Login failed with status ${res.status}`;
-    }
-    throw new Error(msg);
+  const responseText = await res.text();
+  let data;
+  
+  try {
+    data = JSON.parse(responseText);
+  } catch (err) {
+    throw new Error(`Cloudflare or WAF Blocked the connection (Status: ${res.status}). Please check your Cloudflare Bot Fight Mode.`);
   }
 
-  // Extract session cookie using regex
+  if (!res.ok || !data.success) {
+    throw new Error(data.msg || `Login failed with status ${res.status}`);
+  }
+
   const setCookieHeader = res.headers.get("set-cookie");
   if (!setCookieHeader) {
-    throw new Error("No session cookie returned");
+    throw new Error("No session cookie returned from 3x-ui");
   }
 
-  const match = setCookieHeader.match(/session=([^;]+)/);
-  if (!match) {
-    throw new Error("Could not parse session cookie");
+  const match = setCookieHeader.match(/(session=[^;]+)/);
+  if (match) {
+    return match[1];
   }
 
-  return match[0]; // returns "session=..."
+  throw new Error("Invalid cookie format received");
 }
 
 export async function addClient3xui(
