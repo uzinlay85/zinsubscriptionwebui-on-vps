@@ -167,7 +167,35 @@ export async function addClient3xui(
     throw new Error(`3x-ui Error: ${addData?.msg || 'None'}. Status: ${addRes.status}. Request: ${addBody}. Response: ${responseText.substring(0, 200)}`);
   }
 
-  // Generate raw URI directly so we don't depend on 3x-ui's sub endpoints
+  // Try to fetch the link from the panel's own subscription endpoint to get accurate external proxies/hosts
+  try {
+    const subRes = await fetch(`${cleanUrl}/sub/${newClient.subId}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+      }
+    });
+
+    if (subRes.ok) {
+      const bodyText = await subRes.text();
+      let decoded = bodyText;
+      if (!bodyText.includes("://")) {
+        try {
+          decoded = Buffer.from(bodyText, "base64").toString("utf-8");
+        } catch (e) {}
+      }
+      const links = decoded.split("\n").filter(l => l.trim().length > 0 && l.includes("://"));
+      if (links.length > 0) {
+        // Return the first link and append our own server name
+        const baseUrl = links[0].split("#")[0];
+        return `${baseUrl}#${encodeURIComponent(serverName)}`;
+      }
+    }
+  } catch (err) {
+    console.error("Failed to fetch sub link directly from panel:", err);
+  }
+
+  // Fallback: Generate raw URI directly if the sub endpoint fails or is customized
   return build3xuiLink(inbound, newClient, serverName, apiUrl);
 }
 
