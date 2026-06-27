@@ -3,6 +3,15 @@
 export async function login3xui(apiUrl: string, username?: string, password?: string): Promise<string> {
   const cleanUrl = apiUrl.replace(/\/$/, "");
   
+  // 1. Initial GET request to extract CSRF token and initial session cookie
+  const getRes = await fetch(`${cleanUrl}/`);
+  const initialCookie = getRes.headers.get("set-cookie") || "";
+  const html = await getRes.text();
+  
+  const csrfMatch = html.match(/name="csrf-token"\s+content="([^"]+)"/i);
+  const csrfToken = csrfMatch ? csrfMatch[1] : "";
+
+  // 2. Perform the actual POST login
   const body = new URLSearchParams();
   body.append("username", username || "");
   body.append("password", password || "");
@@ -11,7 +20,9 @@ export async function login3xui(apiUrl: string, username?: string, password?: st
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      "Accept": "application/json"
+      "Accept": "application/json",
+      ...(csrfToken ? { "X-Csrf-Token": csrfToken } : {}),
+      ...(initialCookie ? { "Cookie": initialCookie } : {})
     },
     body: body.toString(),
   });
@@ -29,14 +40,19 @@ export async function login3xui(apiUrl: string, username?: string, password?: st
     throw new Error(data?.msg || `Login failed with status ${res.status}`);
   }
 
+  // 3. Extract the authenticated session cookie
   const setCookieHeader = res.headers.get("set-cookie");
-  if (!setCookieHeader) {
+  const finalCookieHeader = setCookieHeader || initialCookie;
+  
+  if (!finalCookieHeader) {
     throw new Error("No session cookie returned from 3x-ui");
   }
 
-  const match = setCookieHeader.match(/(session=[^;]+)/);
-  if (match) {
-    return match[1];
+  // The cookie might be named 'session' or '3x-ui' or something else
+  // Grab the first part before ';' which is the key=value pair
+  const authCookie = finalCookieHeader.split(";")[0];
+  if (authCookie) {
+    return authCookie;
   }
 
   throw new Error("Invalid cookie format received");
