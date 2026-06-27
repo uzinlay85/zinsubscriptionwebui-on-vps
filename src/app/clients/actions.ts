@@ -278,37 +278,36 @@ export async function deleteClient(formData: FormData) {
   const keys = (keysData as any[]) || [];
 
   // 2. Delete each key from the respective server in parallel
-  await Promise.allSettled(
+  const deletionResults = await Promise.allSettled(
     keys.map(async (key) => {
       const server = key.servers;
       if (server?.api_url && key.outline_key_id) {
         if (server.type === "outline" || !server.type) {
-          await deleteOutlineKey(server.api_url, key.outline_key_id).catch(console.error);
+          await deleteOutlineKey(server.api_url, key.outline_key_id);
         } else if (server.type === "hysteria2") {
-          try {
-            const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
-            await deleteHysteriaUser(server.api_url, token, key.outline_key_id, key.clients?.name);
-          } catch (err) {
-            console.error("Failed to delete Hysteria user", err);
-          }
+          const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
+          await deleteHysteriaUser(server.api_url, token, key.outline_key_id, key.clients?.name);
         } else if (server.type === "3x-ui") {
-          try {
-            const { login3xui, deleteClient3xui } = await import("@/lib/3x-ui");
-            const finalUsername = server.username || server.auth_username;
-            const finalPassword = server.password || server.auth_password;
-            const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
-            
-            const inboundId = server.inbound_id;
-            if (inboundId) {
-              await deleteClient3xui(server.api_url, cookie, inboundId, key.outline_key_id); // we used uuid as outline_key_id
-            }
-          } catch (err) {
-            console.error("Failed to delete 3x-ui user", err);
+          const { login3xui, deleteClient3xui } = await import("@/lib/3x-ui");
+          const finalUsername = server.username || server.auth_username;
+          const finalPassword = server.password || server.auth_password;
+          const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
+          
+          const inboundId = server.inbound_id;
+          if (inboundId) {
+            await deleteClient3xui(server.api_url, cookie, inboundId, key.outline_key_id); // we used uuid as outline_key_id
           }
         }
       }
     })
   );
+
+  // 3. Check for failures (Strict Fail-Safe Logic)
+  const failedDeletions = deletionResults.filter(r => r.status === "rejected") as PromiseRejectedResult[];
+  if (failedDeletions.length > 0) {
+    const errorMsg = failedDeletions.map(r => r.reason?.message || "Unknown error").join(" | ");
+    return { error: `Remote Deletion Failed: ${errorMsg}` };
+  }
 
   // 3. Delete the client from DB (client_keys will cascade or be deleted too)
   const { error } = await supabase.from("clients").delete().eq("id", id);
