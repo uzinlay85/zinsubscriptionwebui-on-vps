@@ -314,36 +314,31 @@ export async function deleteClient3xui(
   inboundId: number,
   uuid: string
 ): Promise<void> {
+  if (!uuid) {
+    throw new Error("Cannot delete 3x-ui client: UUID is missing in the database.");
+  }
+
   const cleanUrl = apiUrl.replace(/\/$/, "");
   
-  // Fetch CSRF token for the API request
-  const csrfRes = await fetch(`${cleanUrl}/`, {
-    headers: { "Cookie": cookie }
-  });
-  const html = await csrfRes.text();
-  const csrfMatch = html.match(/name="csrf-token"\s+content="([^"]+)"/i);
-  const csrfToken = csrfMatch ? csrfMatch[1] : "";
-
-  // UUID is often used to delete in 3x-ui API
-  const delRes = await fetch(`${cleanUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`, {
+  const res = await fetch(`${cleanUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`, {
     method: "POST",
     headers: {
-      "Accept": "application/json",
       "Cookie": cookie,
-      ...(csrfToken ? { "X-Csrf-Token": csrfToken } : {})
+      "Accept": "application/json",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     }
   });
 
-  const responseText = await delRes.text();
-  let delData;
+  const responseText = await res.text();
+  let data;
   try {
-    delData = JSON.parse(responseText);
-  } catch (e) {
-    throw new Error(`Invalid JSON response from 3x-ui on delete (Status ${delRes.status}): ${responseText.substring(0, 100)}`);
+    data = JSON.parse(responseText);
+  } catch (err) {
+    throw new Error(`3x-ui Delete API failed (Status: ${res.status}): ${responseText.substring(0, 50)}`);
   }
 
-  if (!delRes.ok || !delData || !delData.success) {
-    throw new Error(`3x-ui Error: ${delData?.msg || 'None'}. Status: ${delRes.status}. Response: ${responseText.substring(0, 200)}`);
+  if (!res.ok || !data.success) {
+    throw new Error(data.msg || `Failed to delete client from 3x-ui (Status ${res.status})`);
   }
 }
 
