@@ -216,7 +216,7 @@ export async function updateClient(formData: FormData) {
   // 2. Fetch all keys to update them on servers
   const { data: keysData } = await supabase
     .from("client_keys")
-    .select("*, servers(api_url, type, auth_username, auth_password)")
+    .select("*, servers(api_url, type, auth_username, auth_password, username, password, inbound_id)")
     .eq("client_id", id);
     
   const keys = (keysData as any[]) || [];
@@ -272,7 +272,7 @@ export async function deleteClient(formData: FormData) {
   // 1. Fetch all keys for this client with server details
   const { data: keysData } = await supabase
     .from("client_keys")
-    .select("*, servers(api_url, type, auth_username, auth_password)")
+    .select("*, servers(api_url, type, auth_username, auth_password, username, password, inbound_id)")
     .eq("client_id", id);
 
   const keys = (keysData as any[]) || [];
@@ -297,10 +297,8 @@ export async function deleteClient(formData: FormData) {
             const finalUsername = server.username || server.auth_username;
             const finalPassword = server.password || server.auth_password;
             const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
-            // We need inbound_id here, let's fetch it if it's missing in `servers` joined query!
-            // Wait, I need to make sure inbound_id is selected in the query above!
-            const serverDetails = await supabase.from("servers").select("inbound_id").eq("id", key.server_id).single();
-            const inboundId = serverDetails.data?.inbound_id;
+            
+            const inboundId = server.inbound_id;
             if (inboundId) {
               await deleteClient3xui(server.api_url, cookie, inboundId, key.outline_key_id); // we used uuid as outline_key_id
             }
