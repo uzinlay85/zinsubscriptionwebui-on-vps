@@ -64,7 +64,8 @@ export async function addClient3xui(
   inboundId: number,
   clientEmail: string,
   uuid: string,
-  serverName: string
+  serverName: string,
+  server: any = {}
 ): Promise<string> {
   const cleanUrl = apiUrl.replace(/\/$/, "");
   

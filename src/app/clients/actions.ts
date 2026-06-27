@@ -60,7 +60,7 @@ export async function addClient(formData: FormData) {
         const finalPassword = server.password || server.auth_password;
         const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
         uuid = crypto.randomUUID();
-        const rawUri = await addClient3xui(server.api_url, cookie, server.inbound_id, name, uuid, `${server.name} - ${name}`);
+        const rawUri = await addClient3xui(server.api_url, cookie, server.inbound_id, name, uuid, `${server.name} - ${name}`, server);
         keyId = uuid;
         accessUrl = rawUri;
       }
@@ -159,7 +159,7 @@ export async function addBulkClients(formData: FormData) {
           const finalPassword = server.password || server.auth_password;
           const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
           uuid = crypto.randomUUID();
-          const rawUri = await addClient3xui(server.api_url, cookie, server.inbound_id, client.name, uuid, `${server.name} - ${client.name}`);
+          const rawUri = await addClient3xui(server.api_url, cookie, server.inbound_id, client.name, uuid, `${server.name} - ${client.name}`, server);
           keyId = uuid;
           accessUrl = rawUri;
         }
@@ -387,7 +387,7 @@ export async function syncClientKeys(clientId: string) {
         const finalPassword = server.password || server.auth_password;
         const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
         uuid = crypto.randomUUID();
-        const rawUri = await addClient3xui(server.api_url, cookie, server.inbound_id, client.name, uuid, `${server.name} - ${client.name}`);
+        const rawUri = await addClient3xui(server.api_url, cookie, server.inbound_id, client.name, uuid, `${server.name} - ${client.name}`, server);
         keyId = uuid;
         accessUrl = rawUri;
       }
