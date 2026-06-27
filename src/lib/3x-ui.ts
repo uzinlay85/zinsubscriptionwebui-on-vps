@@ -105,7 +105,7 @@ export async function addClient3xui(
   if (settings.clients && settings.clients.some((c: any) => c.email === clientEmail)) {
     const existing = settings.clients.find((c: any) => c.email === clientEmail);
     if (existing && existing.subId) {
-      return existing.subId;
+      return fetchOrBuildLink(cleanUrl, existing.subId, serverName, inbound, existing, apiUrl, server);
     }
     return ""; // Already exists but no subId found
   }
@@ -168,9 +168,13 @@ export async function addClient3xui(
     throw new Error(`3x-ui Error: ${addData?.msg || 'None'}. Status: ${addRes.status}. Request: ${addBody}. Response: ${responseText.substring(0, 200)}`);
   }
 
+  return fetchOrBuildLink(cleanUrl, newClient.subId, serverName, inbound, newClient, apiUrl, server);
+}
+
+async function fetchOrBuildLink(cleanUrl: string, subId: string, serverName: string, inbound: any, clientObj: any, apiUrl: string, server: any): Promise<string> {
   // Try to fetch the link from the panel's own subscription endpoint to get accurate external proxies/hosts
   try {
-    const subRes = await fetch(`${cleanUrl}/sub/${newClient.subId}`, {
+    const subRes = await fetch(`${cleanUrl}/sub/${subId}`, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
@@ -185,7 +189,7 @@ export async function addClient3xui(
           decoded = Buffer.from(bodyText, "base64").toString("utf-8");
         } catch (e) {}
       }
-      const links = decoded.split("\n").filter(l => l.trim().length > 0 && l.includes("://"));
+      const links = decoded.split("\n").filter((l: string) => l.trim().length > 0 && l.includes("://"));
       if (links.length > 0) {
         // Return the first link and append our own server name
         const baseUrl = links[0].split("#")[0];
@@ -197,7 +201,7 @@ export async function addClient3xui(
   }
 
   // Fallback: Generate raw URI directly if the sub endpoint fails or is customized
-  return build3xuiLink(inbound, newClient, serverName, apiUrl, server);
+  return build3xuiLink(inbound, clientObj, serverName, apiUrl, server);
 }
 
 function build3xuiLink(inbound: any, client: any, serverName: string, apiUrl: string, server: any): string {
