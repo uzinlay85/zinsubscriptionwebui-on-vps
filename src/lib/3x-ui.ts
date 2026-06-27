@@ -67,7 +67,15 @@ export async function addClient3xui(
 ): Promise<void> {
   const cleanUrl = apiUrl.replace(/\/$/, "");
   
-  // 1. Fetch the existing inbound to append the client and check protocol
+  // 1. Fetch CSRF token for the API request
+  const csrfRes = await fetch(`${cleanUrl}/`, {
+    headers: { "Cookie": cookie }
+  });
+  const html = await csrfRes.text();
+  const csrfMatch = html.match(/name="csrf-token"\s+content="([^"]+)"/i);
+  const csrfToken = csrfMatch ? csrfMatch[1] : "";
+
+  // 2. Fetch the existing inbound to append the client and check protocol
   const getRes = await fetch(`${cleanUrl}/panel/api/inbounds/get/${inboundId}`, {
     method: "GET",
     headers: {
@@ -127,6 +135,7 @@ export async function addClient3xui(
     headers: {
       "Content-Type": "application/json",
       "Cookie": cookie,
+      ...(csrfToken ? { "X-Csrf-Token": csrfToken } : {})
     },
     body: addBody
   });
@@ -145,11 +154,21 @@ export async function deleteClient3xui(
   uuid: string
 ): Promise<void> {
   const cleanUrl = apiUrl.replace(/\/$/, "");
+  
+  // Fetch CSRF token for the API request
+  const csrfRes = await fetch(`${cleanUrl}/`, {
+    headers: { "Cookie": cookie }
+  });
+  const html = await csrfRes.text();
+  const csrfMatch = html.match(/name="csrf-token"\s+content="([^"]+)"/i);
+  const csrfToken = csrfMatch ? csrfMatch[1] : "";
+
   // UUID is often used to delete in 3x-ui API
   const delRes = await fetch(`${cleanUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`, {
     method: "POST",
     headers: {
       "Cookie": cookie,
+      ...(csrfToken ? { "X-Csrf-Token": csrfToken } : {})
     }
   });
 
