@@ -321,12 +321,19 @@ export async function deleteClient3xui(
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
   };
 
+  // Helper: safely parse JSON from a Response without crashing on empty body
+  const safeJson = async (res: Response): Promise<any> => {
+    const text = await res.text();
+    if (!text || text.trim() === "") return { success: res.ok };
+    try { return JSON.parse(text); } catch { return { success: res.ok, msg: text.substring(0, 100) }; }
+  };
+
   // ATTEMPT 1: Standard Sanaei / Modern 3x-ui API
   const path1 = `${cleanUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`;
   const res1 = await fetch(path1, { method: "POST", headers });
 
   if (res1.status === 200) {
-    const data = await res1.json();
+    const data = await safeJson(res1);
     if (!data.success) {
       if (data.msg && data.msg.toLowerCase().includes("not found")) return;
       throw new Error(data.msg || "Failed to delete from 3x-ui");
@@ -334,23 +341,24 @@ export async function deleteClient3xui(
     return;
   }
 
-  // ATTEMPT 2: Universal X-UI Update Method (Fallback)
+  // ATTEMPT 2: Universal X-UI Update Method (Fallback for 404/405)
   const getRes = await fetch(`${cleanUrl}/panel/api/inbounds/get/${inboundId}`, { method: "GET", headers });
   if (!getRes.ok) throw new Error(`Universal Delete: Failed to fetch inbound (Status ${getRes.status})`);
-  
-  const getData = await getRes.json();
+
+  const getData = await safeJson(getRes);
   if (!getData.success) throw new Error(getData.msg || "Universal Delete: Failed to parse inbound");
 
   const inbound = getData.obj;
-  
-  // FIX: Safely parse settings whether it's a string or already an object
-  let settings = typeof inbound.settings === "string" 
-    ? JSON.parse(inbound.settings) 
+
+  // Safely parse settings whether it's a string or already an object
+  const settings = typeof inbound.settings === "string"
+    ? JSON.parse(inbound.settings)
     : inbound.settings;
 
   const initialCount = settings.clients.length;
   settings.clients = settings.clients.filter((c: any) => c.id !== uuid && c.password !== uuid);
 
+  // Client is already gone — treat as success
   if (settings.clients.length === initialCount) return;
 
   // Must stringify before sending back
@@ -362,7 +370,7 @@ export async function deleteClient3xui(
     body: JSON.stringify(inbound)
   });
 
-  const updateData = await updateRes.json();
+  const updateData = await safeJson(updateRes);
   if (!updateRes.ok || !updateData.success) {
     throw new Error(updateData.msg || `Universal Delete Update failed (Status ${updateRes.status})`);
   }
