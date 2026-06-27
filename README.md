@@ -1,6 +1,6 @@
-# Outline & Hysteria2 Unified Subscription Panel
+# Outline, Hysteria2 & 3x-ui Unified Subscription Panel
 
-A modern, fast, and feature-rich unified web panel to manage both Outline and Hysteria2 VPN servers. This project allows you to issue a single universal subscription link for your users, and control their access, expiry, and track live data usage across multiple servers from a single dashboard.
+A modern, fast, and feature-rich unified web panel to manage Outline, Hysteria2, and 3x-ui (Xray/V2ray) VPN servers. This project allows you to issue a single universal subscription link for your users, and control their access, expiry, and track live data usage across multiple servers from a single dashboard.
 
 မြန်မာဘာသာဖြင့် ဖတ်ရှုရန် အောက်သို့ ဆင်းပါ။ 
 
@@ -9,7 +9,7 @@ A modern, fast, and feature-rich unified web panel to manage both Outline and Hy
 ## 🇺🇸 English Documentation
 
 ### 🌟 Features
-- 🚀 **Multi-Protocol Support**: Seamlessly manage both **Outline** and **Hysteria2** servers from a single dashboard.
+- 🚀 **Multi-Protocol Support**: Seamlessly manage **Outline**, **Hysteria2**, and **3x-ui** servers from a single dashboard.
 - 🔗 **Universal Subscription Links**: Generate a single subscription link (`/api/sub/[token]`) per client that serves both Sing-box JSON and Base64 (V2ray/Clash) formats automatically based on the user-agent.
 - ⏳ **Expiry Management & Auto-Suspension**: Set expiry dates for clients. A daily cron job automatically disables expired clients across all connected servers.
   - *Note: Modern apps show remaining days natively via `Subscription-Userinfo` HTTP Headers and a fallback dummy proxy node.*
@@ -27,6 +27,7 @@ A modern, fast, and feature-rich unified web panel to manage both Outline and Hy
 3. **Outline Server**: Must have the Management API URL and Cert SHA-256. 
    - *Tip: SSH into your Outline VPS and run `cat /opt/outline/access.txt` to find these details.*
 4. **Hysteria2 Server**: Must be running the Hysteria2 Express Backend Admin API.
+5. **3x-ui Server**: Must have an active 3x-ui panel running (v3.0+ with CSRF protection is fully supported).
 
 ### 🌍 How to Add Servers to the Panel
 
@@ -47,6 +48,13 @@ To connect a Hysteria2 server, you must have the **Express Admin API** installed
 - **Admin User**: The `ADMIN_USERNAME` you set in the Express API `.env` file.
 - **Admin Pass**: The `ADMIN_PASSWORD` you set in the Express API `.env` file.
 
+### 3. 3x-ui Server (Xray/V2ray)
+Seamlessly integrate 3x-ui panels. Note: The panel securely fetches the CSRF tokens required by newer 3x-ui (v3.0+) panels automatically.
+- **Server Name**: Any name you want.
+- **3x-ui Panel URL**: To completely bypass Cloudflare WAF Bot Protection, it is highly recommended to use your direct VPS IP and Panel Port instead of your domain (e.g., `http://64.120.95.204:2053/panel_path`). 
+- **Panel Username & Password**: Your 3x-ui login credentials.
+- **Inbound ID**: The specific inbound ID (e.g., `1`) where new clients should be added.
+
 ---
 
 ## 🚀 Installation & Deployment
@@ -62,9 +70,10 @@ CREATE TABLE servers (
   name TEXT NOT NULL,
   api_url TEXT NOT NULL,
   cert_sha256 TEXT NOT NULL,
-  auth_username TEXT, -- Hysteria2 admin username (optional for Outline)
-  auth_password TEXT, -- Hysteria2 admin password (optional for Outline)
-  type TEXT DEFAULT 'outline' NOT NULL, -- 'outline' or 'hysteria2'
+  auth_username TEXT,
+  auth_password TEXT,
+  inbound_id INTEGER, -- For 3x-ui support
+  type TEXT DEFAULT 'outline' NOT NULL, -- 'outline', 'hysteria2', or '3x-ui'
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 ALTER TABLE servers DISABLE ROW LEVEL SECURITY;
@@ -87,6 +96,7 @@ CREATE TABLE client_keys (
   server_id UUID REFERENCES servers(id) ON DELETE CASCADE,
   outline_key_id TEXT NOT NULL,
   access_url TEXT NOT NULL,
+  uuid TEXT, -- For 3x-ui clients
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 ALTER TABLE client_keys DISABLE ROW LEVEL SECURITY;
@@ -128,10 +138,10 @@ The panel supports daily automated database backups to WebDAV services like Koof
 
 ## 🇲🇲 မြန်မာဘာသာ လမ်းညွှန်
 
-Outline နှင့် Hysteria2 ဆာဗာ နှစ်မျိုးစလုံးကို နေရာတစ်တည်းကနေ ထိန်းချုပ်လို့ရမယ့် ခေတ်မီ Subscription Web Panel တစ်ခု ဖြစ်ပါတယ်။ အသုံးပြုသူ (Client) တွေအတွက် Sub Link တစ်ခုတည်း ပေးရုံနဲ့ ဆာဗာအားလုံးရဲ့ Key တွေကို အလွယ်တကူ ရယူအသုံးပြုနိုင်မှာပါ။
+Outline, Hysteria2 နှင့် 3x-ui (Xray/V2ray) ဆာဗာ သုံးမျိုးစလုံးကို နေရာတစ်တည်းကနေ ထိန်းချုပ်လို့ရမယ့် ခေတ်မီ Subscription Web Panel တစ်ခု ဖြစ်ပါတယ်။ အသုံးပြုသူ (Client) တွေအတွက် Sub Link တစ်ခုတည်း ပေးရုံနဲ့ ဆာဗာအားလုံးရဲ့ Key တွေကို အလွယ်တကူ ရယူအသုံးပြုနိုင်မှာပါ။
 
 ### 🌟 ပါဝင်သော လုပ်ဆောင်ချက်များ (Features)
-- 🚀 **Multi-Protocol Support**: Outline နဲ့ Hysteria2 ဆာဗာ နှစ်မျိုးစလုံးကို Dashboard တစ်ခုတည်းမှာ ပေါင်းပြီး လွယ်ကူစွာ ထိန်းချုပ်နိုင်ခြင်း။
+- 🚀 **Multi-Protocol Support**: Outline, Hysteria2 နဲ့ 3x-ui ဆာဗာ အားလုံးကို Dashboard တစ်ခုတည်းမှာ ပေါင်းပြီး လွယ်ကူစွာ ထိန်းချုပ်နိုင်ခြင်း။
 - 🔗 **Universal Subscription Links**: Client တစ်ယောက်ကို Sub Link (`/api/sub/...`) တစ်ခုတည်း ပေးရုံဖြင့် Sing-box JSON နှင့် Base64 (V2ray/Clash) Format များကို App ပေါ်မူတည်၍ အလိုအလျောက် ပြောင်းလဲထုတ်ပေးနိုင်ခြင်း။
 - ⏳ **Expiry Management & Auto-Suspension (သက်တမ်းထိန်းချုပ်စနစ်)**: အသုံးပြုသူများကို သက်တမ်း ကန့်သတ်နိုင်ခြင်း။ နေ့စဉ်စစ်ဆေးပေးမည့် Cron Job မှ သက်တမ်းကုန်သွားသော Client များကို ဆာဗာအားလုံးတွင် အလိုအလျောက် ပိတ်ချပေးပါမည်။
   - *မှတ်ချက်။ ။ ခေတ်မီ App များနှင့် ချိတ်ဆက်ပါက `Subscription-Userinfo` မှတစ်ဆင့် ကျန်ရှိသော ရက်အရေအတွက်ကို App မျက်နှာပြင်တွင် တိုက်ရိုက် ပြသပေးပါမည်။*
@@ -149,6 +159,7 @@ Outline နှင့် Hysteria2 ဆာဗာ နှစ်မျိုးစလ
 3. **Servers**: Outline နှင့် Hysteria2 ကို ချိတ်ဆက်ရန် အောက်ပါတို့ကို ပြင်ဆင်ထားရပါမည်။
    - **Outline**: VPS သို့ ဝင်ပြီး `cat /opt/outline/access.txt` ဟု ရိုက်ထည့်ကာ `apiUrl` နှင့် `certSha256` ကို ကူးယူထားပါ။
    - **Hysteria2**: ဆာဗာဘက်တွင် Express Backend API ကို အသင့် Run ထားရပါမည်။
+   - **3x-ui**: လည်ပတ်နေသော 3x-ui Panel တစ်ခုရှိရပါမည်။ (v3.0 အထက် CSRF Token ပါဝင်သော version များကိုလည်း အပြည့်အဝ ထောက်ပံ့ပေးထားပါသည်)
 
 ### 🌍 Panel သို့ ဆာဗာများ ထည့်သွင်းချိတ်ဆက်နည်း
 
@@ -169,6 +180,13 @@ Hysteria2 ဆာဗာကို ချိတ်ဆက်ရန်အတွက်
 - **Admin User**: Express API ၏ `.env` ထဲတွင် ပေးခဲ့သော `ADMIN_USERNAME` ကို ထည့်ပါ။
 - **Admin Pass**: Express API ၏ `.env` ထဲတွင် ပေးခဲ့သော `ADMIN_PASSWORD` ကို ထည့်ပါ။
 
+### ၃။ 3x-ui ဆာဗာ ထည့်နည်း (Xray/V2ray)
+3x-ui ဆာဗာများကို လွယ်ကူစွာ ချိတ်ဆက်နိုင်ပါသည်။ 
+- **Server Name**: မိမိကြိုက်နှစ်သက်ရာ နာမည်ပေးပါ။
+- **3x-ui Panel URL**: Vercel ကနေ လှမ်းချိတ်သည့်အခါ Cloudflare ရဲ့ WAF Bot Protection အပိတ်ခံရခြင်းမှ ကင်းဝေးစေရန် Domain အစား **VPS ၏ IP Address နှင့် Panel Port ကိုသာ တိုက်ရိုက် အသုံးပြုရန်** အထူး အကြံပြုအပ်ပါသည်။ (ဥပမာ - `http://64.120.95.204:2053/panel_path`)
+- **Panel Username & Password**: 3x-ui Panel ဝင်သည့် အကောင့်များ။
+- **Inbound ID**: Client အသစ်များ ထည့်သွင်းလိုသော 3x-ui အတွင်းရှိ Inbound ID နံပါတ် (ဥပမာ - `1`)
+
 ---
 
 ## 🚀 ထည့်သွင်းနည်း လမ်းညွှန် (Vercel ဖြင့် အခမဲ့တင်နည်း) (Installation & Deployment)
@@ -186,6 +204,7 @@ CREATE TABLE servers (
   cert_sha256 TEXT NOT NULL,
   auth_username TEXT,
   auth_password TEXT,
+  inbound_id INTEGER,
   type TEXT DEFAULT 'outline' NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -209,6 +228,7 @@ CREATE TABLE client_keys (
   server_id UUID REFERENCES servers(id) ON DELETE CASCADE,
   outline_key_id TEXT NOT NULL,
   access_url TEXT NOT NULL,
+  uuid TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 ALTER TABLE client_keys DISABLE ROW LEVEL SECURITY;
