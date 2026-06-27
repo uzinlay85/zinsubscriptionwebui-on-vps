@@ -103,8 +103,8 @@ export function EditServerForm({ server }: { server: any }) {
                       </label>
                       <input 
                         type="text" 
-                        name="authUsername" 
-                        defaultValue={server.auth_username}
+                        name={server.type === "3x-ui" ? "username" : "authUsername"} 
+                        defaultValue={server.type === "3x-ui" ? server.username : server.auth_username}
                         required={server.type === "3x-ui"}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
                       />
@@ -115,8 +115,8 @@ export function EditServerForm({ server }: { server: any }) {
                       </label>
                       <input 
                         type="text" 
-                        name="authPassword" 
-                        defaultValue={server.auth_password}
+                        name={server.type === "3x-ui" ? "password" : "authPassword"} 
+                        defaultValue={server.type === "3x-ui" ? server.password : server.auth_password}
                         required
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
                       />
