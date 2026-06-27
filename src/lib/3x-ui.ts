@@ -64,7 +64,7 @@ export async function addClient3xui(
   inboundId: number,
   clientEmail: string,
   uuid: string
-): Promise<void> {
+): Promise<string> {
   const cleanUrl = apiUrl.replace(/\/$/, "");
   
   // 1. Fetch CSRF token for the API request
@@ -101,7 +101,11 @@ export async function addClient3xui(
   
   // Check if client already exists
   if (settings.clients && settings.clients.some((c: any) => c.email === clientEmail)) {
-    return; // Already exists
+    const existing = settings.clients.find((c: any) => c.email === clientEmail);
+    if (existing && existing.subId) {
+      return existing.subId;
+    }
+    return ""; // Already exists but no subId found
   }
 
   // Define new client dynamically based on protocol
@@ -161,6 +165,8 @@ export async function addClient3xui(
   if (!addRes.ok || !addData || !addData.success) {
     throw new Error(`3x-ui Error: ${addData?.msg || 'None'}. Status: ${addRes.status}. Request: ${addBody}. Response: ${responseText.substring(0, 200)}`);
   }
+
+  return newClient.subId;
 }
 
 export async function deleteClient3xui(

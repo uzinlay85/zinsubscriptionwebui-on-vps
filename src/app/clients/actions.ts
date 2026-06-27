@@ -60,9 +60,9 @@ export async function addClient(formData: FormData) {
         const finalPassword = server.password || server.auth_password;
         const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
         uuid = crypto.randomUUID();
-        await addClient3xui(server.api_url, cookie, server.inbound_id, name, uuid);
+        const subId = await addClient3xui(server.api_url, cookie, server.inbound_id, name, uuid);
         keyId = uuid;
-        accessUrl = `3x-ui-sub:${uuid}`;
+        accessUrl = `3x-ui-sub:${subId}`;
       }
 
       await supabase.from("client_keys").insert({
@@ -159,9 +159,9 @@ export async function addBulkClients(formData: FormData) {
           const finalPassword = server.password || server.auth_password;
           const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
           uuid = crypto.randomUUID();
-          await addClient3xui(server.api_url, cookie, server.inbound_id, client.name, uuid);
+          const subId = await addClient3xui(server.api_url, cookie, server.inbound_id, client.name, uuid);
           keyId = uuid;
-          accessUrl = `3x-ui-sub:${uuid}`;
+          accessUrl = `3x-ui-sub:${subId}`;
         }
 
         await supabase.from("client_keys").insert({
@@ -387,9 +387,9 @@ export async function syncClientKeys(clientId: string) {
         const finalPassword = server.password || server.auth_password;
         const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
         uuid = crypto.randomUUID();
-        await addClient3xui(server.api_url, cookie, server.inbound_id, client.name, uuid);
+        const subId = await addClient3xui(server.api_url, cookie, server.inbound_id, client.name, uuid);
         keyId = uuid;
-        accessUrl = `3x-ui-sub:${uuid}`;
+        accessUrl = `3x-ui-sub:${subId}`;
       }
 
       await supabase.from("client_keys").insert({
