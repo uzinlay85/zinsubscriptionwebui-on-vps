@@ -147,10 +147,16 @@ export async function addClient3xui(
     body: addBody
   });
 
-  const addData = await addRes.json().catch(() => null);
+  const responseText = await addRes.text();
+  let addData;
+  try {
+    addData = JSON.parse(responseText);
+  } catch (e) {
+    throw new Error(`Invalid JSON response from 3x-ui (Status ${addRes.status}): ${responseText.substring(0, 100)}`);
+  }
 
   if (!addRes.ok || !addData || !addData.success) {
-    throw new Error(addData?.msg || "Failed to add client");
+    throw new Error(`3x-ui Error: ${addData?.msg || 'None'}. Status: ${addRes.status}. Request: ${addBody}. Response: ${responseText.substring(0, 200)}`);
   }
 }
 
@@ -180,10 +186,16 @@ export async function deleteClient3xui(
     }
   });
 
-  const delData = await delRes.json().catch(() => null);
+  const responseText = await delRes.text();
+  let delData;
+  try {
+    delData = JSON.parse(responseText);
+  } catch (e) {
+    throw new Error(`Invalid JSON response from 3x-ui on delete (Status ${delRes.status}): ${responseText.substring(0, 100)}`);
+  }
 
   if (!delRes.ok || !delData || !delData.success) {
-    throw new Error(delData?.msg || "Failed to delete client");
+    throw new Error(`3x-ui Error: ${delData?.msg || 'None'}. Status: ${delRes.status}. Response: ${responseText.substring(0, 200)}`);
   }
 }
 
