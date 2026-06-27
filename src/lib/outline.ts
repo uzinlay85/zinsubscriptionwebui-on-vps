@@ -172,3 +172,45 @@ export async function removeOutlineDataLimit(
     }
   });
 }
+
+/**
+ * Fetches all access keys from an Outline server.
+ */
+export async function fetchOutlineKeys(
+  apiUrl: string
+): Promise<{ id: string; name: string }[]> {
+  return new Promise((resolve) => {
+    try {
+      const url = new URL(`${apiUrl}/access-keys`);
+      const options = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        method: "GET",
+        rejectUnauthorized: false,
+      };
+
+      const req = https.request(options, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(json.accessKeys || []);
+            } else {
+              resolve([]);
+            }
+          } catch {
+            resolve([]);
+          }
+        });
+      });
+
+      req.on("error", () => resolve([]));
+      req.end();
+    } catch (e) {
+      resolve([]);
+    }
+  });
+}

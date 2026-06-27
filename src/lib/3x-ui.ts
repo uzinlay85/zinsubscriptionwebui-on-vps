@@ -364,3 +364,28 @@ export async function getClientTraffics(apiUrl: string, cookie: string): Promise
 
   return data.obj || [];
 }
+
+/**
+ * Fetches all clients from a specific inbound in 3x-ui.
+ */
+export async function fetch3xuiUsers(
+  apiUrl: string,
+  cookie: string,
+  inboundId: number
+): Promise<{ id: string; email: string }[]> {
+  const cleanUrl = apiUrl.replace(/\/$/, "");
+  const res = await fetch(`${cleanUrl}/panel/api/inbounds/get/${inboundId}`, {
+    method: "GET",
+    headers: { "Cookie": cookie }
+  });
+  
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data || !data.success) return [];
+  
+  try {
+    const settings = JSON.parse(data.obj.settings);
+    return settings.clients || [];
+  } catch {
+    return [];
+  }
+}

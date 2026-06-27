@@ -163,3 +163,21 @@ export function buildHysteriaUri(domainUrl: string, username: string, password: 
     return `hysteria2://${username}:${password}@${domainUrl}:443/?sni=${domainUrl}&mport=20000-50000#${encodeURIComponent(name)}`;
   }
 }
+
+/**
+ * Fetch all users from Hysteria2 backend
+ */
+export async function fetchHysteriaUsers(apiUrl: string, token: string): Promise<HysteriaUser[]> {
+  let baseOrigin = apiUrl;
+  try { baseOrigin = new URL(apiUrl).origin; } catch(e) {}
+  
+  const url = `${baseOrigin}/api/users`;
+  const res = await fetch(url, {
+    headers: { "Authorization": `Bearer ${token}` }
+  });
+
+  if (!res.ok) return [];
+
+  const users: HysteriaUser[] = await res.json();
+  return users;
+}

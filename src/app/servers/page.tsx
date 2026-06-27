@@ -3,6 +3,7 @@ import { AddServerForm } from "./AddServerForm";
 import { EditServerForm } from "./EditServerForm";
 import { deleteServer } from "./actions";
 import { SyncServerButton } from "./SyncServerButton";
+import { ScanOrphanKeysButton } from "./ScanOrphanKeysButton";
 import { Server as ServerIcon, Trash2, Activity } from "lucide-react";
 
 export const revalidate = 0; // Disable caching to always get fresh data
@@ -70,7 +71,8 @@ export default async function ServersPage() {
               )}
             </div>
 
-            <div className="flex items-center gap-2 mt-4 sm:mt-0 w-full sm:w-auto">
+            <div className="mt-4 pt-4 border-t border-white/5 flex justify-end items-center gap-2">
+              <ScanOrphanKeysButton serverId={server.id} serverName={server.name} />
               <SyncServerButton serverId={server.id} />
               <EditServerForm server={server} />
               <form action={async () => {
