@@ -134,7 +134,12 @@ export function ClientList({ clients, servers, initialUsage }: { clients: any[],
                 <div className="shrink-0 flex items-center gap-1 sm:gap-2">
                   <EditClientForm client={{ id: client.id, name: client.name, expiry_date: client.expiry_date }} />
 
-                  <form action={deleteClient} onSubmit={(e) => {
+                  <form action={async (formData) => {
+                    const res = await deleteClient(formData);
+                    if (res?.error) {
+                      alert(res.error);
+                    }
+                  }} onSubmit={(e) => {
                     if (!confirm("Are you sure you want to delete this client? All their keys will also be permanently deleted. This action cannot be undone.")) {
                       e.preventDefault();
                     }
