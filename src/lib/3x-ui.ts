@@ -111,8 +111,11 @@ export async function addClient3xui(
     totalGB: 0,
     expiryTime: 0,
     enable: true,
-    tgId: "",
+    tgId: 0,
     subId: uuid,
+    reset: 0,
+    group: "",
+    comment: ""
   };
 
   if (protocol === "vmess" || protocol === "vless") {
@@ -130,13 +133,12 @@ export async function addClient3xui(
     newClient.password = uuid;
   }
 
-  // AddClient API directly adds the client to the inbound settings
   const addBody = JSON.stringify({
-    id: inboundId,
-    settings: JSON.stringify({ clients: [newClient] })
+    client: newClient,
+    inboundIds: [inboundId]
   });
 
-  const addRes = await fetch(`${cleanUrl}/panel/api/inbounds/addClient`, {
+  const addRes = await fetch(`${cleanUrl}/panel/api/clients/add`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
