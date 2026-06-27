@@ -314,13 +314,12 @@ export async function deleteClient3xui(
   inboundId: number,
   uuid: string
 ): Promise<void> {
-  if (!inboundId || !uuid) {
-    throw new Error("Missing inboundId or uuid for 3x-ui deletion. Please check database query.");
-  }
-
   const cleanUrl = apiUrl.replace(/\/$/, "");
   
-  const res = await fetch(`${cleanUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`, {
+  // Construct the URL exactly to see what variables are being passed
+  const targetUrl = `${cleanUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`;
+
+  const res = await fetch(targetUrl, {
     method: "POST",
     headers: {
       "Cookie": cookie,
@@ -334,11 +333,12 @@ export async function deleteClient3xui(
   try {
     data = JSON.parse(responseText);
   } catch (err) {
-    throw new Error(`3x-ui Delete API failed (Status: ${res.status}): ${responseText.substring(0, 50)}`);
+    // THIS WILL SHOW US EXACTLY WHAT URL WAS REQUESTED
+    throw new Error(`3x-ui API failed (Status: ${res.status}). Requested URL: ${targetUrl}`);
   }
 
   if (!res.ok || !data.success) {
-    throw new Error(data.msg || `Failed to delete client from 3x-ui (Status ${res.status})`);
+    throw new Error(data.msg || `Failed to delete from 3x-ui (Status ${res.status}). Requested URL: ${targetUrl}`);
   }
 }
 
