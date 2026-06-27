@@ -315,36 +315,56 @@ export async function deleteClient3xui(
   uuid: string
 ): Promise<void> {
   const cleanUrl = apiUrl.replace(/\/$/, "");
-  
-  // Path 1: Newer MHSanaei Versions
-  const path1 = `${cleanUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`;
-  // Path 2: Older versions or other forks (e.g., FranzKafkaYu)
-  const path2 = `${cleanUrl}/panel/api/inbounds/delClient/${uuid}`;
-
   const headers = {
     "Cookie": cookie,
     "Accept": "application/json",
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
   };
 
-  // Try Path 1
-  let res = await fetch(path1, { method: "POST", headers });
+  // ATTEMPT 1: Standard Sanaei / Modern 3x-ui API
+  const path1 = `${cleanUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`;
+  const res1 = await fetch(path1, { method: "POST", headers });
 
-  // If Path 1 doesn't exist (404 Not Found), fallback to Path 2
-  if (res.status === 404) {
-    res = await fetch(path2, { method: "POST", headers });
+  if (res1.status === 200) {
+    const data = await res1.json();
+    if (!data.success) {
+      // If client doesn't exist anymore, treat as success
+      if (data.msg && data.msg.toLowerCase().includes("not found")) return;
+      throw new Error(data.msg || "Failed to delete from 3x-ui");
+    }
+    return; // Successfully deleted via standard API
   }
 
-  const responseText = await res.text();
-  let data;
-  try {
-    data = JSON.parse(responseText);
-  } catch (err) {
-    throw new Error(`3x-ui Delete API failed (Status: ${res.status}). Response: ${responseText.substring(0, 100)}`);
-  }
+  // ATTEMPT 2: Universal X-UI Update Method (Fallback for 404/405 errors)
+  // 1. Fetch the entire inbound
+  const getRes = await fetch(`${cleanUrl}/panel/api/inbounds/get/${inboundId}`, { method: "GET", headers });
+  if (!getRes.ok) throw new Error(`Universal Delete: Failed to fetch inbound (Status ${getRes.status})`);
+  
+  const getData = await getRes.json();
+  if (!getData.success) throw new Error(getData.msg || "Universal Delete: Failed to parse inbound");
 
-  if (!res.ok || !data.success) {
-    throw new Error(data.msg || `Failed to delete from 3x-ui (Status ${res.status})`);
+  const inbound = getData.obj;
+  const settings = JSON.parse(inbound.settings);
+
+  // 2. Filter out the client using UUID
+  const initialCount = settings.clients.length;
+  settings.clients = settings.clients.filter((c: any) => c.id !== uuid && c.password !== uuid);
+
+  // If client is already gone, consider it a success
+  if (settings.clients.length === initialCount) return;
+
+  inbound.settings = JSON.stringify(settings);
+
+  // 3. Send the updated inbound back
+  const updateRes = await fetch(`${cleanUrl}/panel/api/inbounds/update/${inboundId}`, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify(inbound)
+  });
+
+  const updateData = await updateRes.json();
+  if (!updateRes.ok || !updateData.success) {
+    throw new Error(updateData.msg || `Universal Delete Update failed (Status ${updateRes.status})`);
   }
 }
 
