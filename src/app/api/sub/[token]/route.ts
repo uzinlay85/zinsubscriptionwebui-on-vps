@@ -20,7 +20,7 @@ export async function GET(
     .eq("sub_token", token)
     .single();
 
-  const client = data as { id: string; name: string; status: string; expiry_date: string | null } | null;
+  const client = data as { id: string; name: string; status: string; expiry_date: string | null; data_limit_gb: number | null; total_usage_bytes: number } | null;
 
   if (clientError || !client) {
     return new NextResponse("Invalid subscription token", { status: 401 });
@@ -49,25 +49,40 @@ export async function GET(
     return new NextResponse("Error fetching keys", { status: 500 });
   }
 
-  // Calculate Expiry Info
+  // Calculate Expiry Info and Usage Info
   let userinfoHeader = "";
-  let dummyNode = "";
+  let dummyNodes = "";
+
+  const totalUsageBytes = client.total_usage_bytes || 0;
+  // Fallback to 1000TB if unlimited so clients don't think it's 0 bytes
+  const dataLimitBytes = client.data_limit_gb ? client.data_limit_gb * 1024 * 1024 * 1024 : 1099511627776000;
+  
+  let expirySeconds = 0;
+  if (client.expiry_date) {
+    expirySeconds = Math.floor(new Date(client.expiry_date).getTime() / 1000);
+  } else {
+    // 10 years in the future for unlimited expiry
+    expirySeconds = Math.floor((new Date().getTime() + 10 * 365 * 24 * 60 * 60 * 1000) / 1000);
+  }
+
+  userinfoHeader = `upload=0; download=${totalUsageBytes}; total=${dataLimitBytes}; expire=${expirySeconds}`;
+
+  // Dummy node 1: Data Usage
+  const gbUsed = (totalUsageBytes / (1024 * 1024 * 1024)).toFixed(2);
+  const dataNodeName = client.data_limit_gb 
+    ? `📊 Usage: ${gbUsed} GB / ${client.data_limit_gb} GB` 
+    : `📊 Usage: ${gbUsed} GB (Unlimited)`;
+    
+  dummyNodes += `ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpkdW1teQ==@127.0.0.1:80#${encodeURIComponent(dataNodeName)}\n`;
+
+  // Dummy node 2: Expiry Date (only if set)
   if (client.expiry_date) {
     const expiryTime = new Date(client.expiry_date).getTime();
     const now = new Date().getTime();
     const leftDays = Math.ceil((expiryTime - now) / (1000 * 60 * 60 * 24));
-    const expirySeconds = Math.floor(expiryTime / 1000);
-    
-    // HTTP Header standard for modern clients (Nekobox, v2rayN, Shadowrocket)
-    // using 1000GB as dummy total data to prevent clients from thinking it's empty
-    userinfoHeader = `upload=0; download=0; total=1099511627776000; expire=${expirySeconds}`;
-
     const dateStr = new Date(client.expiry_date).toISOString().split('T')[0];
     const nodeName = leftDays > 0 ? `⏳ Expire: ${dateStr} (${leftDays} Days Left)` : `❌ Expired: ${dateStr}`;
-    
-    // Dummy Shadowsocks node just to show the text at the top of the server list
-    // Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpkdW1teQ== is base64 of "chacha20-ietf-poly1305:dummy"
-    dummyNode = `ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpkdW1teQ==@127.0.0.1:80#${encodeURIComponent(nodeName)}\n`;
+    dummyNodes += `ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpkdW1teQ==@127.0.0.1:80#${encodeURIComponent(nodeName)}\n`;
   }
 
   // Build URL list
@@ -122,7 +137,7 @@ export async function GET(
   }));
 
   const urls = urlsArray.filter(u => u !== null).join("\n");
-  const finalUrls = dummyNode + urls;
+  const finalUrls = dummyNodes + urls;
 
   if (format === "text") {
     return new NextResponse(finalUrls, {
