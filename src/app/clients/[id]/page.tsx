@@ -198,20 +198,25 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
             return (
               <div key={key.id} className="glass-card p-4 flex flex-col gap-4">
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl">
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                  {/* Left Side: Server Info */}
+                  <div className="flex items-center gap-4 w-full md:w-64 shrink-0 min-w-0">
+                    <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl shrink-0">
                       <Server size={20} />
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-white">{key.servers?.name || "Unknown Server"}</h3>
-                      <p className="text-sm text-zinc-400 mt-0.5 flex items-center gap-1">
-                        <Key size={14} /> Key ID: {key.outline_key_id}
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-white truncate" title={key.servers?.name || "Unknown Server"}>
+                        {key.servers?.name || "Unknown Server"}
+                      </h3>
+                      <p className="text-sm text-zinc-400 mt-0.5 flex items-center gap-1 truncate" title={key.outline_key_id}>
+                        <Key size={14} className="shrink-0" />
+                        <span className="truncate">{key.outline_key_id}</span>
                       </p>
                     </div>
                   </div>
                   
-                  <div className="w-full md:w-auto flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 sm:gap-4 mt-3 md:mt-0">
+                  {/* Right Side: Usage & URL */}
+                  <div className="flex-1 w-full flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 min-w-0">
                     {/* Usage Badge */}
                     <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-lg shrink-0">
                       <Activity size={14} className="text-emerald-400" />
@@ -220,14 +225,16 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                       </span>
                     </div>
 
-                    <div className="flex-1 min-w-[150px]">
+                    {/* Access URL */}
+                    <div className="flex-1 w-full min-w-0">
                       <p className="text-xs text-zinc-500 mb-1">Access URL</p>
-                      <p className="text-sm font-mono text-zinc-300 truncate max-w-full bg-white/5 px-2 py-1.5 rounded-md">
+                      <p className="text-sm font-mono text-zinc-300 truncate w-full bg-white/5 px-2 py-1.5 rounded-md" title={key.access_url}>
                         {key.access_url}
                       </p>
                     </div>
                     
-                    <div className="shrink-0">
+                    {/* Actions */}
+                    <div className="shrink-0 self-end sm:self-center mt-1 sm:mt-0">
                       <DeleteKeyButton keyId={key.id} clientId={client.id} />
                     </div>
                   </div>
