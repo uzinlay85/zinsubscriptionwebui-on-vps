@@ -15,9 +15,12 @@ export async function addServer(formData: FormData) {
   const authPassword = formData.get("authPassword") as string;
   const username = formData.get("username") as string;
   const password = formData.get("password") as string;
+  const externalDomain = formData.get("externalDomain") as string;
+  const externalPortStr = formData.get("externalPort") as string;
 
   const finalUsername = type === "3x-ui" ? username : authUsername;
   const finalPassword = type === "3x-ui" ? password : authPassword;
+  const externalPort = externalPortStr ? parseInt(externalPortStr, 10) : null;
 
   if (!name || !apiUrl) {
     return { error: "Name and API URL are required" };
@@ -93,7 +96,9 @@ export async function addServer(formData: FormData) {
       auth_password: finalPassword || null,
       username: username || null,
       password: password || null,
-      inbound_id: inboundId
+      inbound_id: inboundId,
+      external_domain: externalDomain || null,
+      external_port: externalPort
     })
     .select()
     .single();
@@ -133,10 +138,10 @@ export async function addServer(formData: FormData) {
       } else if (type === "3x-ui") {
         const { addClient3xui } = await import("@/lib/3x-ui");
         uuid = crypto.randomUUID();
-        // client.name is the email identifier for 3x-ui
-        await addClient3xui(apiUrl, cookie3xui, inboundId as number, client.name, uuid);
+        // Pass the server object so it can use external settings
+        const rawUri = await addClient3xui(apiUrl, cookie3xui, inboundId as number, client.name, uuid, `${name} - ${client.name}`, server);
         keyId = uuid;
-        accessUrl = `3x-ui-sub:${uuid}`; // Custom scheme to let the API know it needs to fetch the sub
+        accessUrl = rawUri;
       }
 
       await supabase.from("client_keys").insert({
@@ -178,9 +183,12 @@ export async function updateServer(formData: FormData) {
   const authPassword = formData.get("authPassword") as string;
   const username = formData.get("username") as string;
   const password = formData.get("password") as string;
+  const externalDomain = formData.get("externalDomain") as string;
+  const externalPortStr = formData.get("externalPort") as string;
 
   const finalUsername = type === "3x-ui" ? username : authUsername;
   const finalPassword = type === "3x-ui" ? password : authPassword;
+  const externalPort = externalPortStr ? parseInt(externalPortStr, 10) : null;
 
   if (!id || !name || !apiUrl) {
     return { error: "ID, Name, and API URL are required" };
@@ -242,7 +250,9 @@ export async function updateServer(formData: FormData) {
       auth_password: finalPassword || null,
       username: username || null,
       password: password || null,
-      inbound_id: inboundId
+      inbound_id: inboundId,
+      external_domain: externalDomain || null,
+      external_port: externalPort
     })
     .eq("id", id);
 
@@ -329,10 +339,9 @@ export async function syncServerKeys(serverId: string) {
       } else if (server.type === "3x-ui") {
         const { addClient3xui } = await import("@/lib/3x-ui");
         uuid = crypto.randomUUID();
-        // client.name is the email identifier for 3x-ui
-        await addClient3xui(server.api_url, cookie3xui, server.inbound_id, client.name, uuid);
+        const rawUri = await addClient3xui(server.api_url, cookie3xui, server.inbound_id, client.name, uuid, `${server.name} - ${client.name}`, server);
         keyId = uuid;
-        accessUrl = `3x-ui-sub:${uuid}`; // Custom scheme to let the API know it needs to fetch the sub
+        accessUrl = rawUri;
       }
 
       await supabase.from("client_keys").insert({

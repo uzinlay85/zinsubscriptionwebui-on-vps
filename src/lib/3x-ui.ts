@@ -196,10 +196,10 @@ export async function addClient3xui(
   }
 
   // Fallback: Generate raw URI directly if the sub endpoint fails or is customized
-  return build3xuiLink(inbound, newClient, serverName, apiUrl);
+  return build3xuiLink(inbound, newClient, serverName, apiUrl, server);
 }
 
-function build3xuiLink(inbound: any, client: any, serverName: string, apiUrl: string): string {
+function build3xuiLink(inbound: any, client: any, serverName: string, apiUrl: string, server: any): string {
   const protocol = inbound.protocol;
   let stream;
   try {
@@ -209,7 +209,7 @@ function build3xuiLink(inbound: any, client: any, serverName: string, apiUrl: st
   }
   
   const net = stream.network || "tcp";
-  const sec = stream.security || "none";
+  let sec = stream.security || "none";
   
   let host = "";
   let path = "";
@@ -236,7 +236,8 @@ function build3xuiLink(inbound: any, client: any, serverName: string, apiUrl: st
     }
   }
 
-  let address = sni || host;
+  // Use explicit external domain if provided, else fallback to sni, host, or apiUrl
+  let address = server.external_domain || sni || host;
   if (!address) {
     try {
       address = new URL(apiUrl).hostname;
@@ -245,7 +246,16 @@ function build3xuiLink(inbound: any, client: any, serverName: string, apiUrl: st
     }
   }
 
-  let port = inbound.port;
+  // Use explicit external port if provided, else fallback to inbound port
+  let port = server.external_port || inbound.port;
+
+  // If external port is 443, it's highly likely they are using TLS (e.g. via Cloudflare)
+  if (port === 443 && sec === "none") {
+    sec = "tls";
+    // Also use the external domain as host/sni if not already set
+    if (!host && net === "ws") host = address;
+    if (!sni) sni = address;
+  }
 
   const query = new URLSearchParams();
   query.set("type", net);

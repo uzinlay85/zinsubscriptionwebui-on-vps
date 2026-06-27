@@ -154,17 +154,40 @@ export function AddServerForm() {
                     </div>
                   </div>
                   {serverType === "3x-ui" && (
-                    <div>
-                      <label className="block text-sm font-medium text-zinc-400 mb-1">Inbound ID</label>
-                      <input 
-                        type="number" 
-                        name="inboundId" 
-                        required
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                        placeholder="e.g. 1"
-                      />
-                      <p className="text-xs text-zinc-500 mt-1">The ID of the inbound where clients will be added.</p>
-                    </div>
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-400 mb-1">Inbound ID</label>
+                        <input 
+                          type="number" 
+                          name="inboundId" 
+                          required
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                          placeholder="e.g. 1"
+                        />
+                        <p className="text-xs text-zinc-500 mt-1">The ID of the inbound where clients will be added.</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-zinc-400 mb-1">External Domain (Optional)</label>
+                          <input 
+                            type="text" 
+                            name="externalDomain" 
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                            placeholder="e.g. sgvless.truehand.top"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-zinc-400 mb-1">External Port (Optional)</label>
+                          <input 
+                            type="number" 
+                            name="externalPort" 
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                            placeholder="e.g. 443"
+                          />
+                        </div>
+                      </div>
+                    </>
                   )}
                 </>
               )}

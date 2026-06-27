@@ -123,16 +123,41 @@ export function EditServerForm({ server }: { server: any }) {
                     </div>
                   </div>
                   {server.type === "3x-ui" && (
-                    <div>
-                      <label className="block text-sm font-medium text-zinc-400 mb-1">Inbound ID</label>
-                      <input 
-                        type="number" 
-                        name="inboundId" 
-                        defaultValue={server.inbound_id}
-                        required
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                      />
-                    </div>
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-400 mb-1">Inbound ID</label>
+                        <input 
+                          type="number" 
+                          name="inboundId" 
+                          defaultValue={server.inbound_id}
+                          required
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 mt-3">
+                        <div>
+                          <label className="block text-sm font-medium text-zinc-400 mb-1">External Domain (Optional)</label>
+                          <input 
+                            type="text" 
+                            name="externalDomain" 
+                            defaultValue={server.external_domain || ""}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                            placeholder="e.g. sgvless.truehand.top"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-zinc-400 mb-1">External Port (Optional)</label>
+                          <input 
+                            type="number" 
+                            name="externalPort" 
+                            defaultValue={server.external_port || ""}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                            placeholder="e.g. 443"
+                          />
+                        </div>
+                      </div>
+                    </>
                   )}
                 </>
               )}
