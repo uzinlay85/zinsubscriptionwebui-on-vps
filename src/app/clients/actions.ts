@@ -9,6 +9,8 @@ import crypto from "crypto";
 export async function addClient(formData: FormData) {
   const name = formData.get("name") as string;
   const expiryDate = formData.get("expiryDate") as string || null;
+  const dataLimitStr = formData.get("dataLimitGb") as string;
+  const dataLimitGb = dataLimitStr ? parseInt(dataLimitStr, 10) : null;
 
   if (!name) {
     return { error: "Name is required" };
@@ -17,7 +19,7 @@ export async function addClient(formData: FormData) {
   // 1. Create the client record
   const { data: newClient, error: clientError } = await supabase
     .from("clients")
-    .insert({ name, expiry_date: expiryDate })
+    .insert({ name, expiry_date: expiryDate, data_limit_gb: dataLimitGb })
     .select()
     .single();
 
@@ -89,6 +91,8 @@ export async function addBulkClients(formData: FormData) {
   const startStr = formData.get("startNumber") as string;
   const endStr = formData.get("endNumber") as string;
   const expiryDate = formData.get("expiryDate") as string || null;
+  const dataLimitStr = formData.get("dataLimitGb") as string;
+  const dataLimitGb = dataLimitStr ? parseInt(dataLimitStr, 10) : null;
 
   const startNo = parseInt(startStr, 10);
   const endNo = parseInt(endStr, 10);
@@ -115,7 +119,7 @@ export async function addBulkClients(formData: FormData) {
     // 2. Create the client record
     const { data: newClient, error: clientError } = await supabase
       .from("clients")
-      .insert({ name: clientName, expiry_date: expiryDate })
+      .insert({ name: clientName, expiry_date: expiryDate, data_limit_gb: dataLimitGb })
       .select()
       .single();
 
@@ -192,6 +196,8 @@ export async function updateClient(formData: FormData) {
   const id = formData.get("id") as string;
   const name = formData.get("name") as string;
   const expiryDate = formData.get("expiryDate") as string || null;
+  const dataLimitStr = formData.get("dataLimitGb") as string;
+  const dataLimitGb = dataLimitStr ? parseInt(dataLimitStr, 10) : null;
 
   if (!id || !name) {
     return { error: "ID and Name are required" };
@@ -200,7 +206,7 @@ export async function updateClient(formData: FormData) {
   // 1. Update the client in Supabase
   const { error } = await supabase
     .from("clients")
-    .update({ name, expiry_date: expiryDate })
+    .update({ name, expiry_date: expiryDate, data_limit_gb: dataLimitGb })
     .eq("id", id);
 
   if (error) {

@@ -115,8 +115,12 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
             {client.name}
-            <span className={`text-sm px-2.5 py-0.5 rounded-full ${client.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-400'}`}>
-              {client.status.toUpperCase()}
+            <span className={`text-sm px-2.5 py-0.5 rounded-full ${
+              client.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 
+              client.status === 'limit_reached' ? 'bg-orange-500/10 text-orange-400' :
+              'bg-zinc-800 text-zinc-400'
+            }`}>
+              {client.status === 'limit_reached' ? 'DATA LIMIT REACHED' : client.status.toUpperCase()}
             </span>
             {client.expiry_date && (
               <span className={`text-sm px-2.5 py-0.5 rounded-full ${new Date(client.expiry_date) < new Date() ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-blue-500/10 text-blue-400'}`}>
@@ -135,18 +139,53 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       </div>
 
       {/* Total Usage Card */}
-      <div className="glass-card p-5 flex items-center gap-4 border-purple-500/20">
-        <div className="p-3 bg-purple-500/10 text-purple-400 rounded-xl">
-          <BarChart3 size={24} />
+      <div className="glass-card p-5 flex flex-col gap-4 border-purple-500/20">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-purple-500/10 text-purple-400 rounded-xl">
+            <BarChart3 size={24} />
+          </div>
+          <div>
+            <p className="text-sm text-zinc-400">Total Data Usage</p>
+            <p className="text-2xl font-bold text-white">
+              {client.data_limit_gb 
+                ? formatBytes(client.total_usage_bytes || 0) 
+                : formatBytes(totalBytes)}
+              {client.data_limit_gb && (
+                <span className="text-sm font-normal text-zinc-500 ml-2">
+                  / {client.data_limit_gb} GB
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="ml-auto text-right">
+            <p className="text-sm text-zinc-500">{clientKeys?.length || 0} active keys</p>
+            <p className="text-xs text-zinc-600 mt-1">
+              {client.data_limit_gb ? "Synced via Cron" : "Live from Outline API"}
+            </p>
+          </div>
         </div>
-        <div>
-          <p className="text-sm text-zinc-400">Total Data Usage</p>
-          <p className="text-2xl font-bold text-white">{formatBytes(totalBytes)}</p>
-        </div>
-        <div className="ml-auto text-right">
-          <p className="text-sm text-zinc-500">{clientKeys?.length || 0} active keys</p>
-          <p className="text-xs text-zinc-600 mt-1">Live from Outline API</p>
-        </div>
+
+        {/* Progress Bar for Data Limit */}
+        {client.data_limit_gb && (
+          <div className="w-full mt-2">
+            <div className="flex justify-between text-xs text-zinc-400 mb-1.5">
+              <span>Usage Progress</span>
+              <span>
+                {Math.min((((client.total_usage_bytes || 0) / (client.data_limit_gb * 1024 * 1024 * 1024)) * 100), 100).toFixed(1)}%
+              </span>
+            </div>
+            <div className="w-full bg-white/5 rounded-full h-2">
+              <div
+                className={`h-2 rounded-full transition-all ${
+                  (client.total_usage_bytes || 0) >= client.data_limit_gb * 1024 * 1024 * 1024 
+                    ? 'bg-red-500' 
+                    : 'bg-gradient-to-r from-emerald-500 to-purple-500'
+                }`}
+                style={{ width: `${Math.min((((client.total_usage_bytes || 0) / (client.data_limit_gb * 1024 * 1024 * 1024)) * 100), 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-4">

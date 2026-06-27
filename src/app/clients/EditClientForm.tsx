@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { updateClient } from "./actions";
 import { Pencil, X, Loader2, Check } from "lucide-react";
 
-export function EditClientForm({ client }: { client: { id: string; name: string; expiry_date?: string | null } }) {
+export function EditClientForm({ client }: { client: { id: string; name: string; expiry_date?: string | null; data_limit_gb?: number | null } }) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,15 +78,29 @@ export function EditClientForm({ client }: { client: { id: string; name: string;
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Expiry Date (Optional)</label>
-                <input 
-                  type="date" 
-                  name="expiryDate" 
-                  defaultValue={defaultDate}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors [color-scheme:dark]"
-                />
-                <p className="text-xs text-zinc-500 mt-1">If set, access will be revoked after this date.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">Expiry Date (Optional)</label>
+                  <input 
+                    type="date" 
+                    name="expiryDate" 
+                    defaultValue={defaultDate}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors [color-scheme:dark]"
+                  />
+                  <p className="text-xs text-zinc-500 mt-1">Access revoked after this date.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">Data Limit (GB) (Optional)</label>
+                  <input 
+                    type="number" 
+                    name="dataLimitGb" 
+                    defaultValue={client.data_limit_gb || ""}
+                    min="1"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="e.g. 50"
+                  />
+                  <p className="text-xs text-zinc-500 mt-1">Total limit across all servers.</p>
+                </div>
               </div>
 
               <div className="pt-4 flex justify-end gap-3">
