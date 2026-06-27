@@ -75,10 +75,11 @@ export async function addClient(formData: FormData) {
     })
   );
 
-    const failed = results.filter((r) => r.status === "rejected").length;
+    const failedResults = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
 
-  if (failed > 0) {
-    return { success: true, warning: `${failed} server(s) failed to generate keys.` };
+  if (failedResults.length > 0) {
+    const errorMessages = failedResults.map(r => r.reason?.message || "Unknown error").join(" | ");
+    return { error: `Failed to generate keys on ${failedResults.length} servers: ${errorMessages}` };
   }
   return { success: true };
 }
@@ -401,12 +402,13 @@ export async function syncClientKeys(clientId: string) {
     })
   );
 
-  const failed = results.filter((r) => r.status === "rejected").length;
+  const failedResults = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
   revalidatePath("/clients");
   revalidatePath(`/clients/${clientId}`);
   
-  if (failed > 0) {
-    return { success: true, warning: `Synced keys on ${missingServers.length - failed} servers. ${failed} failed.` };
+  if (failedResults.length > 0) {
+    const errorMessages = failedResults.map(r => r.reason?.message || "Unknown error").join(" | ");
+    return { error: `Failed to sync on ${failedResults.length} servers. Errors: ${errorMessages}` };
   }
   return { success: true, message: `Successfully synced keys on ${missingServers.length} servers.` };
 }
