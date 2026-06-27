@@ -55,6 +55,11 @@ Seamlessly integrate 3x-ui panels. Note: The panel securely fetches the CSRF tok
 - **Panel Username & Password**: Your 3x-ui login credentials.
 - **Inbound ID**: The specific inbound ID (e.g., `1`) where new clients should be added.
 
+### 🛠️ Troubleshooting 3x-ui
+- **Cloudflare 403 Forbidden**: If your panel is behind Cloudflare, standard API requests might be blocked by Cloudflare Bot Protection. To resolve this, always use your direct VPS IP and port (e.g. `http://64.120.95.204:2053`) instead of the domain name when adding the server to this panel.
+- **MHSanaei v3.x API Changes**: Recent versions of the MHSanaei 3x-ui panel have deprecated `inbounds/addClient` and replaced it with `clients/add`. This panel automatically handles this new payload structure, but ensure you are running a supported v3+ version.
+- **Missing CSRF Tokens**: This panel handles CSRF tokens automatically by fetching the token from the root `/` page before logging in. If login fails, ensure your panel does not have additional custom authentication layers.
+
 ---
 
 ## 🚀 Installation & Deployment
@@ -186,6 +191,11 @@ Hysteria2 ဆာဗာကို ချိတ်ဆက်ရန်အတွက်
 - **3x-ui Panel URL**: Vercel ကနေ လှမ်းချိတ်သည့်အခါ Cloudflare ရဲ့ WAF Bot Protection အပိတ်ခံရခြင်းမှ ကင်းဝေးစေရန် Domain အစား **VPS ၏ IP Address နှင့် Panel Port ကိုသာ တိုက်ရိုက် အသုံးပြုရန်** အထူး အကြံပြုအပ်ပါသည်။ (ဥပမာ - `http://64.120.95.204:2053/panel_path`)
 - **Panel Username & Password**: 3x-ui Panel ဝင်သည့် အကောင့်များ။
 - **Inbound ID**: Client အသစ်များ ထည့်သွင်းလိုသော 3x-ui အတွင်းရှိ Inbound ID နံပါတ် (ဥပမာ - `1`)
+
+### 🛠️ 3x-ui ပြဿနာများ ဖြေရှင်းနည်း (Troubleshooting)
+- **Cloudflare 403 Error တက်ခြင်း**: Panel ကို Cloudflare ခံထားပါက၊ API လှမ်းခေါ်ရာတွင် Cloudflare Bot Protection ဖြင့် အပိတ်ခံရတတ်ပါသည်။ ထို့ကြောင့် Server အသစ်ထည့်ချိန်တွင် Domain Name အစား မိမိ၏ **VPS IP Address နှင့် Port အစစ်** ကိုသာ ထည့်သွင်းအသုံးပြုပါ။ (ဥပမာ - `http://64.120.95.204:2053`)
+- **MHSanaei v3.x လမ်းကြောင်း ပြောင်းလဲခြင်း**: MHSanaei 3x-ui အသစ်များတွင် `inbounds/addClient` အစား `clients/add` လမ်းကြောင်းကို ပြောင်းလဲအသုံးပြုထားပါသည်။ ဤ Panel က အဆိုပါ လမ်းကြောင်းအသစ်ကိုပါ အပြည့်အဝ Support လုပ်ပေးထားပါသည်။
+- **CSRF Token အခက်အခဲ**: Login ဝင်ရာတွင် လိုအပ်သော CSRF Token များကို ဤ Panel မှ အလိုအလျောက် ယူဆောင်ပေးပါသည်။ အကယ်၍ Login ဝင်မရပါက 3x-ui ဘက်တွင် အခြား Custom လုံခြုံရေးများ ခံထားခြင်း ရှိမရှိ စစ်ဆေးပါ။
 
 ---
 
