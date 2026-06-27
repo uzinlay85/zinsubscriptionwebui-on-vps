@@ -328,15 +328,13 @@ export async function deleteClient3xui(
   if (res1.status === 200) {
     const data = await res1.json();
     if (!data.success) {
-      // If client doesn't exist anymore, treat as success
       if (data.msg && data.msg.toLowerCase().includes("not found")) return;
       throw new Error(data.msg || "Failed to delete from 3x-ui");
     }
-    return; // Successfully deleted via standard API
+    return;
   }
 
-  // ATTEMPT 2: Universal X-UI Update Method (Fallback for 404/405 errors)
-  // 1. Fetch the entire inbound
+  // ATTEMPT 2: Universal X-UI Update Method (Fallback)
   const getRes = await fetch(`${cleanUrl}/panel/api/inbounds/get/${inboundId}`, { method: "GET", headers });
   if (!getRes.ok) throw new Error(`Universal Delete: Failed to fetch inbound (Status ${getRes.status})`);
   
@@ -344,18 +342,20 @@ export async function deleteClient3xui(
   if (!getData.success) throw new Error(getData.msg || "Universal Delete: Failed to parse inbound");
 
   const inbound = getData.obj;
-  const settings = JSON.parse(inbound.settings);
+  
+  // FIX: Safely parse settings whether it's a string or already an object
+  let settings = typeof inbound.settings === "string" 
+    ? JSON.parse(inbound.settings) 
+    : inbound.settings;
 
-  // 2. Filter out the client using UUID
   const initialCount = settings.clients.length;
   settings.clients = settings.clients.filter((c: any) => c.id !== uuid && c.password !== uuid);
 
-  // If client is already gone, consider it a success
   if (settings.clients.length === initialCount) return;
 
+  // Must stringify before sending back
   inbound.settings = JSON.stringify(settings);
 
-  // 3. Send the updated inbound back
   const updateRes = await fetch(`${cleanUrl}/panel/api/inbounds/update/${inboundId}`, {
     method: "POST",
     headers: { ...headers, "Content-Type": "application/json" },
