@@ -342,7 +342,14 @@ export async function deleteClient3xui(
   }
 
   // ATTEMPT 2: Universal X-UI Update Method (Fallback for 404/405)
-  const getRes = await fetch(`${cleanUrl}/panel/api/inbounds/get/${inboundId}`, { method: "GET", headers });
+  // Fetch a fresh CSRF token needed for the update endpoint
+  const homeRes = await fetch(`${cleanUrl}/`, { headers: { "Cookie": cookie, "User-Agent": headers["User-Agent"] } });
+  const homeHtml = await homeRes.text();
+  const csrfMatch = homeHtml.match(/name="csrf-token"\s+content="([^"]+)"/i);
+  const csrfToken = csrfMatch ? csrfMatch[1] : "";
+  const headersWithCsrf = csrfToken ? { ...headers, "X-Csrf-Token": csrfToken } : headers;
+
+  const getRes = await fetch(`${cleanUrl}/panel/api/inbounds/get/${inboundId}`, { method: "GET", headers: headersWithCsrf });
   if (!getRes.ok) throw new Error(`Universal Delete: Failed to fetch inbound (Status ${getRes.status})`);
 
   const getData = await safeJson(getRes);
@@ -366,7 +373,7 @@ export async function deleteClient3xui(
 
   const updateRes = await fetch(`${cleanUrl}/panel/api/inbounds/update/${inboundId}`, {
     method: "POST",
-    headers: { ...headers, "Content-Type": "application/json" },
+    headers: { ...headersWithCsrf, "Content-Type": "application/json" },
     body: JSON.stringify(inbound)
   });
 
