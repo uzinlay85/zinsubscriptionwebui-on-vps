@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 
 const PUBLIC_PATHS = [
   "/api/sub", // subscription links must be public
+  "/api/cron", // cron jobs use Bearer token auth
 ];
 
 export function middleware(request: NextRequest) {
