@@ -12,27 +12,37 @@ export interface HysteriaUser {
 }
 
 /**
- * Clean up the API URL and support custom paths like reverse proxy suffixes (e.g. /hy2-api)
+ * Helper function to extract base URL while preserving subpaths (e.g. /hy2-api)
+ * and handling trailing slashes.
  */
 function getBaseUrl(apiUrl: string): string {
-  let base = apiUrl.trim().replace(/\/$/, "");
-  if (!base.startsWith("http://") && !base.startsWith("https://")) {
-    base = "http://" + base;
+  try {
+    const url = new URL(apiUrl);
+    let base = url.origin + url.pathname;
+    if (base.endsWith('/')) {
+      base = base.slice(0, -1);
+    }
+    return base;
+  } catch (e) {
+    let base = apiUrl;
+    if (base.endsWith('/')) {
+      base = base.slice(0, -1);
+    }
+    return base;
   }
-  return base;
 }
 
 /**
  * Log into the Hysteria Express Backend and return a JWT token.
  * 
- * @param apiUrl The base URL of the Hysteria server (e.g. https://vpn.domain.com/admin_123 or IP:port)
+ * @param apiUrl The base URL of the Hysteria server (e.g. https://vpn.domain.com/admin_123)
  * @param username Admin username
  * @param password Admin password
  * @returns JWT token string
  */
 export async function loginHysteria(apiUrl: string, username?: string, password?: string): Promise<string> {
-  const baseOrigin = getBaseUrl(apiUrl);
-  const url = `${baseOrigin}/api/login`;
+  const base = getBaseUrl(apiUrl);
+  const url = `${base}/api/login`;
   
   const res = await fetch(url, {
     method: "POST",
@@ -56,8 +66,8 @@ export async function loginHysteria(apiUrl: string, username?: string, password?
  * Create a new user in Hysteria2
  */
 export async function createHysteriaUser(apiUrl: string, token: string, userUsername: string, userPassword: string, expiryDays?: number | null): Promise<number> {
-  const baseOrigin = getBaseUrl(apiUrl);
-  const url = `${baseOrigin}/api/users`;
+  const base = getBaseUrl(apiUrl);
+  const url = `${base}/api/users`;
   
   const res = await fetch(url, {
     method: "POST",
@@ -91,10 +101,10 @@ export async function updateHysteriaUser(
   userUsername: string, 
   expiryDays?: number | null
 ): Promise<void> {
-  const baseOrigin = getBaseUrl(apiUrl);
+  const base = getBaseUrl(apiUrl);
   
   // 1. Fetch all users to find the ID by password
-  const url = `${baseOrigin}/api/users`;
+  const url = `${base}/api/users`;
   const res = await fetch(url, {
     headers: { "Authorization": `Bearer ${token}` }
   });
@@ -108,7 +118,7 @@ export async function updateHysteriaUser(
   
   if (targetUser) {
     // 2. Update the user
-    await fetch(`${baseOrigin}/api/users/${targetUser.id}`, {
+    await fetch(`${base}/api/users/${targetUser.id}`, {
       method: "PUT",
       headers: { 
         "Content-Type": "application/json",
@@ -128,10 +138,10 @@ export async function updateHysteriaUser(
  * We need to find their ID first by fetching all users and matching the username/password
  */
 export async function deleteHysteriaUser(apiUrl: string, token: string, userPassword: string, username?: string): Promise<void> {
-  const baseOrigin = getBaseUrl(apiUrl);
+  const base = getBaseUrl(apiUrl);
   
   // 1. Fetch all users
-  const url = `${baseOrigin}/api/users`;
+  const url = `${base}/api/users`;
   const res = await fetch(url, {
     headers: { "Authorization": `Bearer ${token}` }
   });
@@ -146,7 +156,7 @@ export async function deleteHysteriaUser(apiUrl: string, token: string, userPass
   
   if (targetUser) {
     // 3. Delete the user
-    await fetch(`${baseOrigin}/api/users/${targetUser.id}`, {
+    await fetch(`${base}/api/users/${targetUser.id}`, {
       method: "DELETE",
       headers: { "Authorization": `Bearer ${token}` }
     });
@@ -165,7 +175,16 @@ export function buildHysteriaUri(domainUrl: string, username: string, password: 
     return `hysteria2://${username}:${password}@${host}:443/?sni=${host}&mport=20000-50000#${encodeURIComponent(name)}`;
   } catch (e) {
     // Fallback if domainUrl is invalid
-    return `hysteria2://${username}:${password}@${domainUrl}:443/?sni=${domainUrl}&mport=20000-50000#${encodeURIComponent(name)}`;
+    let host = domainUrl;
+    try {
+      // If domainUrl contains protocol, try to parse it
+      if (domainUrl.includes('://')) {
+        host = new URL(domainUrl).hostname;
+      } else if (domainUrl.includes('/')) {
+        host = domainUrl.split('/')[0];
+      }
+    } catch(err) {}
+    return `hysteria2://${username}:${password}@${host}:443/?sni=${host}&mport=20000-50000#${encodeURIComponent(name)}`;
   }
 }
 
@@ -173,9 +192,9 @@ export function buildHysteriaUri(domainUrl: string, username: string, password: 
  * Fetch all users from Hysteria2 backend
  */
 export async function fetchHysteriaUsers(apiUrl: string, token: string): Promise<HysteriaUser[]> {
-  const baseOrigin = getBaseUrl(apiUrl);
+  const base = getBaseUrl(apiUrl);
   
-  const url = `${baseOrigin}/api/users`;
+  const url = `${base}/api/users`;
   const res = await fetch(url, {
     headers: { "Authorization": `Bearer ${token}` }
   });
