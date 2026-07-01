@@ -1,5 +1,6 @@
 import { KeyRound, Shield, AlertTriangle } from "lucide-react";
 import { BackupRestoreSection } from "./BackupRestoreSection";
+import { GeneralSettingsSection } from "./GeneralSettingsSection";
 
 export const revalidate = 0;
 
@@ -12,6 +13,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-6 mt-8">
+        <GeneralSettingsSection />
         <div className="glass-card p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-3 bg-blue-500/10 text-blue-500 rounded-xl">
