@@ -6,12 +6,43 @@ const PUBLIC_PATHS = [
   "/api/cron", // cron jobs use Bearer token auth
 ];
 
+/** Timing-safe string comparison using Web Crypto (Edge Runtime safe). */
+function timingSafeStringEqual(a: string, b: string): boolean {
+  try {
+    const enc = new TextEncoder();
+    const aBuf = enc.encode(a);
+    const bBuf = enc.encode(b);
+    if (aBuf.length !== bBuf.length) return false;
+    // XOR every byte; result is 0 only if all bytes match
+    let diff = 0;
+    for (let i = 0; i < aBuf.length; i++) {
+      diff |= aBuf[i] ^ bBuf[i];
+    }
+    return diff === 0;
+  } catch {
+    return false;
+  }
+}
+
+/** Attach security headers to every response. */
+function withSecurityHeaders(response: NextResponse): NextResponse {
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("X-XSS-Protection", "1; mode=block");
+  response.headers.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()"
+  );
+  return response;
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 1. Always allow public paths
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
-    return NextResponse.next();
+    return withSecurityHeaders(NextResponse.next());
   }
 
   const secretPath = process.env.ADMIN_SECRET_PATH;
@@ -29,35 +60,41 @@ export function middleware(request: NextRequest) {
       sameSite: "lax",
       path: "/",
     });
-    return response;
+    return withSecurityHeaders(response);
   }
 
   // 3. If they don't have the path_auth cookie, block access (return 404)
-  if (secretPath && pathAuthCookie?.value !== "valid") {
-    return new NextResponse("404 Not Found", { status: 404 });
+  if (secretPath && !timingSafeStringEqual(pathAuthCookie?.value ?? "", "valid")) {
+    return withSecurityHeaders(
+      new NextResponse("404 Not Found", { status: 404 })
+    );
   }
 
   // --- User has passed the secret path gate ---
 
   // 4. Handle Username/Password Auth for protected admin routes
   const adminAuthCookie = request.cookies.get("admin_auth");
+  const authSecret = process.env.AUTH_SECRET ?? "";
 
-  // Allow access to login page
+  // Allow access to login page and auth API
   if (pathname === "/login" || pathname.startsWith("/api/auth/")) {
-    return NextResponse.next();
+    return withSecurityHeaders(NextResponse.next());
   }
 
-  if (!adminAuthCookie || adminAuthCookie.value !== process.env.AUTH_SECRET) {
+  if (
+    !adminAuthCookie ||
+    !timingSafeStringEqual(adminAuthCookie.value, authSecret)
+  ) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("from", pathname);
-    return NextResponse.redirect(loginUrl);
+    return withSecurityHeaders(NextResponse.redirect(loginUrl));
   }
 
-  return NextResponse.next();
+  return withSecurityHeaders(NextResponse.next());
 }
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon\\.png).*)",
   ],
 };
