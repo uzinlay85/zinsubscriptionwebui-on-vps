@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
+export const dynamic = 'force-dynamic';
+
 /** Build a dummy Shadowsocks node that carries a display label only. */
 function dummyNode(label: string): string {
   // Base64 of "chacha20-ietf-poly1305:dummy" — always the same placeholder cipher
@@ -199,11 +201,9 @@ export async function GET(
   const urls = urlsArray.filter((u) => u !== null).join("\n");
   const finalUrls = dummyNodes + urls;
 
-  const safeFilename = client.name.replace(/[^a-zA-Z0-9_-]/g, "_") || "subscription";
   const responseHeaders = {
     "Content-Type": "text/plain; charset=utf-8",
     "Cache-Control": "no-store, max-age=0",
-    "Content-Disposition": `inline; filename="${safeFilename}"`,
     "Profile-Title": client.name,
     "profile-title": client.name,
     ...(userinfoHeader ? { "Subscription-Userinfo": userinfoHeader } : {}),
