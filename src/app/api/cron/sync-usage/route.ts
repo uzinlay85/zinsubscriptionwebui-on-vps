@@ -148,16 +148,33 @@ export async function GET(request: Request) {
 
         const lastSeenBytes = key.last_seen_bytes || 0;
         let delta = 0;
+        let shouldUpdateLastSeen = false;
 
         if (currentBytes < lastSeenBytes) {
-          // Server rebooted or usage reset
-          delta = currentBytes;
+          // If currentBytes is significantly lower than lastSeenBytes,
+          // it indicates a server reboot or usage reset.
+          // We use a 10% threshold (currentBytes < lastSeenBytes * 0.9) to distinguish
+          // actual reboots/resets from minor API fluctuations or caching delays.
+          if (currentBytes < lastSeenBytes * 0.9) {
+            delta = currentBytes;
+            shouldUpdateLastSeen = true;
+          } else {
+            // Minor fluctuation, ignore it
+            delta = 0;
+            shouldUpdateLastSeen = false;
+          }
         } else {
           delta = currentBytes - lastSeenBytes;
+          if (delta > 0) {
+            shouldUpdateLastSeen = true;
+          }
         }
 
         if (delta > 0) {
           clientTotalUsage += delta;
+        }
+
+        if (shouldUpdateLastSeen) {
           keyUpdates.push({ id: key.id, last_seen_bytes: currentBytes });
         }
       });

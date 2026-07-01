@@ -4,15 +4,16 @@ import json
 import os
 import re
 import sys
+import threading
+import time
 
 # Configuration
 CONFIG_FILE = "/etc/hysteria/config.yaml"
+DOMAIN_FILE = "/etc/hysteria/domain.txt"
 PORT = 3000
 
-# Read credentials from script arguments or prompt
 if len(sys.argv) < 3:
     print("Usage: python3 hy2-api.py <ADMIN_USERNAME> <ADMIN_PASSWORD> [PORT]")
-    print("Example: python3 hy2-api.py admin SecretPass123 3000")
     sys.exit(1)
 
 ADMIN_USER = sys.argv[1]
@@ -23,8 +24,33 @@ if len(sys.argv) >= 4:
     except ValueError:
         pass
 
-# Simple token for API auth (in production, use a more secure random string)
 AUTH_TOKEN = f"token_{ADMIN_USER}_{ADMIN_PASS}"
+
+if not os.path.exists(DOMAIN_FILE):
+    print(f"Error: {DOMAIN_FILE} not found! Please write your domain name into it.")
+    sys.exit(1)
+
+with open(DOMAIN_FILE, "r") as df:
+    DOMAIN = df.read().strip()
+
+# Global variable for debounced Hysteria restart
+restart_timer = None
+restart_lock = threading.Lock()
+
+def perform_restart():
+    global restart_timer
+    with restart_lock:
+        print("Executing: systemctl restart hysteria-server.service")
+        os.system("systemctl restart hysteria-server.service")
+        restart_timer = None
+
+def trigger_restart():
+    global restart_timer
+    with restart_lock:
+        if restart_timer is not None:
+            restart_timer.cancel()
+        restart_timer = threading.Timer(2.0, perform_restart)
+        restart_timer.start()
 
 def read_users():
     users = []
@@ -41,11 +67,9 @@ def read_users():
             if in_userpass:
                 if not stripped:
                     continue
-                # If line is not indented, we exited userpass section
                 if not line.startswith(' ') and not line.startswith('\t'):
                     in_userpass = False
                     continue
-                # Match username: "password"
                 match = re.match(r'^\s*([a-zA-Z0-9_-]+)\s*:\s*"?([^"\s]+)"?', line)
                 if match:
                     username = match.group(1)
@@ -55,7 +79,6 @@ def read_users():
                     if ':' in stripped and not line.startswith('  '):
                         in_userpass = False
     
-    # Assign index-based IDs
     for idx, user in enumerate(users):
         user["id"] = idx + 1
     return users
@@ -76,7 +99,7 @@ def add_user_to_config(username, password):
     if added:
         with open(CONFIG_FILE, 'w') as f:
             f.writelines(lines)
-        os.system("systemctl restart hysteria-server.service")
+        trigger_restart()
     return added
 
 def delete_user_from_config(username):
@@ -106,7 +129,7 @@ def delete_user_from_config(username):
     if deleted:
         with open(CONFIG_FILE, 'w') as f:
             f.writelines(lines)
-        os.system("systemctl restart hysteria-server.service")
+        trigger_restart()
     return deleted
 
 class HysteriaAPIHandler(http.server.BaseHTTPRequestHandler):
@@ -161,14 +184,12 @@ class HysteriaAPIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": "Username and password required"}, 400)
                 return
             
-            # Check if user already exists
             existing_users = read_users()
             if any(u["username"] == username for u in existing_users):
                 self._send_json({"error": "User already exists"}, 400)
                 return
 
             if add_user_to_config(username, password):
-                # Return the new list length as ID
                 new_users = read_users()
                 user_id = next((u["id"] for u in new_users if u["username"] == username), 999)
                 self._send_json({"ok": True, "id": user_id})
@@ -210,7 +231,6 @@ class HysteriaAPIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": "User not found"}, 404)
                 return
 
-            # If password or username changed, update config
             delete_user_from_config(target_user["username"])
             add_user_to_config(username, password)
             self._send_json({"ok": True})
