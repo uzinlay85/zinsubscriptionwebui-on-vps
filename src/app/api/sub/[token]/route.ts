@@ -193,14 +193,20 @@ export async function GET(
   const urls = urlsArray.filter((u) => u !== null).join("\n");
   const finalUrls = dummyNodes + urls;
 
+  const safeFilename = client.name.replace(/[^a-zA-Z0-9_-]/g, "_") || "subscription";
+  const responseHeaders = {
+    "Content-Type": "text/plain; charset=utf-8",
+    "Cache-Control": "no-store, max-age=0",
+    "Content-Disposition": `inline; filename="${safeFilename}"`,
+    "Profile-Title": client.name,
+    "profile-title": client.name,
+    ...(userinfoHeader ? { "Subscription-Userinfo": userinfoHeader } : {}),
+  };
+
   if (format === "text") {
     return new NextResponse(finalUrls, {
       status: 200,
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "no-store, max-age=0",
-        ...(userinfoHeader ? { "Subscription-Userinfo": userinfoHeader } : {}),
-      },
+      headers: responseHeaders,
     });
   }
 
@@ -209,10 +215,6 @@ export async function GET(
 
   return new NextResponse(base64Urls, {
     status: 200,
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-store, max-age=0",
-      ...(userinfoHeader ? { "Subscription-Userinfo": userinfoHeader } : {}),
-    },
+    headers: responseHeaders,
   });
 }
