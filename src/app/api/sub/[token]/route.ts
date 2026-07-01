@@ -133,7 +133,8 @@ export async function GET(
   // Build URL list
   const urlsArray = await Promise.all(
     clientKeys.map(async (k) => {
-      const serverName = k.servers?.name ?? "Server";
+      if (!k.servers) return null; // Skip key if its associated server has been deleted
+      const serverName = k.servers.name ?? "Server";
       const keyLabel = `${serverName} - ${client.name}`;
 
       if (k.access_url.startsWith("3x-ui-sub:")) {

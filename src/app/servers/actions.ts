@@ -165,11 +165,16 @@ export async function addServer(formData: FormData) {
 }
 
 export async function deleteServer(id: string) {
+  // 1. Delete all client_keys associated with this server first to avoid orphan records
+  await supabase.from("client_keys").delete().eq("server_id", id);
+
+  // 2. Delete the server
   const { error } = await supabase.from("servers").delete().eq("id", id);
   if (error) {
     return { error: error.message };
   }
   revalidatePath("/servers");
+  revalidatePath("/clients");
   return { success: true };
 }
 
