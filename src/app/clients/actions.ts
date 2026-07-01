@@ -5,6 +5,43 @@ import { revalidatePath } from "next/cache";
 import { createOutlineKey, deleteOutlineKey, setOutlineDataLimit, removeOutlineDataLimit } from "@/lib/outline";
 import { loginHysteria, createHysteriaUser, buildHysteriaUri, deleteHysteriaUser, updateHysteriaUser } from "@/lib/hysteria2";
 import crypto from "crypto";
+import https from "https";
+
+// Helper to fetch Outline metrics
+async function fetchOutlineMetrics(apiUrl: string): Promise<Record<string, number>> {
+  return new Promise((resolve) => {
+    try {
+      const url = new URL(`${apiUrl}/metrics/transfer`);
+      const options = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        method: "GET",
+        rejectUnauthorized: false,
+      };
+      const req = https.request(options, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            resolve(json.bytesTransferredByUserId || {});
+          } catch {
+            resolve({});
+          }
+        });
+      });
+      req.setTimeout(3000, () => {
+        req.destroy();
+        resolve({});
+      });
+      req.on("error", () => resolve({}));
+      req.end();
+    } catch {
+      resolve({});
+    }
+  });
+}
 
 export async function addClient(formData: FormData) {
   const name = formData.get("name") as string;
@@ -427,22 +464,81 @@ export async function resetClientUsage(clientId: string) {
   // 2. Fetch all keys for this client to get server details
   const { data: keysData } = await supabase
     .from("client_keys")
-    .select("*, servers(api_url, type)")
+    .select("*, servers(*)")
     .eq("client_id", clientId);
     
   const keys = (keysData as any[]) || [];
 
-  // 3. Remove data limits on Outline servers and reset last_seen_bytes
+  // Group keys by server to fetch metrics
+  const serversMap = new Map<string, any>();
+  keys.forEach(k => {
+    if (k.servers) serversMap.set(k.servers.id, k.servers);
+  });
+
+  const serverMetricsMap = new Map<string, Record<string, number>>();
+
+  // Fetch metrics from each server
+  await Promise.all(
+    Array.from(serversMap.values()).map(async (server: any) => {
+      if (server.type === "outline" || !server.type) {
+        const metrics = await fetchOutlineMetrics(server.api_url);
+        serverMetricsMap.set(server.id, metrics);
+      } else if (server.type === "3x-ui") {
+        try {
+          const { login3xui } = await import("@/lib/3x-ui");
+          const finalUsername = server.username || server.auth_username;
+          const finalPassword = server.password || server.auth_password;
+          const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
+          
+          const cleanUrl = server.api_url.replace(/\/$/, "");
+          const res = await fetch(`${cleanUrl}/panel/api/inbounds/getClientTraffics`, {
+            headers: { "Cookie": cookie, "Accept": "application/json" }
+          });
+          
+          if (res.ok) {
+            const json = await res.json();
+            if (json.success && json.obj) {
+              const metrics: Record<string, number> = {};
+              json.obj.forEach((c: any) => {
+                metrics[c.email] = (c.up || 0) + (c.down || 0);
+              });
+              serverMetricsMap.set(server.id, metrics);
+            }
+          }
+        } catch (e) {
+          console.error("Failed to fetch 3x-ui metrics during reset", e);
+        }
+      }
+    })
+  );
+
+  // 3. Remove data limits on Outline servers and update last_seen_bytes to current usage
+  const { data: clientData } = await supabase.from("clients").select("name").eq("id", clientId).single();
+  const clientName = clientData?.name || "";
+
   await Promise.allSettled(
     keys.map(async (key) => {
       const server = key.servers;
-      if (server && (server.type === "outline" || !server.type) && key.outline_key_id) {
+      if (!server) return;
+
+      if ((server.type === "outline" || !server.type) && key.outline_key_id) {
         await removeOutlineDataLimit(server.api_url, key.outline_key_id).catch(() => {});
       }
-      // Reset last_seen_bytes in DB so delta calculation restarts correctly
+
+      // Find current bytes
+      const metrics = serverMetricsMap.get(server.id) || {};
+      let currentBytes = 0;
+      if (server.type === "outline" || !server.type) {
+        currentBytes = metrics[key.outline_key_id] || 0;
+      } else if (server.type === "3x-ui") {
+        const keyName = `${server.name} - ${clientName}`;
+        currentBytes = metrics[keyName] || metrics[clientName] || metrics[key.uuid] || 0;
+      }
+
+      // Update last_seen_bytes to current bytes so delta starts at 0
       await supabase
         .from("client_keys")
-        .update({ last_seen_bytes: 0 })
+        .update({ last_seen_bytes: currentBytes })
         .eq("id", key.id);
     })
   );
