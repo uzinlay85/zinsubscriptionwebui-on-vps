@@ -228,7 +228,6 @@ export async function GET(
   const responseHeaders = {
     "Content-Type": "text/plain; charset=utf-8",
     "Cache-Control": "no-store, max-age=0",
-    "Profile-Title": profileTitle,
     "profile-title": profileTitle,
     ...(userinfoHeader ? { "Subscription-Userinfo": userinfoHeader } : {}),
   };
