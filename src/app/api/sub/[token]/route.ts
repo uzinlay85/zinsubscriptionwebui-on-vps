@@ -1,5 +1,42 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import https from "https";
+
+// Helper to fetch Outline metrics
+async function fetchOutlineMetrics(apiUrl: string): Promise<Record<string, number>> {
+  return new Promise((resolve) => {
+    try {
+      const url = new URL(`${apiUrl}/metrics/transfer`);
+      const options = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        method: "GET",
+        rejectUnauthorized: false,
+      };
+      const req = https.request(options, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            resolve(json.bytesTransferredByUserId || {});
+          } catch {
+            resolve({});
+          }
+        });
+      });
+      req.setTimeout(3000, () => {
+        req.destroy();
+        resolve({});
+      });
+      req.on("error", () => resolve({}));
+      req.end();
+    } catch {
+      resolve({});
+    }
+  });
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -123,7 +160,35 @@ export async function GET(
   let userinfoHeader = "";
   let dummyNodes = "";
 
-  const totalUsageBytes = client.total_usage_bytes || 0;
+  // Fetch live usage in parallel to ensure accuracy even if cron hasn't run
+  const usageMap: Record<string, number> = {};
+  const uniqueServers = new Map<string, any>();
+  clientKeys?.forEach((key) => {
+    const s = key.servers;
+    if (s && (s.type === "outline" || !s.type)) {
+      uniqueServers.set(s.api_url, s);
+    }
+  });
+
+  await Promise.all(
+    Array.from(uniqueServers.values()).map(async (server: any) => {
+      const metrics = await fetchOutlineMetrics(server.api_url);
+      Object.entries(metrics).forEach(([keyId, bytes]) => {
+        usageMap[`${server.name}:${keyId}`] = bytes as number;
+      });
+    })
+  );
+
+  let liveUsageBytes = 0;
+  clientKeys?.forEach((key) => {
+    const s = key.servers;
+    if (s && (s.type === "outline" || !s.type)) {
+      liveUsageBytes += usageMap[`${s.name}:${key.outline_key_id}`] || 0;
+    }
+  });
+
+  // Use the larger of database accumulated usage or live usage
+  const totalUsageBytes = Math.max(client.total_usage_bytes || 0, liveUsageBytes);
   // Fallback to 1000 TB if unlimited so clients don't think it's 0 bytes
   const dataLimitBytes = client.data_limit_gb
     ? client.data_limit_gb * 1024 * 1024 * 1024

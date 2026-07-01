@@ -76,12 +76,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 1. Fetch all clients with a data limit that are currently active
+    // 1. Fetch all clients that are currently active (including unlimited ones to sync usage stats)
     const { data: clientsData, error: clientsError } = await supabase
       .from("clients")
       .select("*")
-      .eq("status", "active")
-      .not("data_limit_gb", "is", null);
+      .eq("status", "active");
 
     if (clientsError) {
       console.error("Error fetching clients for sync:", clientsError);
@@ -89,7 +88,7 @@ export async function GET(request: Request) {
     }
 
     if (!clientsData || clientsData.length === 0) {
-      return NextResponse.json({ success: true, message: "No active clients with data limit found." });
+      return NextResponse.json({ success: true, message: "No active clients found." });
     }
 
     // 2. Fetch all keys for these clients
