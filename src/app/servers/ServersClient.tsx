@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useCallback } from "react";
 import {
@@ -71,13 +71,16 @@ function SortButton({
   );
 }
 
-function ServerCardView({ server }: { server: Server }) {
+function ServerCardView({ server, index }: { server: Server; index: number }) {
   return (
     <div className="glass-card p-5 flex flex-col group">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-blue-500/10 text-blue-500 rounded-xl">
+          <div className="p-2.5 bg-blue-500/10 text-blue-500 rounded-xl relative">
             <ServerIcon size={20} />
+            <span className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-blue-600 text-[10px] font-bold text-white flex items-center justify-center border border-zinc-950">
+              {index + 1}
+            </span>
           </div>
           <div>
             <h3 className="text-lg font-semibold text-white group-hover:text-primary transition-colors">
@@ -153,11 +156,14 @@ function ServerCardView({ server }: { server: Server }) {
   );
 }
 
-function ServerListRow({ server }: { server: Server }) {
+function ServerListRow({ server, index }: { server: Server; index: number }) {
   return (
     <div className="glass-card px-4 py-3 flex items-center gap-4 group hover:border-white/10 transition-all">
-      <div className="p-2 bg-blue-500/10 text-blue-500 rounded-xl shrink-0">
+      <div className="p-2 bg-blue-500/10 text-blue-500 rounded-xl shrink-0 relative">
         <ServerIcon size={18} />
+        <span className="absolute -top-1.5 -left-1.5 w-4.5 h-4.5 rounded-full bg-blue-600 text-[9px] font-bold text-white flex items-center justify-center border border-zinc-950">
+          {index + 1}
+        </span>
       </div>
 
       <div className="flex-1 min-w-0">
@@ -285,6 +291,9 @@ export function ServersClient({ servers: initialServers }: { servers: Server[] }
     <div className="mt-6">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 mr-2">
+            Servers: {initialServers.length}
+          </span>
           <span className="text-xs text-zinc-500 font-medium mr-1">Sort:</span>
           <SortButton label="Name" sortKey="name" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} />
           <SortButton label="Type" sortKey="type" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} />
@@ -317,14 +326,14 @@ export function ServersClient({ servers: initialServers }: { servers: Server[] }
 
       {view === "card" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sorted.map((server) => (
-            <ServerCardView key={server.id} server={server} />
+          {sorted.map((server, index) => (
+            <ServerCardView key={server.id} server={server} index={index} />
           ))}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {sorted.map((server) => (
-            <ServerListRow key={server.id} server={server} />
+          {sorted.map((server, index) => (
+            <ServerListRow key={server.id} server={server} index={index} />
           ))}
         </div>
       )}

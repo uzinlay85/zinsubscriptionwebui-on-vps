@@ -151,6 +151,9 @@ export function ClientList({ clients, servers, initialUsage }: { clients: any[],
     <div className="space-y-4">
       {/* Sort controls */}
       <div className="flex items-center gap-2 flex-wrap bg-white/5 border border-white/5 rounded-2xl p-3">
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 mr-2">
+          Clients: {clients.length}
+        </span>
         <span className="text-xs text-zinc-500 font-medium mr-1">Sort clients by:</span>
         <SortButton label="Name" sortKey="name" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} />
         <SortButton label="Status" sortKey="status" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} />
@@ -160,7 +163,7 @@ export function ClientList({ clients, servers, initialUsage }: { clients: any[],
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        {sortedClients.map((client) => {
+        {sortedClients.map((client, index) => {
           const keysCount = client.client_keys?.length || 0;
           const isStatusActive = client.status === 'active';
           const clientBytes = usage[client.id] || 0;
@@ -174,6 +177,9 @@ export function ClientList({ clients, servers, initialUsage }: { clients: any[],
               <div className="flex items-center gap-4">
                 <div className={`p-3 rounded-xl relative ${isStatusActive ? 'bg-purple-500/10 text-purple-500' : 'bg-zinc-800 text-zinc-500'}`}>
                   <Users size={24} />
+                  <span className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-purple-600 text-[10px] font-bold text-white flex items-center justify-center border border-zinc-950">
+                    {index + 1}
+                  </span>
                   {isOnline && (
                     <span className="absolute -top-1 -right-1 flex h-3 w-3">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
