@@ -103,8 +103,8 @@ export function ClientList({ clients, servers, initialUsage }: { clients: any[],
               }
             });
 
-            // If usage increased, mark as active
-            if (prevUsage[client.id] !== undefined && total > prevUsage[client.id]) {
+            // If usage increased by more than 10 KB, mark as active
+            if (prevUsage[client.id] !== undefined && (total - prevUsage[client.id]) > 10240) {
               newLastActive[client.id] = now;
             }
 

@@ -46,8 +46,9 @@ export function ClientKeysList({ clientKeys, initialUsageMap, clientId }: Client
             const currentBytes = (metricsMap[serverId] && metricsMap[serverId][keyId]) || 0;
             const prevBytes = prevUsage[mapKey] || 0;
 
-            // If usage increased, mark key as active
-            if (prevUsage[mapKey] !== undefined && currentBytes > prevBytes) {
+            // If usage increased by more than 10 KB, mark key as active
+            // This filters out background ping/latency tests from VPN clients
+            if (prevUsage[mapKey] !== undefined && (currentBytes - prevBytes) > 10240) {
               newLastActiveKeys[mapKey] = now;
             }
 
