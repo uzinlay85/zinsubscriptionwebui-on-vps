@@ -42,6 +42,36 @@ export async function GET(
     return new NextResponse("Invalid subscription token", { status: 401 });
   }
 
+  // Fetch settings from DB to check for custom app/brand name
+  let brandName = "Universal Panel";
+  try {
+    const { data: settingsData } = await supabase.from("settings").select("*");
+    const settingsObj: Record<string, string> = {};
+    settingsData?.forEach(row => {
+      settingsObj[row.key] = row.value;
+    });
+    if (settingsObj["app_name"]) {
+      brandName = settingsObj["app_name"];
+    } else if (settingsObj["panel_name"]) {
+      brandName = settingsObj["panel_name"];
+    } else {
+      const hostname = url.hostname;
+      const domainName = hostname.includes('.') ? hostname.split('.')[0] : hostname;
+      brandName = domainName.charAt(0).toUpperCase() + domainName.slice(1);
+    }
+  } catch {
+    const hostname = url.hostname;
+    const domainName = hostname.includes('.') ? hostname.split('.')[0] : hostname;
+    brandName = domainName.charAt(0).toUpperCase() + domainName.slice(1);
+  }
+
+  // Format creation date to DD.MM.YYYY
+  const createdDate = (client as any).created_at 
+    ? new Date((client as any).created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.')
+    : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.');
+
+  const profileTitle = `${client.name} - ${brandName} [${createdDate}]`;
+
   const isExpired =
     client.expiry_date != null &&
     new Date(client.expiry_date).getTime() <= Date.now();
@@ -137,13 +167,7 @@ export async function GET(
     clientKeys.map(async (k) => {
       if (!k.servers) return null; // Skip key if its associated server has been deleted
       const serverName = k.servers.name ?? "Server";
-      
-      // Format creation date to DD.MM.YYYY
-      const createdDate = client.created_at 
-        ? new Date(client.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.')
-        : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.');
-
-      const keyLabel = `${client.name} - ${serverName} [${createdDate}]`;
+      const keyLabel = `${serverName} - ${client.name}`;
 
       if (k.access_url.startsWith("3x-ui-sub:")) {
         const uuid = k.access_url.split(":")[1];
@@ -204,8 +228,8 @@ export async function GET(
   const responseHeaders = {
     "Content-Type": "text/plain; charset=utf-8",
     "Cache-Control": "no-store, max-age=0",
-    "Profile-Title": client.name,
-    "profile-title": client.name,
+    "Profile-Title": profileTitle,
+    "profile-title": profileTitle,
     ...(userinfoHeader ? { "Subscription-Userinfo": userinfoHeader } : {}),
   };
 
