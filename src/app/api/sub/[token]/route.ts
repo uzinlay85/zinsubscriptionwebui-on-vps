@@ -135,7 +135,13 @@ export async function GET(
     clientKeys.map(async (k) => {
       if (!k.servers) return null; // Skip key if its associated server has been deleted
       const serverName = k.servers.name ?? "Server";
-      const keyLabel = `${serverName} - ${client.name}`;
+      
+      // Format creation date to DD.MM.YYYY
+      const createdDate = client.created_at 
+        ? new Date(client.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.')
+        : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.');
+
+      const keyLabel = `${client.name} - ${serverName} [${createdDate}]`;
 
       if (k.access_url.startsWith("3x-ui-sub:")) {
         const uuid = k.access_url.split(":")[1];
