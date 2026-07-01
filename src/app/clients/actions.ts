@@ -412,3 +412,42 @@ export async function syncClientKeys(clientId: string) {
   }
   return { success: true, message: `Successfully synced keys on ${missingServers.length} servers.` };
 }
+
+export async function resetClientUsage(clientId: string) {
+  // 1. Reset total_usage_bytes and status to active in database
+  const { error } = await supabase
+    .from("clients")
+    .update({ total_usage_bytes: 0, status: "active" })
+    .eq("id", clientId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  // 2. Fetch all keys for this client to get server details
+  const { data: keysData } = await supabase
+    .from("client_keys")
+    .select("*, servers(api_url, type)")
+    .eq("client_id", clientId);
+    
+  const keys = (keysData as any[]) || [];
+
+  // 3. Remove data limits on Outline servers and reset last_seen_bytes
+  await Promise.allSettled(
+    keys.map(async (key) => {
+      const server = key.servers;
+      if (server && (server.type === "outline" || !server.type) && key.outline_key_id) {
+        await removeOutlineDataLimit(server.api_url, key.outline_key_id).catch(() => {});
+      }
+      // Reset last_seen_bytes in DB so delta calculation restarts correctly
+      await supabase
+        .from("client_keys")
+        .update({ last_seen_bytes: 0 })
+        .eq("id", key.id);
+    })
+  );
+
+  revalidatePath("/clients");
+  revalidatePath(`/clients/${clientId}`);
+  return { success: true };
+}

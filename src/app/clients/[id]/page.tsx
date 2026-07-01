@@ -1,8 +1,9 @@
 import { supabase } from "@/lib/supabase";
 import { AddClientKeyForm } from "./AddClientKeyForm";
 import { SyncClientButton } from "./SyncClientButton";
-import { DeleteKeyButton } from "./DeleteKeyButton";
-import { ArrowLeft, Key, Server, Trash2, Activity, BarChart3 } from "lucide-react";
+import { ResetUsageButton } from "./ResetUsageButton";
+import { ClientKeysList } from "./ClientKeysList";
+import { ArrowLeft, Server, Key, Activity, BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import https from "https";
@@ -133,6 +134,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <ResetUsageButton clientId={client.id} />
           <SyncClientButton clientId={client.id} />
           <AddClientKeyForm clientId={client.id} servers={servers || []} />
         </div>
@@ -191,82 +193,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       <div className="mt-4">
         <h2 className="text-xl font-semibold text-white mb-6 border-b border-white/10 pb-4">Assigned Servers</h2>
         
-        <div className="space-y-3">
-          {clientKeys?.map((key) => {
-            const keyUsage = usageMap[`${key.server_id}:${key.outline_key_id}`] || 0;
-            const usagePercent = totalBytes > 0 ? (keyUsage / totalBytes) * 100 : 0;
-
-            return (
-              <div key={key.id} className="glass-card p-4 flex flex-col gap-4">
-                <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-                  {/* Left Side: Server Info */}
-                  <div className="flex items-center gap-4 w-full md:w-64 shrink-0 min-w-0">
-                    <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl shrink-0">
-                      <Server size={20} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-white truncate" title={key.servers?.name || "Unknown Server"}>
-                        {key.servers?.name || "Unknown Server"}
-                      </h3>
-                      <p className="text-sm text-zinc-400 mt-0.5 flex items-center gap-1 truncate" title={key.outline_key_id}>
-                        <Key size={14} className="shrink-0" />
-                        <span className="truncate">{key.outline_key_id}</span>
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Right Side: Usage & URL */}
-                  <div className="flex-1 w-full flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 min-w-0">
-                    {/* Usage Badge */}
-                    <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-lg shrink-0">
-                      <Activity size={14} className="text-emerald-400" />
-                      <span className="text-sm font-mono font-medium text-white">
-                        {formatBytes(keyUsage)}
-                      </span>
-                    </div>
-
-                    {/* Access URL */}
-                    <div className="flex-1 w-full min-w-0">
-                      <p className="text-xs text-zinc-500 mb-1">Access URL</p>
-                      <p className="text-sm font-mono text-zinc-300 truncate w-full bg-white/5 px-2 py-1.5 rounded-md" title={key.access_url}>
-                        {key.access_url}
-                      </p>
-                    </div>
-                    
-                    {/* Actions */}
-                    <div className="shrink-0 self-end sm:self-center mt-1 sm:mt-0">
-                      <DeleteKeyButton keyId={key.id} clientId={client.id} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Usage Progress Bar */}
-                {totalBytes > 0 && (
-                  <div className="w-full">
-                    <div className="flex justify-between text-xs text-zinc-500 mb-1">
-                      <span>Usage share</span>
-                      <span>{usagePercent.toFixed(1)}%</span>
-                    </div>
-                    <div className="w-full bg-white/5 rounded-full h-1.5">
-                      <div
-                        className="bg-gradient-to-r from-emerald-500 to-purple-500 h-1.5 rounded-full transition-all"
-                        style={{ width: `${usagePercent}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {(!clientKeys || clientKeys.length === 0) && (
-            <div className="text-center py-12 text-zinc-500">
-              <Server size={32} className="mx-auto mb-3 opacity-50" />
-              <p>No servers assigned yet. Assign a server to generate access keys.</p>
-            </div>
-          )}
-        </div>
+        <ClientKeysList clientKeys={clientKeys || []} initialUsageMap={usageMap} clientId={client.id} />
       </div>
     </div>
   );
 }
+
