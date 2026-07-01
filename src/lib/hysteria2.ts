@@ -12,21 +12,26 @@ export interface HysteriaUser {
 }
 
 /**
+ * Clean up the API URL and support custom paths like reverse proxy suffixes (e.g. /hy2-api)
+ */
+function getBaseUrl(apiUrl: string): string {
+  let base = apiUrl.trim().replace(/\/$/, "");
+  if (!base.startsWith("http://") && !base.startsWith("https://")) {
+    base = "http://" + base;
+  }
+  return base;
+}
+
+/**
  * Log into the Hysteria Express Backend and return a JWT token.
  * 
- * @param apiUrl The base URL of the Hysteria server (e.g. https://vpn.domain.com/admin_123)
+ * @param apiUrl The base URL of the Hysteria server (e.g. https://vpn.domain.com/admin_123 or IP:port)
  * @param username Admin username
  * @param password Admin password
  * @returns JWT token string
  */
 export async function loginHysteria(apiUrl: string, username?: string, password?: string): Promise<string> {
-  let baseOrigin = apiUrl;
-  try {
-    baseOrigin = new URL(apiUrl).origin;
-  } catch (e) {
-    // Ignore invalid URL parsing errors
-  }
-  
+  const baseOrigin = getBaseUrl(apiUrl);
   const url = `${baseOrigin}/api/login`;
   
   const res = await fetch(url, {
@@ -51,8 +56,7 @@ export async function loginHysteria(apiUrl: string, username?: string, password?
  * Create a new user in Hysteria2
  */
 export async function createHysteriaUser(apiUrl: string, token: string, userUsername: string, userPassword: string, expiryDays?: number | null): Promise<number> {
-  let baseOrigin = apiUrl;
-  try { baseOrigin = new URL(apiUrl).origin; } catch(e) {}
+  const baseOrigin = getBaseUrl(apiUrl);
   const url = `${baseOrigin}/api/users`;
   
   const res = await fetch(url, {
@@ -87,8 +91,7 @@ export async function updateHysteriaUser(
   userUsername: string, 
   expiryDays?: number | null
 ): Promise<void> {
-  let baseOrigin = apiUrl;
-  try { baseOrigin = new URL(apiUrl).origin; } catch(e) {}
+  const baseOrigin = getBaseUrl(apiUrl);
   
   // 1. Fetch all users to find the ID by password
   const url = `${baseOrigin}/api/users`;
@@ -125,8 +128,7 @@ export async function updateHysteriaUser(
  * We need to find their ID first by fetching all users and matching the username/password
  */
 export async function deleteHysteriaUser(apiUrl: string, token: string, userPassword: string, username?: string): Promise<void> {
-  let baseOrigin = apiUrl;
-  try { baseOrigin = new URL(apiUrl).origin; } catch(e) {}
+  const baseOrigin = getBaseUrl(apiUrl);
   
   // 1. Fetch all users
   const url = `${baseOrigin}/api/users`;
@@ -171,8 +173,7 @@ export function buildHysteriaUri(domainUrl: string, username: string, password: 
  * Fetch all users from Hysteria2 backend
  */
 export async function fetchHysteriaUsers(apiUrl: string, token: string): Promise<HysteriaUser[]> {
-  let baseOrigin = apiUrl;
-  try { baseOrigin = new URL(apiUrl).origin; } catch(e) {}
+  const baseOrigin = getBaseUrl(apiUrl);
   
   const url = `${baseOrigin}/api/users`;
   const res = await fetch(url, {
