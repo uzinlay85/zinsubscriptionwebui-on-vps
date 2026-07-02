@@ -41,6 +41,10 @@ async function fetchServerMetrics(apiUrl: string): Promise<Record<string, number
 }
 
 export default async function ClientsPage() {
+  // Fetch all servers for the Add Client form checkboxes
+  const { data: allServersData } = await supabaseAdmin.from("servers").select("id, name, type");
+  const allServers = (allServersData as any[]) || [];
+
   // Fetch clients with their keys (including server info)
   const { data } = await supabaseAdmin
     .from("clients")
@@ -49,14 +53,14 @@ export default async function ClientsPage() {
   const clients = data as any[];
 
   // Collect all unique servers across all clients
-  const allServers = new Map<string, { id: string; api_url: string, type?: string }>();
+  const serversMap = new Map<string, { id: string; api_url: string, type?: string }>();
   clients?.forEach((client) => {
     client.client_keys?.forEach((key: any) => {
-      if (key.servers?.id) allServers.set(key.servers.id, key.servers);
+      if (key.servers?.id) serversMap.set(key.servers.id, key.servers);
     });
   });
 
-  const serversList = Array.from(allServers.values());
+  const serversList = Array.from(serversMap.values());
 
   // Fetch metrics from all servers in parallel
   const metricsMap: Record<string, Record<string, number>> = {};
@@ -88,7 +92,7 @@ export default async function ClientsPage() {
           <h1 className="text-3xl font-bold tracking-tight text-white">Clients</h1>
           <p className="text-zinc-400 mt-1">Manage users and their subscription links.</p>
         </div>
-        <AddClientForm />
+        <AddClientForm servers={allServers} />
       </div>
       <ClientList clients={clients || []} servers={serversList} initialUsage={clientUsage} />
     </div>

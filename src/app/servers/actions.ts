@@ -269,7 +269,7 @@ export async function updateServer(formData: FormData) {
   return { success: true };
 }
 
-export async function syncServerKeys(serverId: string) {
+export async function syncServerKeys(serverId: string, selectedClientIds?: string[]) {
   // 1. Fetch server details
   const { data: serverData, error: serverError } = await supabaseAdmin
     .from("servers")
@@ -282,11 +282,12 @@ export async function syncServerKeys(serverId: string) {
   }
   const server = serverData as any;
 
-  // 2. Fetch all active clients
-  const { data: clientsData } = await supabaseAdmin
-    .from("clients")
-    .select("*")
-    .eq("status", "active");
+  // 2. Fetch active clients (filter to selected if provided)
+  let query = supabaseAdmin.from("clients").select("*").eq("status", "active");
+  if (selectedClientIds && selectedClientIds.length > 0) {
+    query = query.in("id", selectedClientIds);
+  }
+  const { data: clientsData } = await query;
   const clients = (clientsData as any[]) || [];
 
   // 3. Fetch existing keys for this server
@@ -301,7 +302,7 @@ export async function syncServerKeys(serverId: string) {
   const missingClients = clients.filter(c => !existingClientIds.has(c.id));
 
   if (missingClients.length === 0) {
-    return { success: true, message: "All active clients already have keys on this server." };
+    return { success: true, message: "All selected clients already have keys on this server." };
   }
 
   // 5. Generate keys for missing clients
@@ -316,7 +317,6 @@ export async function syncServerKeys(serverId: string) {
   } else if (server.type === "3x-ui") {
     try {
       const { login3xui } = await import("@/lib/3x-ui");
-      // Use username/password if they exist, fallback to auth_username/auth_password
       const finalUsername = server.username || server.auth_username;
       const finalPassword = server.password || server.auth_password;
       cookie3xui = await login3xui(server.api_url, finalUsername, finalPassword);
@@ -362,9 +362,10 @@ export async function syncServerKeys(serverId: string) {
   const failed = results.filter((r) => r.status === "rejected").length;
   revalidatePath("/servers");
   revalidatePath("/clients");
-  
+
   if (failed > 0) {
     return { success: true, warning: `Synced ${missingClients.length - failed} clients. ${failed} failed.` };
   }
   return { success: true, message: `Successfully synced keys for ${missingClients.length} clients.` };
 }
+

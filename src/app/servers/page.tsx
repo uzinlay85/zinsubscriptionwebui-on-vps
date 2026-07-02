@@ -2,7 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase-server";
 import { AddServerForm } from "./AddServerForm";
 import { ServersClient } from "./ServersClient";
 
-export const revalidate = 0; // Disable caching to always get fresh data
+export const revalidate = 0;
 
 export default async function ServersPage() {
   const { data } = await supabaseAdmin
@@ -11,6 +11,14 @@ export default async function ServersPage() {
     .order("created_at", { ascending: false });
 
   const servers = (data as any[]) ?? [];
+
+  // Fetch active clients for the Sync modal client selection
+  const { data: clientsData } = await supabaseAdmin
+    .from("clients")
+    .select("id, name, status")
+    .order("name", { ascending: true });
+
+  const clients = (clientsData as any[]) ?? [];
 
   return (
     <div className="space-y-6 animate-in">
@@ -22,7 +30,7 @@ export default async function ServersPage() {
         <AddServerForm />
       </div>
 
-      <ServersClient servers={servers} />
+      <ServersClient servers={servers} clients={clients} />
     </div>
   );
 }

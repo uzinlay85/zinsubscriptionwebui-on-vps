@@ -126,11 +126,13 @@ function ServerCardView({
   index,
   status,
   loading,
+  clients = [],
 }: {
   server: Server;
   index: number;
   status?: { online: boolean; latency?: number };
   loading: boolean;
+  clients?: any[];
 }) {
   return (
     <div className="glass-card p-5 flex flex-col group">
@@ -205,7 +207,7 @@ function ServerCardView({
 
       <div className="mt-4 pt-4 border-t border-white/5 flex justify-end items-center gap-2">
         <ScanOrphanKeysButton serverId={server.id} serverName={server.name} />
-        <SyncServerButton serverId={server.id} />
+        <SyncServerButton serverId={server.id} clients={clients} />
         <EditServerForm server={server} />
         <DeleteServerButton serverId={server.id} serverName={server.name} />
       </div>
@@ -218,11 +220,13 @@ function ServerListRow({
   index,
   status,
   loading,
+  clients = [],
 }: {
   server: Server;
   index: number;
   status?: { online: boolean; latency?: number };
   loading: boolean;
+  clients?: any[];
 }) {
   return (
     <div className="glass-card px-4 py-3 flex items-center gap-4 group hover:border-white/10 transition-all">
@@ -266,7 +270,7 @@ function ServerListRow({
 
       <div className="shrink-0 flex items-center gap-1">
         <ScanOrphanKeysButton serverId={server.id} serverName={server.name} />
-        <SyncServerButton serverId={server.id} />
+        <SyncServerButton serverId={server.id} clients={clients} />
         <EditServerForm server={server} />
         <DeleteServerButton serverId={server.id} serverName={server.name} />
       </div>
@@ -293,7 +297,7 @@ function DeleteServerButton({ serverId, serverName }: { serverId: string; server
   );
 }
 
-export function ServersClient({ servers: initialServers }: { servers: Server[] }) {
+export function ServersClient({ servers: initialServers, clients = [] }: { servers: Server[]; clients?: Record<string, any>[] }) {
   const [view, setView] = useState<"card" | "list">("card");
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -425,6 +429,7 @@ export function ServersClient({ servers: initialServers }: { servers: Server[] }
               index={index}
               status={statuses[server.id]}
               loading={loadingStatuses && !statuses[server.id]}
+              clients={clients}
             />
           ))}
         </div>
@@ -437,6 +442,7 @@ export function ServersClient({ servers: initialServers }: { servers: Server[] }
               index={index}
               status={statuses[server.id]}
               loading={loadingStatuses && !statuses[server.id]}
+              clients={clients}
             />
           ))}
         </div>

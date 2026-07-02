@@ -16,6 +16,12 @@ export async function addClient(formData: FormData) {
     return { error: "Name is required" };
   }
 
+  // Parse selected server IDs from form (comma-separated)
+  const selectedServerIdsStr = formData.get("selectedServerIds") as string;
+  const selectedServerIds = selectedServerIdsStr
+    ? selectedServerIdsStr.split(",").filter(Boolean)
+    : null;
+
   // 1. Create the client record
   const { data: newClient, error: clientError } = await supabaseAdmin
     .from("clients")
@@ -29,9 +35,12 @@ export async function addClient(formData: FormData) {
 
   const client = newClient as any;
 
-  // 2. Fetch all existing servers
+  // 2. Fetch servers and filter by selection
   const { data: serversData } = await supabaseAdmin.from("servers").select("*");
-  const servers = (serversData as any[]) || [];
+  const allServers = (serversData as any[]) || [];
+  const servers = selectedServerIds && selectedServerIds.length > 0
+    ? allServers.filter((s) => selectedServerIds.includes(s.id))
+    : allServers;
 
   // 3. Auto-generate a key on every server for this new client
   const results = await Promise.allSettled(
@@ -105,9 +114,18 @@ export async function addBulkClients(formData: FormData) {
     return { error: "Maximum 50 clients allowed per bulk request to prevent timeouts." };
   }
 
-  // 1. Fetch all existing servers
+  // Parse selected server IDs (comma-separated)
+  const selectedServerIdsStr = formData.get("selectedServerIds") as string;
+  const selectedServerIds = selectedServerIdsStr
+    ? selectedServerIdsStr.split(",").filter(Boolean)
+    : null;
+
+  // 1. Fetch all existing servers and filter by selection
   const { data: serversData } = await supabaseAdmin.from("servers").select("*");
-  const servers = (serversData as any[]) || [];
+  const allServers = (serversData as any[]) || [];
+  const servers = selectedServerIds && selectedServerIds.length > 0
+    ? allServers.filter((s) => selectedServerIds.includes(s.id))
+    : allServers;
 
   const createdClients: Array<{ name: string; sub_token: string }> = [];
   let totalFailedKeys = 0;
