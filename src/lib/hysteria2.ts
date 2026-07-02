@@ -169,22 +169,19 @@ export async function deleteHysteriaUser(apiUrl: string, token: string, userPass
 export function buildHysteriaUri(domainUrl: string, username: string, password: string, name: string): string {
   try {
     const url = new URL(domainUrl);
-    // Remove protocol and add hysteria2://
     const host = url.hostname;
-    // Default port is 443. Append standard port hopping (mport=20000-50000) for Hysteria2
-    return `hysteria2://${username}:${password}@${host}:443/?sni=${host}&mport=20000-50000#${encodeURIComponent(name)}`;
+    // Matches the CLI manager format exactly: Port 443 with insecure=0 and sni
+    return `hysteria2://${username}:${password}@${host}:443?insecure=0&sni=${host}#${encodeURIComponent(name)}`;
   } catch (e) {
-    // Fallback if domainUrl is invalid
     let host = domainUrl;
     try {
-      // If domainUrl contains protocol, try to parse it
       if (domainUrl.includes('://')) {
         host = new URL(domainUrl).hostname;
       } else if (domainUrl.includes('/')) {
         host = domainUrl.split('/')[0];
       }
     } catch(err) {}
-    return `hysteria2://${username}:${password}@${host}:443/?sni=${host}&mport=20000-50000#${encodeURIComponent(name)}`;
+    return `hysteria2://${username}:${password}@${host}:443?insecure=0&sni=${host}#${encodeURIComponent(name)}`;
   }
 }
 
