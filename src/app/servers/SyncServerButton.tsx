@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { RefreshCw, X, Check, Users, Loader2, ChevronDown } from "lucide-react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { RefreshCw, X, Users, Loader2 } from "lucide-react";
 import { syncServerKeys } from "./actions";
 
 type Client = { id: string; name: string; status: string };
@@ -15,13 +16,17 @@ export function SyncServerButton({
 }) {
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const [result, setResult] = useState<{ message?: string; warning?: string; error?: string } | null>(null);
 
   const activeClients = clients.filter((c) => c.status === "active");
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   function openModal() {
-    // Default: all active clients selected
     setSelectedClientIds(activeClients.map((c) => c.id));
     setResult(null);
     setIsOpen(true);
@@ -66,9 +71,9 @@ export function SyncServerButton({
         <RefreshCw size={16} />
       </button>
 
-      {/* Modal */}
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      {/* Modal Rendered in Portal */}
+      {isOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in">
           <div className="glass-card w-full max-w-sm p-5 relative">
             <button
               onClick={() => setIsOpen(false)}
@@ -166,7 +171,8 @@ export function SyncServerButton({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
