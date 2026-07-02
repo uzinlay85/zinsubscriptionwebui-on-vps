@@ -71,7 +71,67 @@ function SortButton({
   );
 }
 
-function ServerCardView({ server, index }: { server: Server; index: number }) {
+function ServerStatusBadge({
+  status,
+  loading,
+}: {
+  status?: { online: boolean; latency?: number };
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 font-medium bg-white/5 border border-white/5 px-2 py-0.5 rounded-full">
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-zinc-400/40 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-zinc-500"></span>
+        </span>
+        <span className="animate-pulse text-zinc-500">Checking...</span>
+      </div>
+    );
+  }
+
+  const isOnline = status?.online ?? false;
+  const latency = status?.latency;
+
+  if (isOnline) {
+    return (
+      <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+        </span>
+        <span>Online</span>
+        {latency !== undefined && (
+          <span className="text-[10px] text-emerald-500/70 font-mono font-medium">
+            {latency}ms
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 text-[11px] text-red-400 font-semibold bg-red-500/10 border border-red-500/20 px-2.5 py-0.5 rounded-full">
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400/50 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
+      </span>
+      <span>Offline</span>
+    </div>
+  );
+}
+
+function ServerCardView({
+  server,
+  index,
+  status,
+  loading,
+}: {
+  server: Server;
+  index: number;
+  status?: { online: boolean; latency?: number };
+  loading: boolean;
+}) {
   return (
     <div className="glass-card p-5 flex flex-col group">
       <div className="flex justify-between items-start mb-4">
@@ -86,11 +146,8 @@ function ServerCardView({ server, index }: { server: Server; index: number }) {
             <h3 className="text-lg font-semibold text-white group-hover:text-primary transition-colors">
               {server.name}
             </h3>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
-                <Activity size={12} />
-                <span>Online</span>
-              </div>
+            <div className="flex items-center gap-2 mt-1.5">
+              <ServerStatusBadge status={status} loading={loading} />
               <TypeBadge type={server.type ?? "outline"} />
             </div>
           </div>
@@ -156,7 +213,17 @@ function ServerCardView({ server, index }: { server: Server; index: number }) {
   );
 }
 
-function ServerListRow({ server, index }: { server: Server; index: number }) {
+function ServerListRow({
+  server,
+  index,
+  status,
+  loading,
+}: {
+  server: Server;
+  index: number;
+  status?: { online: boolean; latency?: number };
+  loading: boolean;
+}) {
   return (
     <div className="glass-card px-4 py-3 flex items-center gap-4 group hover:border-white/10 transition-all">
       <div className="p-2 bg-blue-500/10 text-blue-500 rounded-xl shrink-0 relative">
@@ -193,9 +260,8 @@ function ServerListRow({ server, index }: { server: Server; index: number }) {
         </div>
       </div>
 
-      <div className="shrink-0 hidden sm:flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
-        <Activity size={12} />
-        <span>Online</span>
+      <div className="shrink-0 hidden sm:flex items-center">
+        <ServerStatusBadge status={status} loading={loading} />
       </div>
 
       <div className="shrink-0 flex items-center gap-1">
@@ -231,6 +297,8 @@ export function ServersClient({ servers: initialServers }: { servers: Server[] }
   const [view, setView] = useState<"card" | "list">("card");
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [statuses, setStatuses] = useState<Record<string, { online: boolean; latency?: number }>>({});
+  const [loadingStatuses, setLoadingStatuses] = useState<boolean>(true);
 
   useEffect(() => {
     try {
@@ -241,6 +309,30 @@ export function ServersClient({ servers: initialServers }: { servers: Server[] }
       const savedSortDir = localStorage.getItem("servers_sort_dir") as SortDir | null;
       if (savedSortDir) setSortDir(savedSortDir);
     } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const fetchStatuses = async () => {
+      try {
+        const res = await fetch("/api/servers/status");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (active && data.statuses) {
+          setStatuses(data.statuses);
+          setLoadingStatuses(false);
+        }
+      } catch (err) {
+        console.error("Failed to fetch server statuses:", err);
+      }
+    };
+
+    fetchStatuses();
+    const interval = setInterval(fetchStatuses, 20000); // Check every 20 seconds
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const handleSetView = (v: "card" | "list") => {
@@ -327,13 +419,25 @@ export function ServersClient({ servers: initialServers }: { servers: Server[] }
       {view === "card" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {sorted.map((server, index) => (
-            <ServerCardView key={server.id} server={server} index={index} />
+            <ServerCardView
+              key={server.id}
+              server={server}
+              index={index}
+              status={statuses[server.id]}
+              loading={loadingStatuses && !statuses[server.id]}
+            />
           ))}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
           {sorted.map((server, index) => (
-            <ServerListRow key={server.id} server={server} index={index} />
+            <ServerListRow
+              key={server.id}
+              server={server}
+              index={index}
+              status={statuses[server.id]}
+              loading={loadingStatuses && !statuses[server.id]}
+            />
           ))}
         </div>
       )}
