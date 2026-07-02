@@ -130,10 +130,11 @@ Enable RLS on all 4 tables for maximum security. Under **Table Editor**, select 
    * `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase Project URL.
    * `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase public key.
    * `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase **`service_role`** secret key (Go to Supabase Dashboard > Project Settings > API > `service_role` key).
-   * `ADMIN_USERNAME`: Dashboard Login Username.
-   * `ADMIN_PASSWORD`: Dashboard Login Password.
-   * `AUTH_SECRET`: A long random string for cookie/session encryption.
-   * `CRON_SECRET`: A long secure password for authorizing Cron Jobs (e.g., `my-super-secret-cron-2026`).
+   * `ADMIN_USERNAME`: Username to login to this dashboard (e.g., `admin`)
+   * `ADMIN_PASSWORD`: Password to login to this dashboard
+   * `AUTH_SECRET`: A random long string for session encryption
+   * `CRON_SECRET`: A long secure password for authorizing Cron Jobs (e.g., `my-super-secret-cron-2026`)
+   * `ADMIN_SECRET_PATH`: A custom secret path gate (e.g., `daweitharlay`). You must visit `https://your-domain.com/your_secret_path` first to bypass the 404 block and access the login screen.
 3. Deploy the application.
 
 ---
@@ -207,11 +208,12 @@ Supabase database ထဲရှိ Table Editor သို့သွားပြီ
    * `NEXT_PUBLIC_SUPABASE_URL`: Supabase Project URL
    * `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon public key
    * `SUPABASE_SERVICE_ROLE_KEY`: Supabase service_role key (Project Settings > API မှ ယူပါ)
-   * `ADMIN_USERNAME`: Admin Panel ဝင်ရန် နာမည်
-   * `ADMIN_PASSWORD`: Admin Panel ဝင်ရန် လျှို့ဝှက်နံပါတ်
-   * `AUTH_SECRET`: လျှို့ဝှက်စာလုံးရှည်တစ်ခု
-   * `CRON_SECRET`: Cron job ခေါ်ယူခွင့်ပြုရန် သတ်မှတ်ထားသော လျှို့ဝှက်စကားစု (ဥပမာ `my-super-secret-cron-2026`)
-3. **Deploy** လုပ်ပါ။
+   * `ADMIN_USERNAME`: Admin Panel သို့ ဝင်ရန် မိမိထားလိုသော Username (ဥပမာ - `admin`)
+   * `ADMIN_PASSWORD`: Admin Panel သို့ ဝင်ရန် မိမိထားလိုသော Password
+   * `AUTH_SECRET`: လုံခြုံရေးအတွက် မိမိစိတ်ကြိုက် အင်္ဂလိပ်စာလုံး ရှည်ရှည်တစ်ခု (ဥပမာ - `my_super_secret_key_123`)
+   * `CRON_SECRET`: Cron job ခေါ်ယူခွင့်ပြုရန် သတ်မှတ်ထားသော လျှို့ဝှက်စကားစု (ဥပမာ - `my-super-secret-cron-2026`)
+   * `ADMIN_SECRET_PATH`: Login page ကို စတင်ဝင်ရောက်ခွင့်ပြုမည့် လျှို့ဝှက်လမ်းကြောင်းစကားစု (ဥပမာ - `daweitharlay`)။ ဤလမ်းကြောင်းအား browser တွင် `https://your-domain.com/daweitharlay` ဟု အရင်ဆုံး ဝင်ရောက်ရိုက်နှိပ်မှသာ Login page ကို ပွင့်စေမည်ဖြစ်ပြီး မဟုတ်ပါက 404 Error သာ ပြသပါလိမ့်မည်။
+4. **Deploy** ကို နှိပ်လိုက်ပါက အသင့် အသုံးပြုနိုင်ပါပြီ။
 
 ---
 

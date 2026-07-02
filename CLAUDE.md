@@ -34,6 +34,11 @@ This guide outlines the commands, architecture, and recent handoff notes for AI 
 - **DRY Principle**: Reuse `fetchOutlineMetrics` from `@/lib/outline` for fetching server bytes. Avoid duplicate raw fetch scripts.
 - **Modals & Dialogs**: Avoid using native browser `alert()` or `confirm()` dialogs. Use React state-based inline confirmations and custom toast states (see `ClientList.tsx` for implementation pattern).
 
+### 5. Admin Portal Access Protection (ADMIN_SECRET_PATH)
+- **Status**: Enabled via `middleware.ts`.
+- **Mechanism**: Blocks direct access to `/login` or the admin dashboard with a `404 Not Found` unless the user first navigates to the secret path `/{ADMIN_SECRET_PATH}` (e.g. `/daweitharlay`). This sets a temporary HTTP-only `path_auth` cookie allowing subsequent login attempts.
+- **Handoff Note**: Ensure `ADMIN_SECRET_PATH` is always configured on Vercel to preserve this security gate.
+
 ---
 
 ## 📅 Handoff Summary (June 2026 Session)
