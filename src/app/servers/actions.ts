@@ -1,6 +1,6 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
 import { createOutlineKey } from "@/lib/outline";
 import { loginHysteria, createHysteriaUser, buildHysteriaUri } from "@/lib/hysteria2";
@@ -85,7 +85,7 @@ export async function addServer(formData: FormData) {
   }
 
   // 2. Create the server record
-  const { data: newServer, error: serverError } = await supabase
+  const { data: newServer, error: serverError } = await supabaseAdmin
     .from("servers")
     .insert({ 
       name, 
@@ -110,7 +110,7 @@ export async function addServer(formData: FormData) {
   const server = newServer as any;
 
   // 3. Fetch all existing active clients
-  const { data: clientsData } = await supabase
+  const { data: clientsData } = await supabaseAdmin
     .from("clients")
     .select("*")
     .eq("status", "active");
@@ -144,7 +144,7 @@ export async function addServer(formData: FormData) {
         accessUrl = rawUri;
       }
 
-      await supabase.from("client_keys").insert({
+      await supabaseAdmin.from("client_keys").insert({
         client_id: client.id,
         server_id: server.id,
         outline_key_id: keyId,
@@ -166,10 +166,10 @@ export async function addServer(formData: FormData) {
 
 export async function deleteServer(id: string) {
   // 1. Delete all client_keys associated with this server first to avoid orphan records
-  await supabase.from("client_keys").delete().eq("server_id", id);
+  await supabaseAdmin.from("client_keys").delete().eq("server_id", id);
 
   // 2. Delete the server
-  const { error } = await supabase.from("servers").delete().eq("id", id);
+  const { error } = await supabaseAdmin.from("servers").delete().eq("id", id);
   if (error) {
     return { error: error.message };
   }
@@ -245,7 +245,7 @@ export async function updateServer(formData: FormData) {
     }
   }
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("servers")
     .update({ 
       name, 
@@ -271,7 +271,7 @@ export async function updateServer(formData: FormData) {
 
 export async function syncServerKeys(serverId: string) {
   // 1. Fetch server details
-  const { data: serverData, error: serverError } = await supabase
+  const { data: serverData, error: serverError } = await supabaseAdmin
     .from("servers")
     .select("*")
     .eq("id", serverId)
@@ -283,14 +283,14 @@ export async function syncServerKeys(serverId: string) {
   const server = serverData as any;
 
   // 2. Fetch all active clients
-  const { data: clientsData } = await supabase
+  const { data: clientsData } = await supabaseAdmin
     .from("clients")
     .select("*")
     .eq("status", "active");
   const clients = (clientsData as any[]) || [];
 
   // 3. Fetch existing keys for this server
-  const { data: existingKeysData } = await supabase
+  const { data: existingKeysData } = await supabaseAdmin
     .from("client_keys")
     .select("client_id")
     .eq("server_id", serverId);
@@ -349,7 +349,7 @@ export async function syncServerKeys(serverId: string) {
         accessUrl = rawUri;
       }
 
-      await supabase.from("client_keys").insert({
+      await supabaseAdmin.from("client_keys").insert({
         client_id: client.id,
         server_id: server.id,
         outline_key_id: keyId,

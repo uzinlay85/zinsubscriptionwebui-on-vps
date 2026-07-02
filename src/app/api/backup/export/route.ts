@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-server";
 
 export async function GET() {
   try {
     // Fetch all tables
-    const { data: servers, error: sErr } = await supabase.from("servers").select("*");
-    const { data: clients, error: cErr } = await supabase.from("clients").select("*");
-    const { data: clientKeys, error: kErr } = await supabase.from("client_keys").select("*");
+    const { data: servers, error: sErr } = await supabaseAdmin.from("servers").select("*");
+    const { data: clients, error: cErr } = await supabaseAdmin.from("clients").select("*");
+    const { data: clientKeys, error: kErr } = await supabaseAdmin.from("client_keys").select("*");
 
     if (sErr || cErr || kErr) {
       return new NextResponse("Failed to fetch database records", { status: 500 });

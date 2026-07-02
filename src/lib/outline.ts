@@ -1,6 +1,48 @@
 import https from "https";
 
 /**
+ * Fetches per-key byte transfer metrics from an Outline server.
+ * Returns a map of { keyId -> bytesTransferred }.
+ * Resolves to an empty object on any error so callers don't need try/catch.
+ */
+export async function fetchOutlineMetrics(
+  apiUrl: string
+): Promise<Record<string, number>> {
+  return new Promise((resolve) => {
+    try {
+      const url = new URL(`${apiUrl}/metrics/transfer`);
+      const options = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        method: "GET",
+        rejectUnauthorized: false,
+      };
+      const req = https.request(options, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            resolve(json.bytesTransferredByUserId || {});
+          } catch {
+            resolve({});
+          }
+        });
+      });
+      req.setTimeout(5000, () => {
+        req.destroy();
+        resolve({});
+      });
+      req.on("error", () => resolve({}));
+      req.end();
+    } catch {
+      resolve({});
+    }
+  });
+}
+
+/**
  * Creates a new access key on an Outline server via its Management API.
  */
 export async function createOutlineKey(

@@ -1,6 +1,6 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
 import { createOutlineKey, deleteOutlineKey } from "@/lib/outline";
 
@@ -13,12 +13,12 @@ export async function assignServerToClient(formData: FormData) {
   }
 
   // Fetch server details
-  const { data: server, error: serverError } = await supabase
+  const { data: server, error: serverError } = await supabaseAdmin
     .from("servers").select("*").eq("id", serverId).single();
   if (serverError || !server) return { error: "Server not found" };
 
   // Fetch client details
-  const { data: client, error: clientError } = await supabase
+  const { data: client, error: clientError } = await supabaseAdmin
     .from("clients").select("*").eq("id", clientId).single();
   if (clientError || !client) return { error: "Client not found" };
 
@@ -29,7 +29,7 @@ export async function assignServerToClient(formData: FormData) {
   try {
     const outlineKey = await createOutlineKey(serverData.api_url, keyName);
 
-    const { error: insertError } = await supabase.from("client_keys").insert({
+    const { error: insertError } = await supabaseAdmin.from("client_keys").insert({
       client_id: clientId,
       server_id: serverId,
       outline_key_id: outlineKey.id,
@@ -47,7 +47,7 @@ export async function assignServerToClient(formData: FormData) {
 
 export async function removeClientKey(id: string, clientId: string) {
   // 1. Fetch key with server details before deleting
-  const { data: keyData } = await supabase
+  const { data: keyData } = await supabaseAdmin
     .from("client_keys")
     .select("*, servers(api_url, type, auth_username, auth_password)")
     .eq("id", id)
@@ -72,7 +72,7 @@ export async function removeClientKey(id: string, clientId: string) {
       try {
         const { login3xui, deleteClient3xui } = await import("@/lib/3x-ui");
         const cookie = await login3xui(server.api_url, server.auth_username, server.auth_password);
-        const serverDetails = await supabase.from("servers").select("inbound_id").eq("id", key.server_id).single();
+        const serverDetails = await supabaseAdmin.from("servers").select("inbound_id").eq("id", key.server_id).single();
         const inboundId = serverDetails.data?.inbound_id;
         if (inboundId) {
           await deleteClient3xui(server.api_url, cookie, inboundId, key.outline_key_id);
@@ -84,7 +84,7 @@ export async function removeClientKey(id: string, clientId: string) {
   }
 
   // 3. Delete from DB
-  const { error } = await supabase.from("client_keys").delete().eq("id", id);
+  const { error } = await supabaseAdmin.from("client_keys").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/clients");

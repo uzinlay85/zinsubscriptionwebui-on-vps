@@ -1,11 +1,11 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-server";
 import { AddServerForm } from "./AddServerForm";
 import { ServersClient } from "./ServersClient";
 
 export const revalidate = 0; // Disable caching to always get fresh data
 
 export default async function ServersPage() {
-  const { data } = await supabase
+  const { data } = await supabaseAdmin
     .from("servers")
     .select("*")
     .order("created_at", { ascending: false });

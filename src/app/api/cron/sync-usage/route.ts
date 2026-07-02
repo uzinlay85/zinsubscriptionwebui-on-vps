@@ -1,43 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
-import { setOutlineDataLimit } from "@/lib/outline";
-import https from "https";
-
-// Helper to fetch Outline metrics
-async function fetchOutlineMetrics(apiUrl: string): Promise<Record<string, number>> {
-  return new Promise((resolve) => {
-    try {
-      const url = new URL(`${apiUrl}/metrics/transfer`);
-      const options = {
-        hostname: url.hostname,
-        port: url.port || 443,
-        path: url.pathname,
-        method: "GET",
-        rejectUnauthorized: false,
-      };
-      const req = https.request(options, (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => {
-          try {
-            const json = JSON.parse(data);
-            resolve(json.bytesTransferredByUserId || {});
-          } catch {
-            resolve({});
-          }
-        });
-      });
-      req.setTimeout(3000, () => {
-        req.destroy();
-        resolve({});
-      });
-      req.on("error", () => resolve({}));
-      req.end();
-    } catch {
-      resolve({});
-    }
-  });
-}
+import { supabaseAdmin } from "@/lib/supabase-server";
+import { setOutlineDataLimit, fetchOutlineMetrics } from "@/lib/outline";
 
 // Helper to fetch 3x-ui metrics
 async function fetch3xuiMetrics(server: any): Promise<Record<string, number>> {
@@ -46,20 +9,19 @@ async function fetch3xuiMetrics(server: any): Promise<Record<string, number>> {
     const finalUsername = server.username || server.auth_username;
     const finalPassword = server.password || server.auth_password;
     const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
-    
+
     const cleanUrl = server.api_url.replace(/\/$/, "");
     const res = await fetch(`${cleanUrl}/panel/api/inbounds/getClientTraffics`, {
-      headers: { "Cookie": cookie, "Accept": "application/json" }
+      headers: { Cookie: cookie, Accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
     });
-    
+
     if (!res.ok) return {};
     const json = await res.json();
     if (!json.success || !json.obj) return {};
-    
+
     const metrics: Record<string, number> = {};
-    // json.obj is an array of { id, inboundId, enable, email, up, down, expiryTime, total, reset }
     json.obj.forEach((client: any) => {
-      // 3x-ui uses email as the identifier. We usually set email to "client.name" or "server.name - client.name"
       metrics[client.email] = (client.up || 0) + (client.down || 0);
     });
     return metrics;
@@ -71,13 +33,16 @@ async function fetch3xuiMetrics(server: any): Promise<Record<string, number>> {
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const cronSecret = process.env.CRON_SECRET;
+
+  // CRON_SECRET is required — reject if missing or wrong
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
   try {
-    // 1. Fetch all clients that are currently active (including unlimited ones to sync usage stats)
-    const { data: clientsData, error: clientsError } = await supabase
+    // 1. Fetch all active clients
+    const { data: clientsData, error: clientsError } = await supabaseAdmin
       .from("clients")
       .select("*")
       .eq("status", "active");
@@ -92,8 +57,8 @@ export async function GET(request: Request) {
     }
 
     // 2. Fetch all keys for these clients
-    const clientIds = clientsData.map(c => c.id);
-    const { data: keysData, error: keysError } = await supabase
+    const clientIds = clientsData.map((c) => c.id);
+    const { data: keysData, error: keysError } = await supabaseAdmin
       .from("client_keys")
       .select("*, servers(*)")
       .in("client_id", clientIds);
@@ -106,38 +71,36 @@ export async function GET(request: Request) {
 
     // 3. Group keys by server to minimize API requests
     const serversMap = new Map<string, any>();
-    keys.forEach(k => {
+    keys.forEach((k) => {
       if (k.servers) serversMap.set(k.servers.id, k.servers);
     });
 
     const serverMetricsMap = new Map<string, Record<string, number>>();
 
-    // 4. Fetch metrics from each server
+    // 4. Fetch metrics from each server in parallel
     await Promise.all(
       Array.from(serversMap.values()).map(async (server) => {
         if (server.type === "outline" || !server.type) {
-          const metrics = await fetchOutlineMetrics(server.api_url);
-          serverMetricsMap.set(server.id, metrics);
+          serverMetricsMap.set(server.id, await fetchOutlineMetrics(server.api_url));
         } else if (server.type === "3x-ui") {
-          const metrics = await fetch3xuiMetrics(server);
-          serverMetricsMap.set(server.id, metrics);
+          serverMetricsMap.set(server.id, await fetch3xuiMetrics(server));
         }
-        // Hysteria2 metrics are currently not natively fetchable via simple API
+        // Hysteria2 metrics not natively fetchable
       })
     );
 
-    const clientUsageUpdates = new Map<string, number>(); // clientId -> new total usage
-    const keyUpdates: Array<{ id: string, last_seen_bytes: number }> = [];
+    const clientUsageUpdates = new Map<string, number>();
+    const keyUpdates: Array<{ id: string; last_seen_bytes: number }> = [];
 
     // 5. Calculate usage deltas
-    clientsData.forEach(client => {
-      const clientKeys = keys.filter(k => k.client_id === client.id);
+    clientsData.forEach((client) => {
+      const clientKeys = keys.filter((k) => k.client_id === client.id);
       let clientTotalUsage = client.total_usage_bytes || 0;
 
-      clientKeys.forEach(key => {
+      clientKeys.forEach((key) => {
         const server = key.servers;
         const metrics = serverMetricsMap.get(server.id) || {};
-        
+
         let currentBytes = 0;
         if (server.type === "outline" || !server.type) {
           currentBytes = metrics[key.outline_key_id] || 0;
@@ -151,43 +114,30 @@ export async function GET(request: Request) {
         let shouldUpdateLastSeen = false;
 
         if (currentBytes < lastSeenBytes) {
-          // If currentBytes is significantly lower than lastSeenBytes,
-          // it indicates a server reboot or usage reset.
-          // We use a 10% threshold (currentBytes < lastSeenBytes * 0.9) to distinguish
-          // actual reboots/resets from minor API fluctuations or caching delays.
+          // Server reboot / reset detection (>10% drop = real reset)
           if (currentBytes < lastSeenBytes * 0.9) {
             delta = currentBytes;
             shouldUpdateLastSeen = true;
-          } else {
-            // Minor fluctuation, ignore it
-            delta = 0;
-            shouldUpdateLastSeen = false;
           }
+          // else: minor API fluctuation, ignore
         } else {
           delta = currentBytes - lastSeenBytes;
-          if (delta > 0) {
-            shouldUpdateLastSeen = true;
-          }
+          if (delta > 0) shouldUpdateLastSeen = true;
         }
 
-        if (delta > 0) {
-          clientTotalUsage += delta;
-        }
-
-        if (shouldUpdateLastSeen) {
-          keyUpdates.push({ id: key.id, last_seen_bytes: currentBytes });
-        }
+        if (delta > 0) clientTotalUsage += delta;
+        if (shouldUpdateLastSeen) keyUpdates.push({ id: key.id, last_seen_bytes: currentBytes });
       });
 
       clientUsageUpdates.set(client.id, clientTotalUsage);
     });
 
-    // 6. Update usage in database
+    // 6. Update usage in database and suspend over-limit clients
     let suspendedCount = 0;
 
     await Promise.all(
       clientsData.map(async (client) => {
-        const newTotal = clientUsageUpdates.get(client.id) || client.total_usage_bytes;
+        const newTotal = clientUsageUpdates.get(client.id) ?? client.total_usage_bytes;
         const dataLimitBytes = (client.data_limit_gb || 0) * 1024 * 1024 * 1024;
 
         let status = client.status;
@@ -195,45 +145,44 @@ export async function GET(request: Request) {
           status = "limit_reached";
           suspendedCount++;
 
-          // Suspend keys on servers
-          const clientKeys = keys.filter(k => k.client_id === client.id);
+          // Block on Outline servers
+          const clientKeys = keys.filter((k) => k.client_id === client.id);
           await Promise.allSettled(
             clientKeys.map(async (key) => {
               const server = key.servers;
               if (server.type === "outline" || !server.type) {
-                try { await setOutlineDataLimit(server.api_url, key.outline_key_id, 1); } catch (e) {}
-              } else if (server.type === "3x-ui") {
-                 // In future, disable 3x-ui client via API. For now, it will be marked limit_reached in DB
-                 // which is a good first step.
-              } else if (server.type === "hysteria2") {
-                 // Hysteria2 doesn't support data limit easily.
+                try {
+                  await setOutlineDataLimit(server.api_url, key.outline_key_id, 1);
+                } catch {}
               }
+              // 3x-ui / hysteria2: blocked via status in DB (dummy node shown in sub link)
             })
           );
         }
 
-        await supabase
+        await supabaseAdmin
           .from("clients")
           .update({ total_usage_bytes: newTotal, status })
           .eq("id", client.id);
       })
     );
 
-    // Update keys last seen
-    for (const kUpdate of keyUpdates) {
-      await supabase
-        .from("client_keys")
-        .update({ last_seen_bytes: kUpdate.last_seen_bytes })
-        .eq("id", kUpdate.id);
-    }
+    // 7. Batch update last_seen_bytes for keys
+    await Promise.all(
+      keyUpdates.map((kUpdate) =>
+        supabaseAdmin
+          .from("client_keys")
+          .update({ last_seen_bytes: kUpdate.last_seen_bytes })
+          .eq("id", kUpdate.id)
+      )
+    );
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       processedClients: clientsData.length,
       suspendedClients: suspendedCount,
-      updatedKeys: keyUpdates.length
+      updatedKeys: keyUpdates.length,
     });
-
   } catch (error: any) {
     console.error("Cron sync usage check failed:", error);
     return new NextResponse(error.message, { status: 500 });

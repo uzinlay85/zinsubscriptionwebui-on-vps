@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-server";
 
 export async function GET() {
   try {
-    const { data, error } = await supabase.from("settings").select("*");
+    const { data, error } = await supabaseAdmin.from("settings").select("*");
     
     // If the table doesn't exist yet (e.g. user hasn't run the SQL command),
     // Supabase will throw an error. We handle it gracefully.
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     }));
 
     if (updates.length > 0) {
-      const { error } = await supabase.from("settings").upsert(updates, { onConflict: 'key' });
+      const { error } = await supabaseAdmin.from("settings").upsert(updates, { onConflict: 'key' });
       if (error) {
         if (error.code === '42P01') {
           return new NextResponse("Database table 'settings' does not exist. Please run the SQL command provided.", { status: 500 });

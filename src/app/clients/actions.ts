@@ -1,47 +1,10 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
-import { createOutlineKey, deleteOutlineKey, setOutlineDataLimit, removeOutlineDataLimit } from "@/lib/outline";
+import { createOutlineKey, deleteOutlineKey, setOutlineDataLimit, removeOutlineDataLimit, fetchOutlineMetrics } from "@/lib/outline";
 import { loginHysteria, createHysteriaUser, buildHysteriaUri, deleteHysteriaUser, updateHysteriaUser } from "@/lib/hysteria2";
 import crypto from "crypto";
-import https from "https";
-
-// Helper to fetch Outline metrics
-async function fetchOutlineMetrics(apiUrl: string): Promise<Record<string, number>> {
-  return new Promise((resolve) => {
-    try {
-      const url = new URL(`${apiUrl}/metrics/transfer`);
-      const options = {
-        hostname: url.hostname,
-        port: url.port || 443,
-        path: url.pathname,
-        method: "GET",
-        rejectUnauthorized: false,
-      };
-      const req = https.request(options, (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => {
-          try {
-            const json = JSON.parse(data);
-            resolve(json.bytesTransferredByUserId || {});
-          } catch {
-            resolve({});
-          }
-        });
-      });
-      req.setTimeout(3000, () => {
-        req.destroy();
-        resolve({});
-      });
-      req.on("error", () => resolve({}));
-      req.end();
-    } catch {
-      resolve({});
-    }
-  });
-}
 
 export async function addClient(formData: FormData) {
   const name = formData.get("name") as string;
@@ -54,7 +17,7 @@ export async function addClient(formData: FormData) {
   }
 
   // 1. Create the client record
-  const { data: newClient, error: clientError } = await supabase
+  const { data: newClient, error: clientError } = await supabaseAdmin
     .from("clients")
     .insert({ name, expiry_date: expiryDate, data_limit_gb: dataLimitGb })
     .select()
@@ -67,7 +30,7 @@ export async function addClient(formData: FormData) {
   const client = newClient as any;
 
   // 2. Fetch all existing servers
-  const { data: serversData } = await supabase.from("servers").select("*");
+  const { data: serversData } = await supabaseAdmin.from("servers").select("*");
   const servers = (serversData as any[]) || [];
 
   // 3. Auto-generate a key on every server for this new client
@@ -104,7 +67,7 @@ export async function addClient(formData: FormData) {
         accessUrl = rawUri;
       }
 
-      await supabase.from("client_keys").insert({
+      await supabaseAdmin.from("client_keys").insert({
         client_id: client.id,
         server_id: server.id,
         outline_key_id: keyId,
@@ -143,7 +106,7 @@ export async function addBulkClients(formData: FormData) {
   }
 
   // 1. Fetch all existing servers
-  const { data: serversData } = await supabase.from("servers").select("*");
+  const { data: serversData } = await supabaseAdmin.from("servers").select("*");
   const servers = (serversData as any[]) || [];
 
   const createdClients: Array<{ name: string; sub_token: string }> = [];
@@ -154,7 +117,7 @@ export async function addBulkClients(formData: FormData) {
     const clientName = `${baseName}-${i}`;
 
     // 2. Create the client record
-    const { data: newClient, error: clientError } = await supabase
+    const { data: newClient, error: clientError } = await supabaseAdmin
       .from("clients")
       .insert({ name: clientName, expiry_date: expiryDate, data_limit_gb: dataLimitGb })
       .select()
@@ -205,7 +168,7 @@ export async function addBulkClients(formData: FormData) {
           accessUrl = rawUri;
         }
 
-        await supabase.from("client_keys").insert({
+        await supabaseAdmin.from("client_keys").insert({
           client_id: client.id,
           server_id: server.id,
           outline_key_id: keyId,
@@ -241,7 +204,7 @@ export async function updateClient(formData: FormData) {
   }
 
   // 1. Update the client in Supabase
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("clients")
     .update({ name, expiry_date: expiryDate, data_limit_gb: dataLimitGb })
     .eq("id", id);
@@ -251,7 +214,7 @@ export async function updateClient(formData: FormData) {
   }
 
   // 2. Fetch all keys to update them on servers
-  const { data: keysData } = await supabase
+  const { data: keysData } = await supabaseAdmin
     .from("client_keys")
     .select("*, servers(api_url, type, auth_username, auth_password, username, password, inbound_id)")
     .eq("client_id", id);
@@ -271,7 +234,7 @@ export async function updateClient(formData: FormData) {
 
   // If we just extended a previously expired client, mark them as active again
   if (!isExpired) {
-    await supabase.from("clients").update({ status: "active" }).eq("id", id);
+    await supabaseAdmin.from("clients").update({ status: "active" }).eq("id", id);
   }
 
   await Promise.allSettled(
@@ -307,7 +270,7 @@ export async function deleteClient(formData: FormData) {
   if (!id) return { error: "ID is required" };
 
   // 1. Fetch all keys for this client with server details
-  const { data: keysData } = await supabase
+  const { data: keysData } = await supabaseAdmin
     .from("client_keys")
     .select("*, servers(id, api_url, type, auth_username, auth_password, username, password, inbound_id), clients(name)")
     .eq("client_id", id);
@@ -344,7 +307,7 @@ export async function deleteClient(formData: FormData) {
   }
 
   // 3. Delete the client from DB (client_keys will cascade or be deleted too)
-  const { error } = await supabase.from("clients").delete().eq("id", id);
+  const { error } = await supabaseAdmin.from("clients").delete().eq("id", id);
   if (error) {
     return { error: error.message };
   }
@@ -354,7 +317,7 @@ export async function deleteClient(formData: FormData) {
 
 export async function toggleClientStatus(id: string, currentStatus: string) {
   const newStatus = currentStatus === "active" ? "inactive" : "active";
-  const { error } = await supabase.from("clients").update({ status: newStatus }).eq("id", id);
+  const { error } = await supabaseAdmin.from("clients").update({ status: newStatus }).eq("id", id);
   
   if (error) {
     return { error: error.message };
@@ -365,7 +328,7 @@ export async function toggleClientStatus(id: string, currentStatus: string) {
 
 export async function syncClientKeys(clientId: string) {
   // 1. Fetch client details
-  const { data: clientData, error: clientError } = await supabase
+  const { data: clientData, error: clientError } = await supabaseAdmin
     .from("clients")
     .select("*")
     .eq("id", clientId)
@@ -381,11 +344,11 @@ export async function syncClientKeys(clientId: string) {
   }
 
   // 2. Fetch all servers
-  const { data: serversData } = await supabase.from("servers").select("*");
+  const { data: serversData } = await supabaseAdmin.from("servers").select("*");
   const servers = (serversData as any[]) || [];
 
   // 3. Fetch existing keys for this client
-  const { data: existingKeysData } = await supabase
+  const { data: existingKeysData } = await supabaseAdmin
     .from("client_keys")
     .select("server_id")
     .eq("client_id", clientId);
@@ -429,7 +392,7 @@ export async function syncClientKeys(clientId: string) {
         accessUrl = rawUri;
       }
 
-      await supabase.from("client_keys").insert({
+      await supabaseAdmin.from("client_keys").insert({
         client_id: client.id,
         server_id: server.id,
         outline_key_id: keyId,
@@ -452,7 +415,7 @@ export async function syncClientKeys(clientId: string) {
 
 export async function resetClientUsage(clientId: string) {
   // 1. Reset total_usage_bytes and status to active in database
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("clients")
     .update({ total_usage_bytes: 0, status: "active" })
     .eq("id", clientId);
@@ -462,7 +425,7 @@ export async function resetClientUsage(clientId: string) {
   }
 
   // 2. Fetch all keys for this client to get server details
-  const { data: keysData } = await supabase
+  const { data: keysData } = await supabaseAdmin
     .from("client_keys")
     .select("*, servers(*)")
     .eq("client_id", clientId);
@@ -513,7 +476,7 @@ export async function resetClientUsage(clientId: string) {
   );
 
   // 3. Remove data limits on Outline servers and update last_seen_bytes to current usage
-  const { data: clientData } = await supabase.from("clients").select("name").eq("id", clientId).single();
+  const { data: clientData } = await supabaseAdmin.from("clients").select("name").eq("id", clientId).single();
   const clientName = clientData?.name || "";
 
   await Promise.allSettled(
@@ -536,7 +499,7 @@ export async function resetClientUsage(clientId: string) {
       }
 
       // Update last_seen_bytes to current bytes so delta starts at 0
-      await supabase
+      await supabaseAdmin
         .from("client_keys")
         .update({ last_seen_bytes: currentBytes })
         .eq("id", key.id);

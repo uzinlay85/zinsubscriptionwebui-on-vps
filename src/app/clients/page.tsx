@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-server";
 import { AddClientForm } from "./AddClientForm";
 import { ClientList } from "./ClientList";
 import https from "https";
@@ -42,7 +42,7 @@ async function fetchServerMetrics(apiUrl: string): Promise<Record<string, number
 
 export default async function ClientsPage() {
   // Fetch clients with their keys (including server info)
-  const { data } = await supabase
+  const { data } = await supabaseAdmin
     .from("clients")
     .select("*, client_keys(id, outline_key_id, server_id, servers(id, api_url, type))")
     .order("created_at", { ascending: false });

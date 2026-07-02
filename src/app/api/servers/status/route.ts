@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-server";
 import http from "http";
 import https from "https";
 
@@ -54,7 +54,7 @@ function pingServer(apiUrl: string): Promise<{ online: boolean; latency?: number
 
 export async function GET() {
   try {
-    const { data: serversData, error } = await supabase
+    const { data: serversData, error } = await supabaseAdmin
       .from("servers")
       .select("id, api_url");
       

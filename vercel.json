@@ -1,12 +1,3 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/check-expiry",
-      "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/auto-backup",
-      "schedule": "0 3 * * *"
-    }
-  ]
+  "crons": []
 }

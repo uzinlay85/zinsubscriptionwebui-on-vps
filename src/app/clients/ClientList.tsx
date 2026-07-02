@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Users, Key, Activity, Wifi, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Users, Key, Activity, Wifi, Trash2, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Check, X } from "lucide-react";
 import Link from "next/link";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { EditClientForm } from "./EditClientForm";
@@ -57,6 +57,9 @@ export function ClientList({ clients, servers, initialUsage }: { clients: any[],
   const [lastActive, setLastActive] = useState<Record<string, number>>({});
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Restore sorting preferences
   useEffect(() => {
@@ -235,25 +238,49 @@ export function ClientList({ clients, servers, initialUsage }: { clients: any[],
                   <div className="shrink-0 flex items-center gap-1 sm:gap-2">
                     <EditClientForm client={{ id: client.id, name: client.name, expiry_date: client.expiry_date }} />
 
-                    <form action={async (formData) => {
-                      const res = await deleteClient(formData);
-                      if (res?.error) {
-                        alert(res.error);
-                      }
-                    }} onSubmit={(e) => {
-                      if (!confirm("Are you sure you want to delete this client? All their keys will also be permanently deleted. This action cannot be undone.")) {
-                        e.preventDefault();
-                      }
-                    }} className="shrink-0 m-0 p-0 flex">
-                      <input type="hidden" name="id" value={client.id} />
+                    {confirmDeleteId === client.id ? (
+                      // Inline confirmation row — no browser alert needed
+                      <div className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 rounded-xl px-2 py-1">
+                        <AlertTriangle size={14} className="text-red-400 shrink-0" />
+                        <span className="text-xs text-red-300 font-medium whitespace-nowrap">Delete?</span>
+                        <button
+                          disabled={isDeleting}
+                          onClick={async () => {
+                            setIsDeleting(true);
+                            setDeleteError(null);
+                            const fd = new FormData();
+                            fd.set("id", client.id);
+                            const res = await deleteClient(fd);
+                            if (res?.error) {
+                              setDeleteError(res.error);
+                              setConfirmDeleteId(null);
+                            } else {
+                              setConfirmDeleteId(null);
+                            }
+                            setIsDeleting(false);
+                          }}
+                          className="p-1 text-red-400 hover:text-white hover:bg-red-500 rounded-lg transition-colors disabled:opacity-50"
+                          title="Confirm delete"
+                        >
+                          <Check size={14} />
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="p-1 text-zinc-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                          title="Cancel"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
                       <button 
-                        type="submit" 
+                        onClick={() => { setConfirmDeleteId(client.id); setDeleteError(null); }}
                         className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors flex justify-center"
                         title="Delete Client"
                       >
                         <Trash2 size={18} />
                       </button>
-                    </form>
+                    )}
                   </div>
                 </div>
               </div>
@@ -261,6 +288,17 @@ export function ClientList({ clients, servers, initialUsage }: { clients: any[],
           );
         })}
       </div>
+
+      {/* Global delete error toast */}
+      {deleteError && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-red-500/90 backdrop-blur text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in">
+          <AlertTriangle size={16} />
+          {deleteError}
+          <button onClick={() => setDeleteError(null)} className="ml-2 hover:opacity-70">
+            <X size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

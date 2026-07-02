@@ -1,22 +1,24 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-server";
 
 export async function GET(request: Request) {
-  // Optional: Protect the route with a cron secret if configured
   const authHeader = request.headers.get("authorization");
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const cronSecret = process.env.CRON_SECRET;
+
+  // CRON_SECRET is required
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
   try {
     // 1. Fetch settings from DB
-    const { data: settingsData, error: sErr } = await supabase.from("settings").select("*");
+    const { data: settingsData, error: sErr } = await supabaseAdmin.from("settings").select("*");
     if (sErr || !settingsData) {
       return NextResponse.json({ success: false, message: "Settings table not found or empty." });
     }
 
     const settings: Record<string, string> = {};
-    settingsData.forEach(r => settings[r.key] = r.value);
+    settingsData.forEach((r) => (settings[r.key] = r.value));
 
     if (settings["auto_backup_enabled"] !== "true") {
       return NextResponse.json({ success: true, message: "Auto backup is disabled." });
@@ -31,9 +33,9 @@ export async function GET(request: Request) {
     }
 
     // 2. Fetch all tables for backup
-    const { data: servers } = await supabase.from("servers").select("*");
-    const { data: clients } = await supabase.from("clients").select("*");
-    const { data: clientKeys } = await supabase.from("client_keys").select("*");
+    const { data: servers } = await supabaseAdmin.from("servers").select("*");
+    const { data: clients } = await supabaseAdmin.from("clients").select("*");
+    const { data: clientKeys } = await supabaseAdmin.from("client_keys").select("*");
 
     const backupData = {
       timestamp: new Date().toISOString(),
@@ -41,25 +43,27 @@ export async function GET(request: Request) {
       data: {
         servers: servers || [],
         clients: clients || [],
-        client_keys: clientKeys || []
-      }
+        client_keys: clientKeys || [],
+      },
     };
 
     // 3. Upload to WebDAV
-    const dateStr = new Date().toISOString().split('T')[0];
-    const timeStr = new Date().toISOString().split('T')[1].replace(/:/g, '').split('.')[0];
+    const dateStr = new Date().toISOString().split("T")[0];
+    const timeStr = new Date().toISOString().split("T")[1].replace(/:/g, "").split(".")[0];
     const fileName = `outline_panel_backup_${dateStr}_${timeStr}.json`;
-    
-    const uploadUrl = url.endsWith('/') ? `${url}${fileName}` : `${url}/${fileName}`;
-    const authHeaderWebDAV = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
+
+    const uploadUrl = url.endsWith("/") ? `${url}${fileName}` : `${url}/${fileName}`;
+    const authHeaderWebDAV =
+      "Basic " + Buffer.from(`${username}:${password}`).toString("base64");
 
     const response = await fetch(uploadUrl, {
       method: "PUT",
       headers: {
-        "Authorization": authHeaderWebDAV,
-        "Content-Type": "application/json"
+        Authorization: authHeaderWebDAV,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(backupData, null, 2),
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) {
@@ -67,7 +71,6 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ success: true, message: `Auto backup uploaded to ${uploadUrl}` });
-
   } catch (error: any) {
     console.error("Auto Backup cron failed:", error);
     return new NextResponse(error.message, { status: 500 });

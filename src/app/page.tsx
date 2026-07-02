@@ -1,12 +1,12 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-server";
 import { Server, Users, Key } from "lucide-react";
 
 export default async function DashboardOverview() {
   // Fetch statistics
   const [{ count: serversCount }, { count: clientsCount }, { count: keysCount }] = await Promise.all([
-    supabase.from("servers").select("*", { count: "exact", head: true }),
-    supabase.from("clients").select("*", { count: "exact", head: true }),
-    supabase.from("client_keys").select("*", { count: "exact", head: true })
+    supabaseAdmin.from("servers").select("*", { count: "exact", head: true }),
+    supabaseAdmin.from("clients").select("*", { count: "exact", head: true }),
+    supabaseAdmin.from("client_keys").select("*", { count: "exact", head: true })
   ]);
 
   const stats = [

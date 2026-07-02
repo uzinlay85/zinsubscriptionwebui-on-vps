@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-server";
 import { AddClientKeyForm } from "./AddClientKeyForm";
 import { SyncClientButton } from "./SyncClientButton";
 import { ResetUsageButton } from "./ResetUsageButton";
@@ -59,7 +59,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const { id } = await params;
   
   // Fetch client details
-  const { data, error: clientError } = await supabase
+  const { data, error: clientError } = await supabaseAdmin
     .from("clients")
     .select("*")
     .eq("id", id)
@@ -72,7 +72,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   }
 
   // Fetch client keys with associated server data
-  const { data: keysData } = await supabase
+  const { data: keysData } = await supabaseAdmin
     .from("client_keys")
     .select("*, servers(*)")
     .eq("client_id", id)
@@ -81,7 +81,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const clientKeys = keysData as any[];
 
   // Fetch all servers for the dropdown
-  const { data: serversData } = await supabase.from("servers").select("id, name");
+  const { data: serversData } = await supabaseAdmin.from("servers").select("id, name");
   const servers = serversData as any[];
 
   // Fetch usage metrics from each unique server's Outline API

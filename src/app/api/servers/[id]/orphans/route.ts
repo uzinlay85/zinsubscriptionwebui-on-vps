@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-server";
 import { fetchOutlineKeys, deleteOutlineKey } from "@/lib/outline";
 import { loginHysteria, fetchHysteriaUsers, deleteHysteriaUser } from "@/lib/hysteria2";
 
@@ -14,7 +14,7 @@ export async function GET(
   }
 
   // 1. Fetch server details
-  const { data: server, error: serverError } = await supabase
+  const { data: server, error: serverError } = await supabaseAdmin
     .from("servers")
     .select("*")
     .eq("id", id)
@@ -25,7 +25,7 @@ export async function GET(
   }
 
   // 2. Fetch all keys stored in our DB for this server
-  const { data: dbKeysData, error: dbKeysError } = await supabase
+  const { data: dbKeysData, error: dbKeysError } = await supabaseAdmin
     .from("client_keys")
     .select("outline_key_id, uuid")
     .eq("server_id", id);
@@ -97,7 +97,7 @@ export async function POST(
   }
 
   // Fetch server details
-  const { data: server, error: serverError } = await supabase
+  const { data: server, error: serverError } = await supabaseAdmin
     .from("servers")
     .select("*")
     .eq("id", id)
