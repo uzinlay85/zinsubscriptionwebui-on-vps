@@ -84,6 +84,10 @@ export async function createOutlineKey(
       });
 
       req.on("error", (e) => reject(e));
+      req.setTimeout(5000, () => {
+        req.destroy();
+        reject(new Error("Outline API request timed out"));
+      });
       req.write(body);
       req.end();
     } catch (e) {
@@ -175,6 +179,10 @@ export async function setOutlineDataLimit(
       });
 
       req.on("error", (e) => reject(e));
+      req.setTimeout(5000, () => {
+        req.destroy();
+        reject(new Error("Outline API request timed out"));
+      });
       req.write(body);
       req.end();
     } catch (e) {
@@ -208,6 +216,10 @@ export async function removeOutlineDataLimit(
       });
 
       req.on("error", (e) => reject(e));
+      req.setTimeout(5000, () => {
+        req.destroy();
+        reject(new Error("Outline API request timed out"));
+      });
       req.end();
     } catch (e) {
       reject(e);
@@ -250,6 +262,10 @@ export async function fetchOutlineKeys(
       });
 
       req.on("error", () => resolve([]));
+      req.setTimeout(5000, () => {
+        req.destroy();
+        resolve([]);
+      });
       req.end();
     } catch (e) {
       resolve([]);

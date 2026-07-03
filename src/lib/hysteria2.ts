@@ -2,6 +2,15 @@
  * Utility functions to interact with the Hysteria2 Express Backend
  */
 
+// Override fetch locally to enforce a 5-second timeout
+const originalFetch = globalThis.fetch;
+const fetch = async (url: string | URL | globalThis.Request, options?: RequestInit) => {
+  return originalFetch(url, {
+    ...options,
+    signal: options?.signal ?? AbortSignal.timeout(5000)
+  });
+};
+
 export interface HysteriaUser {
   id: number;
   username: string;
