@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Users, Key, Activity, Wifi, Trash2, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Check, X } from "lucide-react";
+import { Users, Key, Activity, Wifi, Trash2, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Check, X, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { EditClientForm } from "./EditClientForm";
@@ -262,7 +262,7 @@ export function ClientList({ clients, servers, initialUsage }: { clients: any[],
                           className="p-1 text-red-400 hover:text-white hover:bg-red-500 rounded-lg transition-colors disabled:opacity-50"
                           title="Confirm delete"
                         >
-                          <Check size={14} />
+                          {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                         </button>
                         <button
                           onClick={() => setConfirmDeleteId(null)}

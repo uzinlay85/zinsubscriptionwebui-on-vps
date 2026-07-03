@@ -173,6 +173,27 @@ export async function addClient3xui(
     throw new Error(`Invalid JSON response from 3x-ui (Status ${addRes.status}): ${responseText.substring(0, 100)}`);
   }
 
+  // If email is already in use (out-of-sync state), fetch the existing client's link
+  if (!addData?.success && addData?.msg && addData.msg.toLowerCase().includes("email already in use")) {
+    // Re-fetch the inbound to get the existing client's data
+    const retryRes = await fetch(`${cleanUrl}/panel/api/inbounds/get/${inboundId}`, {
+      method: "GET",
+      headers: { "Cookie": cookie, "Accept": "application/json" }
+    });
+    const retryData = await retryRes.json().catch(() => null);
+    if (retryData?.success && retryData?.obj) {
+      const retrySettings = typeof retryData.obj.settings === "string"
+        ? JSON.parse(retryData.obj.settings)
+        : retryData.obj.settings;
+      const existingClient = retrySettings?.clients?.find((c: any) => c.email === clientEmail);
+      if (existingClient) {
+        return fetchOrBuildLink(cleanUrl, existingClient.subId || "", serverName, retryData.obj, existingClient, apiUrl, server);
+      }
+    }
+    // Could not recover - just return empty string to avoid blocking sync
+    return "";
+  }
+
   if (!addRes.ok || !addData || !addData.success) {
     throw new Error(`3x-ui Error: ${addData?.msg || 'None'}. Status: ${addRes.status}. Request: ${addBody}. Response: ${responseText.substring(0, 200)}`);
   }
