@@ -15,7 +15,9 @@ export function EditServerForm({ server }: { server: any }) {
     setMounted(true);
   }, []);
 
-  async function handleSubmit(formData: FormData) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
     try {
       setLoading(true);
       setError(null);
@@ -61,7 +63,7 @@ export function EditServerForm({ server }: { server: any }) {
               </div>
             )}
 
-            <form action={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <input type="hidden" name="id" value={server.id} />
               <input type="hidden" name="type" value={server.type} />
               
