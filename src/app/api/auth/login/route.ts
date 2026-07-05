@@ -44,8 +44,11 @@ function safeEqual(a: string, b: string): boolean {
 
 export async function POST(request: NextRequest) {
   // Determine caller IP (works behind Vercel / standard proxies)
+  // Use the LAST entry in x-forwarded-for — this is appended by our trusted
+  // reverse proxy/CDN and cannot be spoofed by the client.
+  const forwardedFor = request.headers.get("x-forwarded-for");
   const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+    (forwardedFor ? forwardedFor.split(",").at(-1)?.trim() : null) ??
     request.headers.get("x-real-ip") ??
     "unknown";
 
@@ -86,7 +89,7 @@ export async function POST(request: NextRequest) {
   response.cookies.set("admin_auth", authSecret, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: "strict",
     maxAge: 60 * 60 * 24 * 7, // 7 days
     path: "/",
   });

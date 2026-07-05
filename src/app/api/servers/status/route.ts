@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
+import { requireAuth } from "@/lib/auth";
 import http from "http";
 import https from "https";
 
@@ -14,6 +15,10 @@ function pingServer(apiUrl: string): Promise<{ online: boolean; latency?: number
       const isHttps = url.protocol === "https:";
       const client = isHttps ? https : http;
       
+      // Allow self-signed certs only when explicitly opted in via env var.
+      // By default, TLS verification is enforced to prevent MITM attacks.
+      const allowSelfSigned = process.env.ALLOW_SELF_SIGNED_CERTS === "true";
+
       const options = {
         hostname: url.hostname,
         port: url.port || (isHttps ? 443 : 80),
@@ -22,7 +27,7 @@ function pingServer(apiUrl: string): Promise<{ online: boolean; latency?: number
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         },
-        rejectUnauthorized: false, // Bypass SSL certificate checks for self-signed certificates
+        rejectUnauthorized: !allowSelfSigned,
       };
 
       const req = client.request(options, (res) => {
@@ -54,6 +59,9 @@ function pingServer(apiUrl: string): Promise<{ online: boolean; latency?: number
 
 export async function GET() {
   try {
+    // Defense-in-depth: verify session even though middleware also checks.
+    await requireAuth();
+
     const { data: serversData, error } = await supabaseAdmin
       .from("servers")
       .select("id, api_url");
@@ -73,6 +81,7 @@ export async function GET() {
 
     return NextResponse.json({ statuses });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("Server status check failed:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { setOutlineDataLimit, fetchOutlineMetrics } from "@/lib/outline";
+import crypto from "crypto";
+
+/** Timing-safe Bearer token comparison. */
+function safeTokenEqual(a: string, b: string): boolean {
+  try {
+    const aBuf = Buffer.from(a, "utf8");
+    const bBuf = Buffer.from(b, "utf8");
+    if (aBuf.length !== bBuf.length) return false;
+    return crypto.timingSafeEqual(aBuf, bBuf);
+  } catch {
+    return false;
+  }
+}
 
 // Helper to fetch 3x-ui metrics
 async function fetch3xuiMetrics(server: any): Promise<Record<string, number>> {
@@ -35,8 +48,11 @@ export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
-  // CRON_SECRET is required — reject if missing or wrong
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  // CRON_SECRET is required — timing-safe comparison to prevent timing attacks
+  const receivedToken = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : "";
+  if (!cronSecret || !safeTokenEqual(receivedToken, cronSecret)) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
@@ -49,7 +65,7 @@ export async function GET(request: Request) {
 
     if (clientsError) {
       console.error("Error fetching clients for sync:", clientsError);
-      return new NextResponse(clientsError.message, { status: 500 });
+      return new NextResponse("Internal server error", { status: 500 });
     }
 
     if (!clientsData || clientsData.length === 0) {
@@ -64,7 +80,8 @@ export async function GET(request: Request) {
       .in("client_id", clientIds);
 
     if (keysError) {
-      return new NextResponse(keysError.message, { status: 500 });
+      console.error("Error fetching keys for sync:", keysError);
+      return new NextResponse("Internal server error", { status: 500 });
     }
 
     const keys = (keysData as any[]) || [];
@@ -185,6 +202,6 @@ export async function GET(request: Request) {
     });
   } catch (error: any) {
     console.error("Cron sync usage check failed:", error);
-    return new NextResponse(error.message, { status: 500 });
+    return new NextResponse("Internal server error", { status: 500 });
   }
 }

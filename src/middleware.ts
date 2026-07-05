@@ -34,6 +34,19 @@ function withSecurityHeaders(response: NextResponse): NextResponse {
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=()"
   );
+  // CSP: restrict resource origins to self; inline styles allowed for Next.js UI
+  response.headers.set(
+    "Content-Security-Policy",
+    [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Next.js requires unsafe-eval in dev
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self'",
+      "connect-src 'self'",
+      "frame-ancestors 'none'",
+    ].join("; ")
+  );
   return response;
 }
 
@@ -57,7 +70,7 @@ export function middleware(request: NextRequest) {
     response.cookies.set("path_auth", "valid", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
     });
     return withSecurityHeaders(response);
