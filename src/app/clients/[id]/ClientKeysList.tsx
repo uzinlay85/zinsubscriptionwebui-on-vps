@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Server, Key, Activity, Wifi } from "lucide-react";
 import { DeleteKeyButton } from "./DeleteKeyButton";
+import { CopyKeyButton } from "./CopyKeyButton";
 
 // Convert bytes to readable format
 function formatBytes(bytes: number): string {
@@ -132,7 +133,8 @@ export function ClientKeysList({ clientKeys, initialUsageMap, clientId }: Client
                 </div>
                 
                 {/* Actions */}
-                <div className="shrink-0 self-end sm:self-center mt-1 sm:mt-0">
+                <div className="shrink-0 self-end sm:self-center mt-1 sm:mt-0 flex items-center gap-1">
+                  <CopyKeyButton accessUrl={key.access_url} />
                   <DeleteKeyButton keyId={key.id} clientId={clientId} />
                 </div>
               </div>
