@@ -3,7 +3,7 @@
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
 import { createOutlineKey, deleteOutlineKey, setOutlineDataLimit, removeOutlineDataLimit, fetchOutlineMetrics } from "@/lib/outline";
-import { loginHysteria, createHysteriaUser, buildHysteriaUri, deleteHysteriaUser, updateHysteriaUser } from "@/lib/hysteria2";
+import { loginHysteria, createHysteriaUser, buildHysteriaUri, deleteHysteriaUser, updateHysteriaUser, enableHysteriaUser, disableHysteriaUser } from "@/lib/hysteria2";
 import crypto from "crypto";
 
 export async function addClient(formData: FormData) {
@@ -261,9 +261,8 @@ export async function updateClient(formData: FormData) {
       if (!server || !key.outline_key_id) return;
 
       if (server.type === "outline" || !server.type) {
-        // If not expired, ensure data limit is removed so they can reconnect
-        // (If expired, cron job will handle blocking them, but we could also block here)
         if (!isExpired) {
+          // Remove data limit so the client can reconnect
           await removeOutlineDataLimit(server.api_url, key.outline_key_id).catch(() => {});
         } else {
           await setOutlineDataLimit(server.api_url, key.outline_key_id, 1).catch(() => {});
@@ -271,9 +270,46 @@ export async function updateClient(formData: FormData) {
       } else if (server.type === "hysteria2") {
         try {
           const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
-          await updateHysteriaUser(server.api_url, token, key.outline_key_id, name, expiryDays);
+          if (!isExpired) {
+            // Re-enable with new expiry
+            await enableHysteriaUser(server.api_url, token, key.outline_key_id, name, expiryDays);
+          } else {
+            await disableHysteriaUser(server.api_url, token, key.outline_key_id, name);
+          }
         } catch (err) {
           console.error("Failed to update Hysteria user", err);
+        }
+      } else if (server.type === "3x-ui" && !isExpired) {
+        // Re-enable 3x-ui client when renewing
+        try {
+          const { login3xui } = await import("@/lib/3x-ui");
+          const finalUsername = server.username || server.auth_username;
+          const finalPassword = server.password || server.auth_password;
+          const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
+          const cleanUrl = server.api_url.replace(/\/$/, "");
+          const getRes = await fetch(`${cleanUrl}/panel/api/inbounds/get/${server.inbound_id}`, {
+            headers: { Cookie: cookie, Accept: "application/json" }, signal: AbortSignal.timeout(8000)
+          });
+          const getData = await getRes.json().catch(() => null);
+          if (!getData?.success || !getData.obj) return;
+          const inbound = getData.obj;
+          const settings = typeof inbound.settings === "string" ? JSON.parse(inbound.settings) : inbound.settings;
+          const updated = settings.clients?.map((c: any) => {
+            if (c.id === key.outline_key_id || c.password === key.outline_key_id) {
+              return { ...c, enable: true };
+            }
+            return c;
+          });
+          if (!updated) return;
+          inbound.settings = JSON.stringify({ ...settings, clients: updated });
+          await fetch(`${cleanUrl}/panel/api/inbounds/update/${server.inbound_id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Cookie: cookie, Accept: "application/json" },
+            body: JSON.stringify(inbound),
+            signal: AbortSignal.timeout(8000),
+          });
+        } catch (err) {
+          console.error("Failed to re-enable 3x-ui client", err);
         }
       }
     })
@@ -335,11 +371,90 @@ export async function deleteClient(formData: FormData) {
 
 export async function toggleClientStatus(id: string, currentStatus: string) {
   const newStatus = currentStatus === "active" ? "inactive" : "active";
+  const isActivating = newStatus === "active"; // true = turning ON, false = turning OFF
+
+  // 1. Update status in DB
   const { error } = await supabaseAdmin.from("clients").update({ status: newStatus }).eq("id", id);
-  
   if (error) {
     return { error: error.message };
   }
+
+  // 2. Fetch client name + all keys with server details
+  const { data: clientData } = await supabaseAdmin.from("clients").select("name").eq("id", id).single();
+  const clientName = (clientData as any)?.name || "";
+
+  const { data: keysData } = await supabaseAdmin
+    .from("client_keys")
+    .select("*, servers(api_url, type, auth_username, auth_password, username, password, inbound_id)")
+    .eq("client_id", id);
+  const keys = (keysData as any[]) || [];
+
+  // 3. Block or unblock keys on every server type
+  await Promise.allSettled(
+    keys.map(async (key) => {
+      const server = key.servers;
+      if (!server || !key.outline_key_id) return;
+
+      // Outline
+      if (server.type === "outline" || !server.type) {
+        if (isActivating) {
+          await removeOutlineDataLimit(server.api_url, key.outline_key_id).catch(() => {});
+        } else {
+          await setOutlineDataLimit(server.api_url, key.outline_key_id, 1).catch(() => {});
+        }
+      }
+
+      // Hysteria2
+      else if (server.type === "hysteria2") {
+        try {
+          const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
+          if (isActivating) {
+            // Restore unlimited expiry (null = no expiry set by panel)
+            await enableHysteriaUser(server.api_url, token, key.outline_key_id, clientName, null);
+          } else {
+            await disableHysteriaUser(server.api_url, token, key.outline_key_id, clientName);
+          }
+        } catch (err) {
+          console.error("Failed to toggle Hysteria2 user", err);
+        }
+      }
+
+      // 3x-ui
+      else if (server.type === "3x-ui") {
+        try {
+          const { login3xui } = await import("@/lib/3x-ui");
+          const finalUsername = server.username || server.auth_username;
+          const finalPassword = server.password || server.auth_password;
+          const cookie = await login3xui(server.api_url, finalUsername, finalPassword);
+          const cleanUrl = server.api_url.replace(/\/$/, "");
+          const getRes = await fetch(`${cleanUrl}/panel/api/inbounds/get/${server.inbound_id}`, {
+            headers: { Cookie: cookie, Accept: "application/json" }, signal: AbortSignal.timeout(8000)
+          });
+          const getData = await getRes.json().catch(() => null);
+          if (!getData?.success || !getData.obj) return;
+          const inbound = getData.obj;
+          const settings = typeof inbound.settings === "string" ? JSON.parse(inbound.settings) : inbound.settings;
+          const updated = settings.clients?.map((c: any) => {
+            if (c.id === key.outline_key_id || c.password === key.outline_key_id) {
+              return { ...c, enable: isActivating };
+            }
+            return c;
+          });
+          if (!updated) return;
+          inbound.settings = JSON.stringify({ ...settings, clients: updated });
+          await fetch(`${cleanUrl}/panel/api/inbounds/update/${server.inbound_id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Cookie: cookie, Accept: "application/json" },
+            body: JSON.stringify(inbound),
+            signal: AbortSignal.timeout(8000),
+          });
+        } catch (err) {
+          console.error("Failed to toggle 3x-ui client", err);
+        }
+      }
+    })
+  );
+
   revalidatePath("/clients");
   return { success: true };
 }

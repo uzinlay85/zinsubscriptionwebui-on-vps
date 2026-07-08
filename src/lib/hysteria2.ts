@@ -143,6 +143,65 @@ export async function updateHysteriaUser(
 }
 
 /**
+ * Disable a Hysteria2 user (block without deleting).
+ * Sets expiry_days to 0 so the server rejects connections immediately.
+ */
+export async function disableHysteriaUser(
+  apiUrl: string,
+  token: string,
+  userPassword: string,
+  userUsername: string
+): Promise<void> {
+  const base = getBaseUrl(apiUrl);
+  const url = `${base}/api/users`;
+  const res = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
+  if (!res.ok) return;
+
+  let usersData = await res.json();
+  let users: HysteriaUser[] = Array.isArray(usersData) ? usersData : (usersData.users || usersData.data || []);
+  const targetUser = users.find(u => u.password === userPassword || u.username === userUsername);
+
+  if (targetUser) {
+    await fetch(`${base}/api/users/${targetUser.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      // expiry_days: 0 means already expired → server blocks connections
+      body: JSON.stringify({ username: targetUser.username, password: targetUser.password, expiry_days: 0 })
+    });
+  }
+}
+
+/**
+ * Re-enable a previously disabled Hysteria2 user.
+ * Restores expiry_days based on new expiry date.
+ */
+export async function enableHysteriaUser(
+  apiUrl: string,
+  token: string,
+  userPassword: string,
+  userUsername: string,
+  expiryDays: number | null
+): Promise<void> {
+  const base = getBaseUrl(apiUrl);
+  const url = `${base}/api/users`;
+  const res = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
+  if (!res.ok) return;
+
+  let usersData = await res.json();
+  let users: HysteriaUser[] = Array.isArray(usersData) ? usersData : (usersData.users || usersData.data || []);
+  const targetUser = users.find(u => u.password === userPassword || u.username === userUsername);
+
+  if (targetUser) {
+    await fetch(`${base}/api/users/${targetUser.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ username: targetUser.username, password: targetUser.password, expiry_days: expiryDays })
+    });
+  }
+}
+
+
+/**
  * Delete a user from Hysteria2
  * We need to find their ID first by fetching all users and matching the username/password
  */
