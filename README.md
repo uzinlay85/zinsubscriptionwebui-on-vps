@@ -172,7 +172,65 @@ Since Vercel's Free plan limits crons, hosting scheduled jobs on your main VPS i
 4. Turn on **Enable Daily Auto Backup** and click **Save Settings**.
 
 ---
+
+### 🖥️ How to Add a Server (Where to Find Each Field)
+
+Click **Add Server** in the Servers page. The required fields differ by server type.
+
 ---
+
+#### 🔵 Outline Server
+
+| Field | Where to Find It |
+|---|---|
+| **Server Name** | Any display name you choose (e.g. `SG-01 Outline`) |
+| **Outline API URL** | SSH into your VPS and run: `cat /opt/outline/access.txt` → copy the `apiUrl` value |
+| **Certificate SHA-256** | From the same `access.txt` output → copy the `certSha256` value |
+
+**Example `access.txt` output:**
+```json
+{"apiUrl":"https://123.45.67.89:12345/AbCdEfGhIjKlMn","certSha256":"AB:CD:EF:12:34:56:..."}
+```
+Copy `apiUrl` → paste into **Outline API URL**.
+Copy `certSha256` → paste into **Certificate SHA-256**.
+
+---
+
+#### 🟣 Hysteria2 Server
+
+> Requires the [Hysteria2 Express Backend](https://github.com/sin-ack/hysteria2-express-backend) running on your VPS.
+
+| Field | Where to Find It |
+|---|---|
+| **Server Name** | Any display name you choose (e.g. `US-01 Hysteria`) |
+| **Server API URL** | The URL to your Hysteria2 Express Backend admin API — e.g. `https://your-domain.com/admin_path` or `http://123.45.67.89:8080` |
+| **Auth Username** | The admin username you set when configuring the Hysteria2 Express Backend |
+| **Auth Password** | The admin password you set when configuring the Hysteria2 Express Backend |
+
+---
+
+#### 🟢 3x-ui Server
+
+| Field | Where to Find It |
+|---|---|
+| **Server Name** | Any display name you choose (e.g. `DE-01 3x-ui`) |
+| **3x-ui Panel URL** | The full URL of your 3x-ui panel including port — e.g. `http://123.45.67.89:2053` or `https://panel.yourdomain.com` |
+| **Panel Username** | Your 3x-ui admin username (default: `admin`) |
+| **Panel Password** | Your 3x-ui admin password |
+| **Inbound ID** | Go to your 3x-ui panel → **Inbounds** list → look at the **#** column (the number on the left of the inbound row) |
+| **External Domain** *(optional)* | If your inbound uses a CDN or reverse proxy domain (e.g. `sg.yourdomain.com`) — leave blank if using direct IP |
+| **External Port** *(optional)* | If your inbound is behind a reverse proxy on a different port (e.g. `443`) — leave blank to use the inbound's own port |
+
+**How to find Inbound ID in 3x-ui:**
+```
+3x-ui Panel → Inbounds (ဝင်ချောင်းများ) → table ထဲရှိ # ကော်လံ၏ ဂဏန်း
+e.g.  # | Protocol | ...
+      1 | vmess    | ...   ← Inbound ID = 1
+      2 | vless    | ...   ← Inbound ID = 2
+```
+
+---
+
 
 ## 🇲🇲 မြန်မာဘာသာ လမ်းညွှန်
 
@@ -244,3 +302,61 @@ Vercel Free plan တွင် ဒေတာပုံမှန် sync လုပ�
    * **Username**: Koofr အကောင့် email
    * **Password**: Koofr မှ ထုတ်ပေးလိုက်သော App Password
 3. **Enable Daily Auto Backup** အား ဖွင့်ပြီး သိမ်းဆည်းပါ။
+
+---
+
+### 🖥️ ဆာဗာ Add လုပ်နည်း (လိုအပ်သော အချက်အလက် ရှာဖွေနည်း)
+
+Servers page တွင် **Add Server** ကို နှိပ်ပါ။ ဆာဗာ အမျိုးအစားပေါ်မူတည်ပြီး ဖြည့်ရမည့် field များ ကွဲပြားသည်။
+
+---
+
+#### 🔵 Outline ဆာဗာ
+
+| Field | ဘယ်နေရာမှ ယူမလဲ |
+|---|---|
+| **Server Name** | မိမိစိတ်ကြိုက် ဆာဗာအမည် (ဥပမာ `SG-01 Outline`) |
+| **Outline API URL** | VPS သို့ SSH ဝင်ပြီး `cat /opt/outline/access.txt` ရိုက်ပါ → `apiUrl` တန်ဖိုးကို ကူးပါ |
+| **Certificate SHA-256** | အထက်ပါ `access.txt` ထွက်ရလာသော output မှ `certSha256` တန်ဖိုးကို ကူးပါ |
+
+**`access.txt` ထွက်ရသော output ပုံစံ:**
+```json
+{"apiUrl":"https://123.45.67.89:12345/AbCdEfGhIjKlMn","certSha256":"AB:CD:EF:12:34:56:..."}
+```
+`apiUrl` → **Outline API URL** တွင် ထည့်ပါ။
+`certSha256` → **Certificate SHA-256** တွင် ထည့်ပါ။
+
+---
+
+#### 🟣 Hysteria2 ဆာဗာ
+
+| Field | ဘယ်နေရာမှ ယူမလဲ |
+|---|---|
+| **Server Name** | မိမိစိတ်ကြိုက် ဆာဗာအမည် (ဥပမာ `US-01 Hysteria`) |
+| **Server API URL** | VPS တွင် Hysteria2 Express Backend ကို install လုပ်ထားသော URL — ဥပမာ `https://yourdomain.com/admin_path` |
+| **Auth Username** | Hysteria2 Backend ကို configure လုပ်ရာတွင် သတ်မှတ်ထားသော admin username |
+| **Auth Password** | Hysteria2 Backend ကို configure လုပ်ရာတွင် သတ်မှတ်ထားသော admin password |
+
+---
+
+#### 🟢 3x-ui ဆာဗာ
+
+| Field | ဘယ်နေရာမှ ယူမလဲ |
+|---|---|
+| **Server Name** | မိမိစိတ်ကြိုက် ဆာဗာအမည် (ဥပမာ `DE-01 3x-ui`) |
+| **3x-ui Panel URL** | 3x-ui panel ၏ ပြည့်စုံသော URL — ဥပမာ `http://123.45.67.89:2053` |
+| **Panel Username** | 3x-ui panel ဝင်ရောက်ရာတွင် သုံးသော username (ပုံမှန် `admin`) |
+| **Panel Password** | 3x-ui panel ဝင်ရောက်ရာတွင် သုံးသော password |
+| **Inbound ID** | 3x-ui panel → **Inbounds** သို့သွားပြီး ဘယ်ဆုံးကော်လံရှိ **#** နံပါတ်ကို ကြည့်ပါ |
+| **External Domain** *(ရွေးချယ်ရန်)* | Inbound ကို CDN သို့မဟုတ် reverse proxy domain ဖြင့် ချိတ်ဆက်ထားလျှင် ထည့်ပါ (ဥပမာ `sg.yourdomain.com`) — မဟုတ်ပါက ဗလာထားပါ |
+| **External Port** *(ရွေးချယ်ရန်)* | Reverse proxy ၏ port (ဥပမာ `443`) — မဟုတ်ပါက ဗလာထားပါ |
+
+**3x-ui တွင် Inbound ID ရှာနည်း:**
+```
+3x-ui Panel → Inbounds (ဝင်ချောင်းများ) → table ၏ ဘယ်ဆုံး # ကော်လံရှိ ဂဏန်းကို ကြည့်ပါ
+
+ဥပမာ:
+  # | Protocol | ...
+  1 | vmess    | ...   ← Inbound ID = 1
+  2 | vless    | ...   ← Inbound ID = 2
+```
