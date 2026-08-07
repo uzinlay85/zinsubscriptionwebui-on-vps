@@ -53,6 +53,9 @@ export async function addServer(formData: FormData) {
   if (type === "outline" && !certSha256) {
     return { error: "Cert SHA-256 is required for Outline" };
   }
+  if (type === "hysteria2_python" && !finalPassword) {
+    return { error: "Password is required for Hysteria2 Python Web Panel" };
+  }
   if ((type === "hysteria2" || type === "3x-ui") && (!finalUsername || !finalPassword)) {
     return { error: "Username and Password are required for this server type" };
   }
@@ -75,10 +78,11 @@ export async function addServer(formData: FormData) {
     } catch (err: any) {
       return { error: `Failed to connect to 3x-ui panel: ${err.message}` };
     }
-  } else if (type === "hysteria2") {
+  } else if (type === "hysteria2" || type === "hysteria2_python") {
     // Verify Hysteria2 connection
     try {
-      hy2Token = await loginHysteria(apiUrl, finalUsername, finalPassword);
+      const usernameParam = type === "hysteria2_python" ? "python_flask" : finalUsername;
+      hy2Token = await loginHysteria(apiUrl, usernameParam, finalPassword);
     } catch (err: any) {
       return { error: `Failed to connect to Hysteria2 server: ${err.message}` };
     }
@@ -129,12 +133,17 @@ export async function addServer(formData: FormData) {
         const key = await createOutlineKey(apiUrl, keyName);
         keyId = key.id;
         accessUrl = key.accessUrl;
-      } else if (type === "hysteria2") {
+      } else if (type === "hysteria2" || type === "hysteria2_python") {
         // Generate a random password for the user (6 chars)
         const userPass = crypto.randomBytes(3).toString('hex');
         await createHysteriaUser(apiUrl, hy2Token, client.name, userPass);
         keyId = userPass; // Use password as key ID since it's unique
-        accessUrl = buildHysteriaUri(apiUrl, client.name, userPass, `${name} - ${client.name}`);
+        if (type === "hysteria2_python") {
+          const { buildHysteriaFlaskUri } = await import("@/lib/hysteria2");
+          accessUrl = buildHysteriaFlaskUri(apiUrl, client.name, userPass, `${name} - ${client.name}`);
+        } else {
+          accessUrl = buildHysteriaUri(apiUrl, client.name, userPass, `${name} - ${client.name}`);
+        }
       } else if (type === "3x-ui") {
         const { addClient3xui } = await import("@/lib/3x-ui");
         uuid = crypto.randomUUID();
@@ -237,9 +246,10 @@ export async function updateServer(formData: FormData) {
     } catch (err: any) {
       return { error: `Failed to connect to 3x-ui panel: ${err.message}` };
     }
-  } else if (type === "hysteria2") {
+  } else if (type === "hysteria2" || type === "hysteria2_python") {
     try {
-      await loginHysteria(apiUrl, finalUsername, finalPassword);
+      const usernameParam = type === "hysteria2_python" ? "python_flask" : finalUsername;
+      await loginHysteria(apiUrl, usernameParam, finalPassword);
     } catch (err: any) {
       return { error: `Failed to authenticate with Hysteria2 Server. ${err.message}` };
     }
@@ -308,9 +318,10 @@ export async function syncServerKeys(serverId: string, selectedClientIds?: strin
   // 5. Generate keys for missing clients
   let hy2Token = "";
   let cookie3xui = "";
-  if (server.type === "hysteria2") {
+  if (server.type === "hysteria2" || server.type === "hysteria2_python") {
     try {
-      hy2Token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
+      const usernameParam = server.type === "hysteria2_python" ? "python_flask" : server.auth_username;
+      hy2Token = await loginHysteria(server.api_url, usernameParam, server.auth_password);
     } catch (err: any) {
       return { error: `Failed to authenticate with Hysteria2 Server. ${err.message}` };
     }
@@ -336,11 +347,16 @@ export async function syncServerKeys(serverId: string, selectedClientIds?: strin
         const key = await createOutlineKey(server.api_url, keyName);
         keyId = key.id;
         accessUrl = key.accessUrl;
-      } else if (server.type === "hysteria2") {
+      } else if (server.type === "hysteria2" || server.type === "hysteria2_python") {
         const userPass = crypto.randomBytes(3).toString('hex');
         await createHysteriaUser(server.api_url, hy2Token, client.name, userPass);
         keyId = userPass;
-        accessUrl = buildHysteriaUri(server.api_url, client.name, userPass, `${server.name} - ${client.name}`);
+        if (server.type === "hysteria2_python") {
+          const { buildHysteriaFlaskUri } = await import("@/lib/hysteria2");
+          accessUrl = buildHysteriaFlaskUri(server.api_url, client.name, userPass, `${server.name} - ${client.name}`);
+        } else {
+          accessUrl = buildHysteriaUri(server.api_url, client.name, userPass, `${server.name} - ${client.name}`);
+        }
       } else if (server.type === "3x-ui") {
         const { addClient3xui } = await import("@/lib/3x-ui");
         uuid = crypto.randomUUID();

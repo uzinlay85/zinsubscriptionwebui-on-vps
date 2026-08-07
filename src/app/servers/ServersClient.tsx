@@ -26,6 +26,7 @@ type SortDir = "asc" | "desc";
 const TYPE_LABEL: Record<string, { label: string; color: string }> = {
   outline: { label: "Outline", color: "bg-blue-500/15 text-blue-400 border-blue-500/20" },
   hysteria2: { label: "Hysteria2", color: "bg-violet-500/15 text-violet-400 border-violet-500/20" },
+  hysteria2_python: { label: "Hysteria2 (Python)", color: "bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/20" },
   "3x-ui": { label: "3x-UI", color: "bg-orange-500/15 text-orange-400 border-orange-500/20" },
 };
 
@@ -159,7 +160,7 @@ function ServerCardView({
       <div className="space-y-2 mt-2 flex-1">
         <div>
           <p className="text-xs text-zinc-500 mb-1">
-            {server.type === "hysteria2"
+            {server.type === "hysteria2" || server.type === "hysteria2_python"
               ? "Web UI Base URL"
               : server.type === "3x-ui"
               ? "Panel URL"
@@ -178,23 +179,34 @@ function ServerCardView({
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2">
-            <div>
-              <p className="text-xs text-zinc-500 mb-1">
-                {server.type === "3x-ui" ? "Panel User" : "Admin User"}
-              </p>
-              <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">
-                {server.auth_username || server.username || ""}
-              </p>
-            </div>
-            {server.type === "3x-ui" ? (
-              <div>
-                <p className="text-xs text-zinc-500 mb-1">Inbound ID</p>
-                <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">
-                  {server.inbound_id}
-                </p>
-              </div>
+            {server.type !== "hysteria2_python" ? (
+              <>
+                <div>
+                  <p className="text-xs text-zinc-500 mb-1">
+                    {server.type === "3x-ui" ? "Panel User" : "Admin User"}
+                  </p>
+                  <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">
+                    {server.auth_username || server.username || ""}
+                  </p>
+                </div>
+                {server.type === "3x-ui" ? (
+                  <div>
+                    <p className="text-xs text-zinc-500 mb-1">Inbound ID</p>
+                    <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">
+                      {server.inbound_id}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xs text-zinc-500 mb-1">Admin Pass</p>
+                    <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">
+                      ••••••
+                    </p>
+                  </div>
+                )}
+              </>
             ) : (
-              <div>
+              <div className="col-span-2">
                 <p className="text-xs text-zinc-500 mb-1">Admin Pass</p>
                 <p className="text-sm text-zinc-300 font-mono truncate bg-white/5 px-2 py-1.5 rounded-lg border border-white/5">
                   ••••••

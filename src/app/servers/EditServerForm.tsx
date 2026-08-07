@@ -102,24 +102,26 @@ export function EditServerForm({ server }: { server: any }) {
                 </div>
               )}
 
-              {(server.type === "hysteria2" || server.type === "3x-ui") && (
+              {(server.type === "hysteria2" || server.type === "hysteria2_python" || server.type === "3x-ui") && (
                 <>
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
+                    {server.type !== "hysteria2_python" && (
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-400 mb-1">
+                          {server.type === "3x-ui" ? "Panel Username" : "Auth Username (optional)"}
+                        </label>
+                        <input 
+                          type="text" 
+                          name={server.type === "3x-ui" ? "username" : "authUsername"} 
+                          defaultValue={server.type === "3x-ui" ? server.username : server.auth_username}
+                          required={server.type === "3x-ui"}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                        />
+                      </div>
+                    )}
+                    <div className={server.type === "hysteria2_python" ? "col-span-2" : ""}>
                       <label className="block text-sm font-medium text-zinc-400 mb-1">
-                        {server.type === "hysteria2" ? "Auth Username (optional)" : "Panel Username"}
-                      </label>
-                      <input 
-                        type="text" 
-                        name={server.type === "3x-ui" ? "username" : "authUsername"} 
-                        defaultValue={server.type === "3x-ui" ? server.username : server.auth_username}
-                        required={server.type === "3x-ui"}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-zinc-400 mb-1">
-                        {server.type === "hysteria2" ? "Auth Password" : "Panel Password"}
+                        {server.type === "3x-ui" ? "Panel Password" : "Admin Password"}
                       </label>
                       <input 
                         type="text" 
@@ -130,6 +132,9 @@ export function EditServerForm({ server }: { server: any }) {
                       />
                     </div>
                   </div>
+                </>
+              )}
+
                   {server.type === "3x-ui" && (
                     <>
                       <div>
@@ -167,8 +172,6 @@ export function EditServerForm({ server }: { server: any }) {
                       </div>
                     </>
                   )}
-                </>
-              )}
 
               <div className="pt-4 flex justify-end gap-3">
                 <button 

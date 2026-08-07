@@ -10,6 +10,7 @@ export function AddServerForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serverType, setServerType] = useState<"outline" | "hysteria2" | "3x-ui">("outline");
+  const [hysteriaBackend, setHysteriaBackend] = useState<"express" | "python">("express");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -22,7 +23,10 @@ export function AddServerForm() {
     try {
       setLoading(true);
       setError(null);
-      formData.append("type", serverType);
+      const finalType = serverType === "hysteria2"
+        ? (hysteriaBackend === "python" ? "hysteria2_python" : "hysteria2")
+        : serverType;
+      formData.append("type", finalType);
       const result = await addServer(formData);
       
       if (result?.error) {
@@ -130,24 +134,46 @@ export function AddServerForm() {
                 </div>
               )}
 
-              {(serverType === "hysteria2" || serverType === "3x-ui") && (
+              {serverType === "hysteria2" && (
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1.5">Hysteria2 Backend Style</label>
+                  <div className="flex bg-zinc-900/50 p-1 rounded-xl gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setHysteriaBackend("express")}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${hysteriaBackend === "express" ? "bg-purple-500/20 text-purple-400 border border-purple-500/30" : "text-zinc-400 border border-transparent hover:bg-white/5"}`}
+                    >
+                      Express Backend
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHysteriaBackend("python")}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${hysteriaBackend === "python" ? "bg-purple-500/20 text-purple-400 border border-purple-500/30" : "text-zinc-400 border border-transparent hover:bg-white/5"}`}
+                    >
+                      Python Web Panel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {((serverType === "hysteria2" && hysteriaBackend === "express") || serverType === "3x-ui") && (
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-zinc-400 mb-1">
-                        {serverType === "hysteria2" ? "Auth Username (optional)" : "Panel Username"}
+                        {serverType === "3x-ui" ? "Panel Username" : "Auth Username (optional)"}
                       </label>
                       <input 
                         type="text" 
                         name={serverType === "3x-ui" ? "username" : "authUsername"} 
                         required={serverType === "3x-ui"}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                        placeholder={serverType === "hysteria2" ? "e.g. admin" : "admin"}
+                        placeholder={serverType === "3x-ui" ? "admin" : "e.g. admin"}
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-zinc-400 mb-1">
-                        {serverType === "hysteria2" ? "Auth Password" : "Panel Password"}
+                        {serverType === "3x-ui" ? "Panel Password" : "Auth Password"}
                       </label>
                       <input 
                         type="password" 
@@ -158,42 +184,56 @@ export function AddServerForm() {
                       />
                     </div>
                   </div>
-                  {serverType === "3x-ui" && (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-zinc-400 mb-1">Inbound ID</label>
-                        <input 
-                          type="number" 
-                          name="inboundId" 
-                          required
-                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                          placeholder="e.g. 1"
-                        />
-                        <p className="text-xs text-zinc-500 mt-1">The ID of the inbound where clients will be added.</p>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-zinc-400 mb-1">External Domain (Optional)</label>
-                          <input 
-                            type="text" 
-                            name="externalDomain" 
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                            placeholder="e.g. sgvless.truehand.top"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-zinc-400 mb-1">External Port (Optional)</label>
-                          <input 
-                            type="number" 
-                            name="externalPort" 
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                            placeholder="e.g. 443"
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
+                </>
+              )}
+
+              {serverType === "hysteria2" && hysteriaBackend === "python" && (
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">Admin Password</label>
+                  <input 
+                    type="password" 
+                    name="authPassword" 
+                    required
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                    placeholder="e.g. admin123"
+                  />
+                </div>
+              )}
+
+              {serverType === "3x-ui" && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Inbound ID</label>
+                    <input 
+                      type="number" 
+                      name="inboundId" 
+                      required
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                      placeholder="e.g. 1"
+                    />
+                    <p className="text-xs text-zinc-500 mt-1">The ID of the inbound where clients will be added.</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">External Domain (Optional)</label>
+                      <input 
+                        type="text" 
+                        name="externalDomain" 
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                        placeholder="e.g. sgvless.truehand.top"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">External Port (Optional)</label>
+                      <input 
+                        type="number" 
+                        name="externalPort" 
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                        placeholder="e.g. 443"
+                      />
+                    </div>
+                  </div>
                 </>
               )}
 

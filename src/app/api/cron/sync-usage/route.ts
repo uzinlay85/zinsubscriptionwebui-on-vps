@@ -44,6 +44,45 @@ async function fetch3xuiMetrics(server: any): Promise<Record<string, number>> {
   }
 }
 
+// Helper to fetch Hysteria2 Flask metrics by scraping the Web UI
+async function fetchHysteriaFlaskMetrics(server: any): Promise<Record<string, number>> {
+  try {
+    const { loginHysteriaFlask, parseFormattedBytes } = await import("@/lib/hysteria2");
+    const finalPassword = server.password || server.auth_password;
+    const token = await loginHysteriaFlask(server.api_url, finalPassword);
+    const parsed = JSON.parse(token);
+    const cookie = parsed.cookie;
+
+    let base = server.api_url;
+    if (base.endsWith('/')) {
+      base = base.slice(0, -1);
+    }
+
+    const res = await fetch(`${base}/`, {
+      headers: { Cookie: cookie },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!res.ok) return {};
+    const html = await res.text();
+
+    const metrics: Record<string, number> = {};
+    const rowRegex = /<tr>\s*<td>\s*<b>([^<]+)<\/b>\s*<\/td>\s*<td>\s*<code>([^<]+)<\/code>\s*<\/td>\s*<td>[\s\S]*?<\/td>\s*<td[^>]*>\s*<span class="usage-badge">⬇️\s*([^<]+)<\/span>\s*<br>\s*<span class="usage-badge"[^>]*>⬆️\s*([^<]+)<\/span>/g;
+    
+    let match;
+    while ((match = rowRegex.exec(html)) !== null) {
+      const password = match[2].trim();
+      const txBytes = parseFormattedBytes(match[3]);
+      const rxBytes = parseFormattedBytes(match[4]);
+      metrics[password] = txBytes + rxBytes; // use user password as key since it's the outline_key_id
+    }
+    return metrics;
+  } catch (e) {
+    console.error("Failed to fetch Hysteria Flask metrics", e);
+    return {};
+  }
+}
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
@@ -101,6 +140,8 @@ export async function GET(request: Request) {
           serverMetricsMap.set(server.id, await fetchOutlineMetrics(server.api_url));
         } else if (server.type === "3x-ui") {
           serverMetricsMap.set(server.id, await fetch3xuiMetrics(server));
+        } else if (server.type === "hysteria2_python") {
+          serverMetricsMap.set(server.id, await fetchHysteriaFlaskMetrics(server));
         }
         // Hysteria2 metrics not natively fetchable
       })
@@ -124,6 +165,8 @@ export async function GET(request: Request) {
         } else if (server.type === "3x-ui") {
           const keyName = `${server.name} - ${client.name}`;
           currentBytes = metrics[keyName] || metrics[client.name] || metrics[key.uuid] || 0;
+        } else if (server.type === "hysteria2_python") {
+          currentBytes = metrics[key.outline_key_id] || 0;
         }
 
         const lastSeenBytes = key.last_seen_bytes || 0;

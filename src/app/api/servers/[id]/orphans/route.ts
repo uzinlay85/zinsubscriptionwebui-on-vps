@@ -62,13 +62,14 @@ export async function GET(
           }
         }
       }
-    } else if (server.type === "hysteria2") {
-      const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
+    } else if (server.type === "hysteria2" || server.type === "hysteria2_python") {
+      const usernameParam = server.type === "hysteria2_python" ? "python_flask" : server.auth_username;
+      const token = await loginHysteria(server.api_url, usernameParam, server.auth_password);
       const serverKeys = await fetchHysteriaUsers(server.api_url, token);
       for (const k of serverKeys) {
         // Hysteria2 uses password as outline_key_id in our DB
         if (k.password && !dbKeys.includes(k.password)) {
-          orphans.push({ id: k.password, name: k.username || "Unknown", type: "hysteria2" });
+          orphans.push({ id: k.password, name: k.username || "Unknown", type: server.type });
         }
       }
     }
@@ -136,8 +137,9 @@ export async function POST(
           }
         }
       }
-    } else if (server.type === "hysteria2") {
-      const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
+    } else if (server.type === "hysteria2" || server.type === "hysteria2_python") {
+      const usernameParam = server.type === "hysteria2_python" ? "python_flask" : server.auth_username;
+      const token = await loginHysteria(server.api_url, usernameParam, server.auth_password);
       for (const keyId of orphanIds) {
         try {
           // deleteHysteriaUser expects the user's password (which is what we use as ID here)

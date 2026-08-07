@@ -67,9 +67,10 @@ export async function GET(request: Request) {
         }
 
         // --- Hysteria2: set expiry_days to 0 (blocks immediately) ---
-        else if (server.type === "hysteria2") {
+        else if (server.type === "hysteria2" || server.type === "hysteria2_python") {
           try {
-            const token = await loginHysteria(server.api_url, server.auth_username, server.auth_password);
+            const usernameParam = server.type === "hysteria2_python" ? "python_flask" : server.auth_username;
+            const token = await loginHysteria(server.api_url, usernameParam, server.auth_password);
             const clientName = key.clients?.name || "";
             await disableHysteriaUser(server.api_url, token, key.outline_key_id, clientName);
             disabledHysteria++;
