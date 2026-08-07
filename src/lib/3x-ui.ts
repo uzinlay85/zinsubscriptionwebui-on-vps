@@ -201,6 +201,88 @@ export async function addClient3xui(
   return fetchOrBuildLink(cleanUrl, newClient.subId, serverName, inbound, newClient, apiUrl, server);
 }
 
+function adjustClientLink(link: string, inbound: any, server: any, serverName: string): string {
+  try {
+    if (!link) return "";
+    
+    let stream;
+    try {
+      stream = typeof inbound.streamSettings === "string" ? JSON.parse(inbound.streamSettings) : inbound.streamSettings;
+    } catch(e) {
+      stream = {};
+    }
+    const extProxy = stream.externalProxy?.[0] || {};
+    
+    const extHost = server.external_domain || extProxy.dest || "";
+    const extPort = server.external_port || extProxy.port || 0;
+    
+    if (link.startsWith("vmess://")) {
+      const b64 = link.substring(8).trim();
+      const decoded = Buffer.from(b64, "base64").toString("utf-8");
+      const obj = JSON.parse(decoded);
+      
+      if (extHost) {
+        obj.add = extHost;
+      }
+      if (extPort) {
+        obj.port = extPort;
+      }
+      if (obj.port === 443 || extPort === 443) {
+        obj.tls = "tls";
+        if (!obj.sni) obj.sni = obj.add;
+        if (!obj.host) obj.host = obj.add;
+      }
+      if (serverName) {
+        obj.ps = serverName;
+      }
+      return `vmess://${Buffer.from(JSON.stringify(obj)).toString("base64")}`;
+    }
+    
+    if (link.startsWith("vless://") || link.startsWith("trojan://")) {
+      const type = link.startsWith("vless://") ? "vless" : "trojan";
+      const parts = link.substring(type.length + 3).split("#");
+      const mainPart = parts[0];
+      const hashPart = parts[1] || "";
+      
+      const mainSplit = mainPart.split("?");
+      const connectionPart = mainSplit[0];
+      const queryPart = mainSplit[1] || "";
+      
+      const connSplit = connectionPart.split("@");
+      const credentials = connSplit[0];
+      const hostPort = connSplit[1];
+      
+      const hpSplit = hostPort.split(":");
+      let currentHost = hpSplit[0];
+      let currentPort = hpSplit[1] || "";
+      
+      let finalHost = extHost || currentHost;
+      let finalPort = extPort ? String(extPort) : currentPort;
+      
+      const params = new URLSearchParams(queryPart);
+      if (Number(finalPort) === 443) {
+        params.set("security", "tls");
+        if (extProxy.sni) {
+          params.set("sni", extProxy.sni);
+        } else if (!params.get("sni")) {
+          params.set("sni", finalHost);
+        }
+        if (!params.get("host") && params.get("type") === "ws") {
+          params.set("host", finalHost);
+        }
+      }
+      
+      const qs = params.toString();
+      const finalHash = serverName ? encodeURIComponent(serverName) : hashPart;
+      
+      return `${type}://${credentials}@${finalHost}:${finalPort}${qs ? "?" + qs : ""}${finalHash ? "#" + finalHash : ""}`;
+    }
+  } catch (e) {
+    console.error("Error adjusting client link:", e);
+  }
+  return link;
+}
+
 async function fetchOrBuildLink(cleanUrl: string, subId: string, serverName: string, inbound: any, clientObj: any, apiUrl: string, server: any): Promise<string> {
   // Try to fetch the link from the panel's own subscription endpoint to get accurate external proxies/hosts
   try {
@@ -221,9 +303,8 @@ async function fetchOrBuildLink(cleanUrl: string, subId: string, serverName: str
       }
       const links = decoded.split("\n").filter((l: string) => l.trim().length > 0 && l.includes("://"));
       if (links.length > 0) {
-        // Return the first link and append our own server name
-        const baseUrl = links[0].split("#")[0];
-        return `${baseUrl}#${encodeURIComponent(serverName)}`;
+        // Return the first link adjusted with external Proxy / host / port info
+        return adjustClientLink(links[0], inbound, server, serverName);
       }
     }
   } catch (err) {
@@ -250,6 +331,7 @@ function build3xuiLink(inbound: any, client: any, serverName: string, apiUrl: st
   let path = "";
   let sni = "";
   let alpn = "";
+  let fingerprint = "";
 
   if (net === "ws") {
     path = stream.wsSettings?.path || "";
@@ -263,16 +345,26 @@ function build3xuiLink(inbound: any, client: any, serverName: string, apiUrl: st
     }
   }
 
+  // Parse external proxy if available
+  const extProxy = stream.externalProxy?.[0] || {};
+
   if (sec === "tls" || sec === "reality") {
     const tlsSet = sec === "reality" ? stream.realitySettings : stream.tlsSettings;
     sni = tlsSet?.serverName || "";
     if (tlsSet?.alpn && tlsSet.alpn.length > 0) {
       alpn = tlsSet.alpn.join(",");
     }
+  } else if (extProxy.forceTls === "tls" || extProxy.dest) {
+    if (extProxy.forceTls === "tls") sec = "tls";
+    sni = extProxy.sni || sni;
+    if (extProxy.alpn && extProxy.alpn.length > 0) {
+      alpn = extProxy.alpn.join(",");
+    }
+    fingerprint = extProxy.fingerprint || "";
   }
 
-  // Use explicit external domain if provided, else fallback to sni, host, or apiUrl
-  let address = server.external_domain || sni || host;
+  // Use explicit external domain if provided, else fallback to externalProxy, sni, host, or apiUrl
+  let address = server.external_domain || extProxy.dest || sni || host;
   if (!address) {
     try {
       address = new URL(apiUrl).hostname;
@@ -281,8 +373,8 @@ function build3xuiLink(inbound: any, client: any, serverName: string, apiUrl: st
     }
   }
 
-  // Use explicit external port if provided, else fallback to inbound port
-  let port = server.external_port || inbound.port;
+  // Use explicit external port if provided, else fallback to externalProxy or inbound port
+  let port = server.external_port || extProxy.port || inbound.port;
 
   // If external port is 443, it's highly likely they are using TLS (e.g. via Cloudflare)
   if (port === 443 && sec === "none") {
@@ -299,6 +391,7 @@ function build3xuiLink(inbound: any, client: any, serverName: string, apiUrl: st
   if (alpn) query.set("alpn", alpn);
   if (host) query.set("host", host);
   if (path) query.set("path", path);
+  if (fingerprint) query.set("fp", fingerprint);
 
   if (protocol === "vless") {
     query.set("encryption", "none");
