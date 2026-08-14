@@ -18,7 +18,43 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-INSTALL_DIR="/opt/vpn-sub-panel"
+# Detect installation directory
+detect_install_dir() {
+    # If running from within the repo
+    if [ -f "docker-compose.yml" ] && [ -d "app" ]; then
+        INSTALL_DIR=$(pwd)
+        return
+    fi
+    
+    if [ -f "python-sub-panel/docker-compose.yml" ] && [ -d "python-sub-panel/app" ]; then
+        INSTALL_DIR=$(pwd)/python-sub-panel
+        return
+    fi
+    
+    # Check common locations
+    if [ -d "/opt/vpn-sub-panel" ]; then
+        INSTALL_DIR="/opt/vpn-sub-panel"
+        return
+    fi
+    
+    if [ -d "/home/zinko/zinsubscriptionwebui-on-vps/python-sub-panel" ]; then
+        INSTALL_DIR="/home/zinko/zinsubscriptionwebui-on-vps/python-sub-panel"
+        return
+    fi
+    
+    # Ask user if not found
+    echo -e "${YELLOW}Could not detect installation directory.${NC}"
+    read -p "Enter the full path to your installation directory (e.g., /opt/vpn-sub-panel): " INSTALL_DIR
+    
+    if [ ! -d "$INSTALL_DIR" ]; then
+        echo -e "${RED}Directory not found: $INSTALL_DIR${NC}"
+        exit 1
+    fi
+}
+
+detect_install_dir
+
+echo -e "${GREEN}[✓]${NC} Detected installation directory: $INSTALL_DIR"
 
 # Function to ask yes/no
 ask_yes_no() {
@@ -33,10 +69,11 @@ ask_yes_no() {
 }
 
 # Step 1: Stop and remove Docker containers
+echo ""
 echo -e "${YELLOW}[1/5] Stopping Docker containers...${NC}"
 if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
     cd "$INSTALL_DIR"
-    if command -v docker &> /dev/null && command -v docker compose &> /dev/null; then
+    if command -v docker &> /dev/null && docker compose version &> /dev/null; then
         docker compose down -v 2>/dev/null || true
         echo -e "${GREEN}[✓]${NC} Docker containers stopped and removed"
     else
@@ -62,7 +99,17 @@ fi
 # Step 3: Stop uvicorn process if running
 echo ""
 echo -e "${YELLOW}[3/5] Stopping uvicorn process...${NC}"
-if [ -f "$INSTALL_DIR/python-sub-panel/panel.pid" ]; then
+if [ -f "$INSTALL_DIR/panel.pid" ]; then
+    PID=$(cat "$INSTALL_DIR/panel.pid")
+    if kill -0 "$PID" 2>/dev/null; then
+        kill "$PID" 2>/dev/null || true
+        sleep 1
+        echo -e "${GREEN}[✓]${NC} uvicorn process (PID: $PID) stopped"
+    else
+        echo -e "${YELLOW}[!]${NC} Process $PID not running"
+    fi
+    rm -f "$INSTALL_DIR/panel.pid"
+elif [ -f "$INSTALL_DIR/python-sub-panel/panel.pid" ]; then
     PID=$(cat "$INSTALL_DIR/python-sub-panel/panel.pid")
     if kill -0 "$PID" 2>/dev/null; then
         kill "$PID" 2>/dev/null || true
