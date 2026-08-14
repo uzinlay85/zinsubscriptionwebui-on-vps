@@ -6,44 +6,73 @@ import base64
 from typing import Optional, Dict, Any, List
 from app.models import Server, Client
 
-async def login_3xui(session: aiohttp.ClientSession, server: Server) -> bool:
-    api_base = server.api_url.rstrip('/')
-    try:
-        async with session.get(f"{api_base}/login", timeout=aiohttp.ClientTimeout(total=5), ssl=False) as resp:
-            html = await resp.text() if resp.status == 200 else ""
-            
-        csrf_token = ""
-        csrf_match = re.search(r'csrfToken.*?"([^"]+)"', html) or re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', html)
-        if csrf_match:
-            csrf_token = csrf_match.group(1)
-            
-        post_data = {"username": server.username, "password": server.password}
-        if csrf_token:
-            post_data["csrf_token"] = csrf_token
-            
-        async with session.post(
-            f"{api_base}/login",
-            data=post_data,
-            timeout=aiohttp.ClientTimeout(total=5),
-            ssl=False,
-            allow_redirects=True
-        ) as login_resp:
-            if login_resp.status == 200:
-                res_text = await login_resp.text()
-                if "success" in res_text or "inbounds" in res_text or login_resp.url.path != "/login":
-                    return True
-                    
-        async with session.post(
-            f"{api_base}/login",
-            json={"username": server.username, "password": server.password},
-            timeout=aiohttp.ClientTimeout(total=5),
-            ssl=False
-        ) as login_resp2:
-            if login_resp2.status == 200:
-                return True
-    except Exception:
-        pass
-    return False
+def get_base_urls(server: Server) -> List[str]:
+    raw = server.api_url.rstrip('/')
+    urls = [raw]
+    if "://" in raw:
+        scheme = raw.split("://")[0]
+        host_part = raw.split("://")[1].split("/")[0]
+        origin = f"{scheme}://{host_part}"
+        if origin not in urls:
+            urls.append(origin)
+    return urls
+
+async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional[str]:
+    u_name = server.username or server.auth_username or "admin"
+    u_pass = server.password or server.auth_password or "admin"
+    
+    base_urls = get_base_urls(server)
+    for api_base in base_urls:
+        try:
+            async with session.get(f"{api_base}/login", timeout=aiohttp.ClientTimeout(total=5), ssl=False) as resp:
+                html = await resp.text() if resp.status == 200 else ""
+                
+            csrf_token = ""
+            csrf_match = re.search(r'csrfToken.*?"([^"]+)"', html) or re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', html)
+            if csrf_match:
+                csrf_token = csrf_match.group(1)
+                
+            post_data = {"username": u_name, "password": u_pass}
+            if csrf_token:
+                post_data["csrf_token"] = csrf_token
+                
+            async with session.post(
+                f"{api_base}/login",
+                data=post_data,
+                timeout=aiohttp.ClientTimeout(total=5),
+                ssl=False,
+                allow_redirects=True
+            ) as login_resp:
+                if login_resp.status == 200:
+                    res_text = await login_resp.text()
+                    try:
+                        res_json = json.loads(res_text)
+                        if res_json.get("success"):
+                            return api_base
+                    except Exception:
+                        pass
+                    if "success" in res_text or "inbounds" in res_text or "Clients" in res_text:
+                        return api_base
+
+            async with session.post(
+                f"{api_base}/login",
+                json={"username": u_name, "password": u_pass},
+                timeout=aiohttp.ClientTimeout(total=5),
+                ssl=False
+            ) as login_resp2:
+                if login_resp2.status == 200:
+                    res_text2 = await login_resp2.text()
+                    try:
+                        res_json2 = json.loads(res_text2)
+                        if res_json2.get("success"):
+                            return api_base
+                    except Exception:
+                        pass
+                    if "success" in res_text2 or "inbounds" in res_text2:
+                        return api_base
+        except Exception:
+            pass
+    return None
 
 def parse_server_host_port(server: Server):
     raw = server.api_url.replace('https://', '').replace('http://', '').rstrip('/')
@@ -58,13 +87,12 @@ def parse_server_host_port(server: Server):
     return ext_host, ext_port
 
 async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_id: str) -> Optional[str]:
-    api_base = server.api_url.rstrip('/')
     ext_host, ext_port = parse_server_host_port(server)
     
     try:
         async with aiohttp.ClientSession() as session:
-            logged_in = await login_3xui(session, server)
-            if not logged_in:
+            api_base = await login_3xui(session, server)
+            if not api_base:
                 return None
                 
             inbound_id = server.inbound_id
@@ -265,11 +293,10 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
     return None
 
 async def delete_3xui_client(server: Server, client_uuid: str) -> bool:
-    api_base = server.api_url.rstrip('/')
     try:
         async with aiohttp.ClientSession() as session:
-            logged_in = await login_3xui(session, server)
-            if not logged_in:
+            api_base = await login_3xui(session, server)
+            if not api_base:
                 return False
                 
             inbound_id = server.inbound_id or 1

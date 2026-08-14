@@ -336,30 +336,13 @@ async def delete_orphan_keys(server: Server, orphan_ids: List[str], db: Session)
 async def fetch_3xui_metrics(server: Server, keys: list) -> Dict[str, int]:
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(
-                server.api_url,
-                timeout=aiohttp.ClientTimeout(total=5),
-                ssl=False
-            ) as resp:
-                if resp.status != 200:
-                    return {}
-                html = await resp.text()
-                csrf_match = re.search(r'csrfToken.*?"([^"]+)"', html)
-                if not csrf_match:
-                    return {}
-                csrf_token = csrf_match.group(1)
-                
-                async with session.post(
-                    server.api_url + "/login",
-                    data={"username": server.username, "password": server.password},
-                    timeout=aiohttp.ClientTimeout(total=5),
-                    ssl=False
-                ) as login_resp:
-                    if login_resp.status != 200:
-                        return {}
+            from app.services.three_xui import login_3xui
+            api_base = await login_3xui(session, server)
+            if not api_base:
+                return {}
             
             async with session.get(
-                server.api_url + "/panel/api/inbounds/clientTraffics",
+                f"{api_base}/panel/api/inbounds/clientTraffics",
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False
             ) as resp:
@@ -369,9 +352,14 @@ async def fetch_3xui_metrics(server: Server, keys: list) -> Dict[str, int]:
                         traffics = {}
                         for item in data.get("obj", []):
                             email = item.get("email", "")
+                            sub_id = item.get("subId", "")
+                            uuid_val = item.get("id", "")
                             up = item.get("up", 0) or 0
                             down = item.get("down", 0) or 0
-                            traffics[email] = up + down
+                            total = up + down
+                            if email: traffics[email] = total
+                            if sub_id: traffics[sub_id] = total
+                            if uuid_val: traffics[uuid_val] = total
                         return traffics
     except Exception:
         pass
