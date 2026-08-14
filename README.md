@@ -282,11 +282,15 @@ python-sub-panel/
 
 #### ⚙️ VPS Deployment (Python Edition)
 
+There are **two deployment options** for the Python edition.
+
+##### Option A: Docker Compose (Recommended)
+
 ```bash
 # 1. SSH into your VPS
-ssh ubuntu@your-vps-ip
+ssh root@your-vps-ip
 
-# 2. Clone or copy the project
+# 2. Clone or update the project
 git clone https://github.com/uzinlay85/zinsubscriptionwebui-on-vps.git
 cd zinsubscriptionwebui-on-vps/python-sub-panel
 
@@ -297,9 +301,164 @@ nano .env
 # 4. Start with Docker Compose
 docker compose up -d --build
 
-# 5. Access admin panel
+# 5. Check logs
+docker compose logs -f
+
+# 6. Access admin panel
 # Browser: http://<your-vps-ip>:8000/<ADMIN_SECRET_PATH>
 ```
+
+##### Option B: Direct Python / venv (No Docker Required)
+
+Use this if your VPS does not have Docker installed.
+
+```bash
+# 1. SSH into your VPS
+ssh root@your-vps-ip
+
+# 2. Clone or update the project
+git clone https://github.com/uzinlay85/zinsubscriptionwebui-on-vps.git
+cd zinsubscriptionwebui-on-vps/python-sub-panel
+
+# 3. Install system dependencies
+apt update
+apt install -y python3-venv python3-pip python3-dev build-essential libssl-dev libffi-dev
+
+# 4. Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# 5. Install Python dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 6. Copy environment file and edit
+cp .env.example .env
+nano .env
+
+# 7. Run the application
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# 8. Verify it's running
+curl http://localhost:8000/health
+```
+
+**Note:** When running without Docker, background tasks (APScheduler) still run automatically inside the uvicorn process. No external crontab is required.
+
+---
+
+##### Production: systemd Service (No Docker)
+
+To run the panel as a background service that starts on boot:
+
+```bash
+# 1. Create systemd service file
+nano /etc/systemd/system/vpn-panel.service
+```
+
+Paste the following (replace `/home/zinko` with your actual path):
+
+```ini
+[Unit]
+Description=Unified VPN Subscription Panel (FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/zinko/zinsubscriptionwebui-on-vps/python-sub-panel
+Environment="PATH=/home/zinko/zinsubscriptionwebui-on-vps/python-sub-panel/venv/bin"
+ExecStart=/home/zinko/zinsubscriptionwebui-on-vps/python-sub-panel/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+# 2. Reload systemd and enable the service
+systemctl daemon-reload
+systemctl enable vpn-panel
+systemctl start vpn-panel
+
+# 3. Check status
+systemctl status vpn-panel
+
+# 4. View logs
+journalctl -u vpn-panel -f
+```
+
+---
+
+##### Production: Nginx Reverse Proxy + SSL
+
+For production use with a domain name and HTTPS:
+
+```bash
+# 1. Install Nginx
+apt install -y nginx
+
+# 2. Create Nginx config
+nano /etc/nginx/sites-available/vpn-panel
+```
+
+Paste the following (replace `yourdomain.com` with your actual domain):
+
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+
+    # Redirect HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name yourdomain.com;
+
+    # SSL certificates (will be obtained via Certbot)
+    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+
+    # Security headers
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # Proxy settings
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 10s;
+        proxy_read_timeout 10s;
+    }
+}
+```
+
+```bash
+# 3. Enable the site
+ln -s /etc/nginx/sites-available/vpn-panel /etc/nginx/sites-enabled/
+nginx -t
+systemctl reload nginx
+
+# 4. Obtain SSL certificate with Certbot
+apt install -y certbot python3-certbot-nginx
+certbot --nginx -d yourdomain.com
+
+# 5. Test auto-renewal
+certbot renew --dry-run
+```
+
+Now access your panel at `https://yourdomain.com/<ADMIN_SECRET_PATH>`
+
+---
 
 #### Environment Variables (Python Edition)
 
@@ -325,7 +484,7 @@ The Python edition includes built-in background tasks using APScheduler:
 | Expiry Check | Daily at midnight | Blocks expired clients on all servers |
 | Auto Backup | Daily at 3:00 AM | Uploads JSON backup to WebDAV if enabled |
 
-No external crontab required — everything runs inside the container.
+No external crontab required — everything runs automatically when the app is running.
 
 ---
 
@@ -335,7 +494,7 @@ No external crontab required — everything runs inside the container.
 |---|---|---|
 | **Runtime** | Node.js 18+ | Python 3.11+ |
 | **Database** | Supabase (PostgreSQL) | SQLite (file-based) |
-| **Hosting** | Vercel + VPS Cron | Single VPS (Docker) |
+| **Hosting** | Vercel + VPS Cron | Single VPS (Docker or Direct) |
 | **RAM Usage** | ~150-300MB | ~30-50MB |
 | **External Deps** | Supabase account required | Zero external dependencies |
 | **Background Tasks** | VPS Crontab | Built-in APScheduler |
