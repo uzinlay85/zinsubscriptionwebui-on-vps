@@ -196,15 +196,33 @@ async def flask_delete_user(server: Server, user_pass: str) -> bool:
     except Exception:
         return False
 
+def parse_bytes_from_str(val_str: str, unit_str: str) -> int:
+    try:
+        val = float(val_str)
+        unit = unit_str.upper().strip()
+        if "TB" in unit:
+            return int(val * 1024 * 1024 * 1024 * 1024)
+        elif "GB" in unit:
+            return int(val * 1024 * 1024 * 1024)
+        elif "MB" in unit:
+            return int(val * 1024 * 1024)
+        elif "KB" in unit:
+            return int(val * 1024)
+        else:
+            return int(val)
+    except Exception:
+        return 0
+
 async def flask_fetch_users(server: Server) -> List[Dict[str, Any]]:
     auth = await flask_login(server)
     if not auth:
         return []
     
     try:
+        base_url = server.api_url.rstrip("/")
         async with aiohttp.ClientSession(cookie_jar=auth["cookie"]) as session:
             async with session.get(
-                server.api_url,
+                base_url,
                 timeout=aiohttp.ClientTimeout(total=15),
                 ssl=False
             ) as resp:
@@ -214,29 +232,48 @@ async def flask_fetch_users(server: Server) -> List[Dict[str, Any]]:
                 users = []
                 rows = re.findall(r'<tr>.*?</tr>', html, re.DOTALL)
                 for row in rows:
-                    username_match = re.search(r'<td[^>]*>([\w_-]+)</td>', row)
-                    password_match = re.search(r'<td[^>]*>([\w_-]+)</td>', row)
-                    if username_match:
-                        users.append({
-                            "username": username_match.group(1),
-                            "password": password_match.group(1) if password_match else "",
-                            "tx": 0,
-                            "rx": 0
-                        })
+                    pass_match = re.search(r'<code>([\w_-]+)</code>', row) or re.search(r'hy2://([\w_-]+)@', row)
+                    if not pass_match:
+                        continue
+                    password = pass_match.group(1).strip()
+                    
+                    name_match = re.search(r'<b>(.*?)</b>', row)
+                    username = name_match.group(1).strip() if name_match else password.split("_")[0]
+                    
+                    total_bytes = 0
+                    tot_match = re.search(r'Total:\s*([\d\.]+)\s*([KMGT]?B)', row, re.IGNORECASE)
+                    if tot_match:
+                        total_bytes = parse_bytes_from_str(tot_match.group(1), tot_match.group(2))
+                    else:
+                        tx_match = re.search(r'⬇️\s*([\d\.]+)\s*([KMGT]?B)', row, re.IGNORECASE)
+                        rx_match = re.search(r'⬆️\s*([\d\.]+)\s*([KMGT]?B)', row, re.IGNORECASE)
+                        tx_b = parse_bytes_from_str(tx_match.group(1), tx_match.group(2)) if tx_match else 0
+                        rx_b = parse_bytes_from_str(rx_match.group(1), rx_match.group(2)) if rx_match else 0
+                        total_bytes = tx_b + rx_b
+                        
+                    is_online = ("status-online" in row or "🟢 Online" in row or "Online" in row)
+                    ls_match = re.search(r'(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})', row)
+                    last_seen = ls_match.group(1) if ls_match else None
+                    
+                    users.append({
+                        "username": username,
+                        "password": password,
+                        "bytes": total_bytes,
+                        "is_online": is_online,
+                        "last_seen": last_seen
+                    })
                 return users
     except Exception:
         return []
 
-async def fetch_hysteria2_metrics(server: Server) -> Dict[str, int]:
+async def fetch_hysteria2_metrics(server: Server) -> Dict[str, Any]:
     try:
-        auth = None
-        if server.auth_username and server.auth_password:
-            token = base64.b64encode(f"{server.auth_username}:{server.auth_password}".encode()).decode()
-            auth = {"Authorization": f"Basic {token}"}
+        auth = get_auth_headers(server)
+        base_url = server.api_url.rstrip("/")
         
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                f"{server.api_url}/api/users",
+                f"{base_url}/api/users",
                 headers=auth,
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False
@@ -245,11 +282,27 @@ async def fetch_hysteria2_metrics(server: Server) -> Dict[str, int]:
                     users = await resp.json()
                     metrics = {}
                     for user in users:
-                        username = user.get("username", "")
+                        key = user.get("password") or user.get("username", "")
                         tx = user.get("tx", 0) or 0
                         rx = user.get("rx", 0) or 0
-                        metrics[username] = tx + rx
-                    return metrics
+                        metrics[key] = {
+                            "bytes": tx + rx,
+                            "is_online": user.get("online", False),
+                            "last_seen": user.get("last_seen")
+                        }
+                    if metrics:
+                        return metrics
     except Exception:
         pass
-    return {}
+        
+    flask_users = await flask_fetch_users(server)
+    metrics = {}
+    for fu in flask_users:
+        metric_data = {
+            "bytes": fu["bytes"],
+            "is_online": fu["is_online"],
+            "last_seen": fu["last_seen"]
+        }
+        metrics[fu["password"]] = metric_data
+        metrics[fu["username"]] = metric_data
+    return metrics

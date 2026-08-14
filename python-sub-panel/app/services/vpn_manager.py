@@ -501,10 +501,18 @@ async def sync_all_usage(db: Session):
         
         for k in keys:
             metrics = server_metrics.get(k.server_id, {})
-            current_bytes = metrics.get(k.outline_key_id)
-            if current_bytes is None:
-                current_bytes = metrics.get(client.name, 0)
-            current_bytes = int(current_bytes or 0)
+            user_metric = metrics.get(k.outline_key_id)
+            if user_metric is None:
+                user_metric = metrics.get(client.name, 0)
+                
+            if isinstance(user_metric, dict):
+                current_bytes = int(user_metric.get("bytes", 0) or 0)
+                if user_metric.get("is_online"):
+                    client.last_seen = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                elif user_metric.get("last_seen"):
+                    client.last_seen = user_metric.get("last_seen")
+            else:
+                current_bytes = int(user_metric or 0)
             
             if current_bytes < k.last_seen_bytes * 0.9:
                 delta = current_bytes
@@ -513,10 +521,15 @@ async def sync_all_usage(db: Session):
             
             k.last_seen_bytes = current_bytes
             client_total += delta
+            
+            # If server reports cumulative usage higher than stored, sync directly
+            if current_bytes > client.total_usage_bytes:
+                client.total_usage_bytes = current_bytes
         
-        client.total_usage_bytes += client_total
         if client_total > 0:
-            client.last_seen = datetime.utcnow().isoformat()
+            client.total_usage_bytes += client_total
+            if not client.last_seen:
+                client.last_seen = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         
         if client.data_limit_gb and client.total_usage_bytes >= client.data_limit_gb * 1024 * 1024 * 1024:
             client.status = "disabled"
