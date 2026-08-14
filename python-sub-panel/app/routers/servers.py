@@ -49,8 +49,10 @@ async def get_status(db: Session = Depends(get_db)):
             url = server.api_url.rstrip("/")
             if server.type == "outline":
                 url = f"{url}/access-keys"
-            elif server.type in ["hysteria2", "hysteria2_python"]:
+            elif server.type == "hysteria2":
                 url = f"{url}/api/users"
+            elif server.type == "hysteria2_python":
+                url = url
             
             headers = {}
             if server.auth_username and server.auth_password:

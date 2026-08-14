@@ -46,24 +46,34 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                 db.add(client_key)
         
         elif server.type in ["hysteria2", "hysteria2_python"]:
-            password = generate_password()
-            user_id = password
+            rand_str = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+            password = f"{client.name}_{rand_str}"
+            
             if server.type == "hysteria2":
                 result = await hysteria2.express_create_user(server, client.name, password)
-                if result:
-                    user_id = str(result.get("user_id", password))
+                if result and result.get("password"):
+                    password = result.get("password")
             else:
                 await hysteria2.flask_add_user(server, client.name, password)
             
-            host = server.external_domain or server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0].split(':')[0]
-            port = server.external_port or 443
-            access_url = f"hysteria2://{client.name}:{password}@{host}:{port}?insecure=1&sni={host}#{server.name} - {client.name}"
+            raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
+            if ':' in raw_host_port:
+                parsed_host, parsed_port = raw_host_port.split(':')[0], raw_host_port.split(':')[1]
+            else:
+                parsed_host, parsed_port = raw_host_port, "10443"
+                
+            host = server.external_domain or parsed_host
+            port = server.external_port or int(parsed_port)
+            
+            # Exact format matching Hy2_WebUI_ManusAi:
+            # hy2://<user_pass>@<domain>:<port>/?security=tls&sni=<domain>#<server_name> - <client_name>
+            access_url = f"hy2://{password}@{host}:{port}/?security=tls&sni={host}#{server.name} - {client.name}"
             
             client_key = ClientKey(
                 id=key_id,
                 client_id=client.id,
                 server_id=server.id,
-                outline_key_id=user_id,
+                outline_key_id=password,
                 access_url=access_url,
                 created_at=now,
                 uuid=None,
