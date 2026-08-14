@@ -158,6 +158,13 @@ else
     echo -e "${GREEN}[✓]${NC} .env file already exists, skipping configuration"
 fi
 
+# Load .env variables for display
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
 # Step 4: Create data directory
 echo ""
 echo -e "${YELLOW}[4/6] Creating data directory...${NC}"
@@ -396,6 +403,16 @@ elif command -v docker &> /dev/null && [ -f "$INSTALL_DIR/python-sub-panel/docke
 else
     echo "  kill \$(cat $INSTALL_DIR/python-sub-panel/panel.pid)"
 fi
+echo ""
+echo -e "${YELLOW}Next steps:${NC}"
+echo "1. Access the panel using the URL above"
+echo "2. Login with your admin credentials"
+echo "3. Add your VPN servers"
+echo "4. Create clients and generate subscription links"
+echo ""
+echo -e "${YELLOW}Optional: Setup domain with SSL later${NC}"
+echo "Run: bash setup-domain.sh"
+echo ""
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
 echo "1. Access the panel using the URL above"
