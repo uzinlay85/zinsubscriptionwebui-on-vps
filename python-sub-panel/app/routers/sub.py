@@ -99,8 +99,10 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
     nodes.append(f"📊 Usage: {total_usage / (1024*1024*1024):.2f} GB / {client.data_limit_gb or 'Unlimited'} GB")
     
     if expiry_dt:
-        from datetime import timezone
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
+        if expiry_dt.tzinfo is not None:
+            from datetime import timezone
+            now = datetime.now(timezone.utc)
         days_left = (expiry_dt - now).days
         if days_left >= 0:
             nodes.append(f"⏳ Expire: {expiry_dt.strftime('%Y-%m-%d')} ({days_left} Days Left)")
