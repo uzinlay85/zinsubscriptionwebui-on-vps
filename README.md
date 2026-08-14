@@ -58,6 +58,35 @@ A modern, feature-rich unified web panel to manage **Outline**, **Hysteria2**, a
 
 ---
 
+### ⚡ One-Click Setup (Python FastAPI Edition)
+
+For the fastest deployment, use our automated setup script. This will install Docker, clone the repository, generate secure credentials, and start the application automatically.
+
+```bash
+# SSH into your VPS
+ssh root@your-vps-ip
+
+# Download and run the setup script
+curl -fsSL https://raw.githubusercontent.com/uzinlay85/zinsubscriptionwebui-on-vps/main/python-sub-panel/setup.sh -o setup.sh
+bash setup.sh
+```
+
+The script will:
+1. ✅ Install Docker & Docker Compose (if not present)
+2. ✅ Clone the repository to `/opt/vpn-sub-panel`
+3. ✅ Generate secure random passwords and secrets
+4. ✅ Create `.env` configuration file
+5. ✅ Start the application with Docker Compose
+6. ✅ Configure firewall rules
+7. ✅ Display your admin URL and credentials
+
+**After setup completes**, open your browser and visit:
+```
+http://your-vps-ip:8000/<generated-secret-path>
+```
+
+---
+
 ### 📋 Prerequisites
 
 1. **Supabase Account**: For the PostgreSQL database.
@@ -277,10 +306,46 @@ python-sub-panel/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example
+├── setup.sh              # One-click automated setup script
+├── setup-domain.sh       # Domain + SSL setup script
 └── README.md
 ```
 
-#### ⚙️ VPS Deployment (Python Edition)
+#### ⚡ Quick Start with Setup Script
+
+The fastest way to deploy is using the automated setup script:
+
+```bash
+# SSH into your VPS
+ssh root@your-vps-ip
+
+# Download and run setup
+curl -fsSL https://raw.githubusercontent.com/uzinlay85/zinsubscriptionwebui-on-vps/main/python-sub-panel/setup.sh -o setup.sh
+bash setup.sh
+```
+
+The script will guide you through:
+- Installing Docker automatically
+- Cloning the repository
+- Generating secure credentials
+- Creating `.env` configuration
+- Starting the application
+- Configuring firewall
+
+**Optional: Add Domain + SSL**
+
+After the initial setup, run the domain setup script:
+
+```bash
+cd /opt/vpn-sub-panel/python-sub-panel
+bash setup-domain.sh
+```
+
+This will configure Nginx, obtain SSL certificate from Let's Encrypt, and restart the application.
+
+---
+
+#### ⚙️ Manual VPS Deployment (Python Edition)
 
 There are **two deployment options** for the Python edition.
 

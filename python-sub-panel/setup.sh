@@ -1,0 +1,271 @@
+#!/bin/bash
+set -e
+
+echo "=========================================="
+echo "  VPN Subscription Panel - One Click Setup"
+echo "=========================================="
+echo ""
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+    echo -e "${RED}Please run as root or with sudo${NC}"
+    exit 1
+fi
+
+# Check OS
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS=$ID
+else:
+    echo -e "${RED}Cannot detect OS. This script supports Ubuntu/Debian only.${NC}"
+    exit 1
+fi
+
+if [ "$OS" != "ubuntu" ] && [ "$OS" != "debian" ]; then
+    echo -e "${RED}This script supports Ubuntu/Debian only. Detected: $OS${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}[✓]${NC} OS detected: $OS"
+
+# Function to generate random string
+generate_secret() {
+    cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1
+}
+
+# Function to ask yes/no
+ask_yes_no() {
+    while true; do
+        read -p "$1 (y/n): " yn
+        case $yn in
+            [Yy]* ) return 0;;
+            [Nn]* ) return 1;;
+            * ) echo "Please answer y or n.";;
+        esac
+    done
+}
+
+# Step 1: Install Docker if not present
+echo ""
+echo -e "${YELLOW}[1/6] Checking Docker...${NC}"
+if ! command -v docker &> /dev/null; then
+    echo "Docker not found. Installing Docker..."
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sh get-docker.sh
+    rm get-docker.sh
+    systemctl enable --now docker
+    echo -e "${GREEN}[✓]${NC} Docker installed successfully"
+else
+    echo -e "${GREEN}[✓]${NC} Docker already installed ($(docker --version))"
+fi
+
+if ! command -v docker compose &> /dev/null; then
+    echo "Docker Compose plugin not found. Installing..."
+    apt update
+    apt install -y docker-compose-plugin
+    echo -e "${GREEN}[✓]${NC} Docker Compose installed"
+else
+    echo -e "${GREEN}[✓]${NC} Docker Compose already installed ($(docker compose version --short))"
+fi
+
+# Step 2: Clone or update repository
+echo ""
+echo -e "${YELLOW}[2/6] Setting up project directory...${NC}"
+INSTALL_DIR="/opt/vpn-sub-panel"
+
+if [ -d "$INSTALL_DIR" ]; then
+    echo "Directory $INSTALL_DIR already exists."
+    if ask_yes_no "Do you want to update the existing installation?"; then
+        cd "$INSTALL_DIR"
+        git pull origin main
+        echo -e "${GREEN}[✓]${NC} Repository updated"
+    else
+        echo "Using existing directory."
+    fi
+else
+    echo "Cloning repository..."
+    git clone https://github.com/uzinlay85/zinsubscriptionwebui-on-vps.git "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
+    echo -e "${GREEN}[✓]${NC} Repository cloned"
+fi
+
+cd "$INSTALL_DIR/python-sub-panel"
+
+# Step 3: Create .env file
+echo ""
+echo -e "${YELLOW}[3/6] Configuring environment...${NC}"
+
+if [ ! -f .env ]; then
+    if [ -f .env.example ]; then
+        cp .env.example .env
+    else
+        touch .env
+    fi
+    
+    # Generate secure credentials
+    ADMIN_USERNAME="admin"
+    ADMIN_PASSWORD=$(generate_secret)
+    AUTH_SECRET=$(generate_secret)
+    CRON_SECRET=$(generate_secret)
+    ADMIN_SECRET_PATH=$(generate_secret | tr -d '[:upper:]' | head -c 12)
+    
+    # Ask for admin username
+    read -p "Admin username [default: admin]: " input_username
+    ADMIN_USERNAME=${input_username:-admin}
+    
+    # Ask for admin password
+    read -p "Admin password [default: generated]: " input_password
+    ADMIN_PASSWORD=${input_password:-$ADMIN_PASSWORD}
+    
+    # Ask for app name
+    read -p "App/Brand name [default: My VPN Panel]: " input_app_name
+    APP_NAME=${input_app_name:-"My VPN Panel"}
+    
+    # Ask for sync interval
+    read -p "Usage sync interval in minutes [default: 10]: " input_sync
+    SYNC_INTERVAL=${input_sync:-10}
+    
+    # Write .env file
+    cat > .env << EOF
+ADMIN_USERNAME=$ADMIN_USERNAME
+ADMIN_PASSWORD=$ADMIN_PASSWORD
+AUTH_SECRET=$AUTH_SECRET
+CRON_SECRET=$CRON_SECRET
+ADMIN_SECRET_PATH=$ADMIN_SECRET_PATH
+APP_NAME=$APP_NAME
+PANEL_NAME=VPN Panel
+SYNC_INTERVAL_MINUTES=$SYNC_INTERVAL
+DATABASE_URL=sqlite:///./data/panel.db
+EOF
+
+    echo ""
+    echo -e "${GREEN}[✓]${NC} Configuration saved to .env"
+    echo ""
+    echo "Your credentials:"
+    echo "  Admin URL: http://$(curl -s ifconfig.me):8000/$ADMIN_SECRET_PATH"
+    echo "  Username: $ADMIN_USERNAME"
+    echo "  Password: $ADMIN_PASSWORD"
+    echo ""
+    echo -e "${YELLOW}⚠️  Please save these credentials somewhere safe!${NC}"
+else
+    echo -e "${GREEN}[✓]${NC} .env file already exists, skipping configuration"
+fi
+
+# Step 4: Create data directory
+echo ""
+echo -e "${YELLOW}[4/6] Creating data directory...${NC}"
+mkdir -p data
+chmod 755 data
+echo -e "${GREEN}[✓]${NC} Data directory ready"
+
+# Step 5: Start application
+echo ""
+echo -e "${YELLOW}[5/6] Starting application...${NC}"
+
+if command -v docker &> /dev/null && command -v docker compose &> /dev/null; then
+    echo "Starting with Docker Compose..."
+    docker compose up -d --build
+    
+    # Wait for container to start
+    sleep 3
+    
+    # Check if container is running
+    if docker compose ps | grep -q "Up"; then
+        echo -e "${GREEN}[✓]${NC} Application started with Docker"
+        
+        # Show logs
+        echo ""
+        echo "Recent logs:"
+        docker compose logs --tail=20
+    else
+        echo -e "${RED}[✗]${NC} Failed to start with Docker"
+        echo "Check logs with: docker compose logs"
+    fi
+else
+    echo "Docker not available. Starting with uvicorn..."
+    
+    # Install Python dependencies
+    if [ ! -d "venv" ]; then
+        apt update
+        apt install -y python3-venv python3-pip
+        python3 -m venv venv
+    fi
+    
+    source venv/bin/activate
+    pip install -q -r requirements.txt
+    
+    # Start uvicorn in background
+    nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > panel.log 2>&1 &
+    echo $! > panel.pid
+    
+    sleep 2
+    
+    if curl -s http://localhost:8000/health > /dev/null; then
+        echo -e "${GREEN}[✓]${NC} Application started with uvicorn (PID: $(cat panel.pid))"
+    else
+        echo -e "${RED}[✗]${NC} Failed to start application"
+        echo "Check logs: tail -f panel.log"
+    fi
+fi
+
+# Step 6: Firewall configuration
+echo ""
+echo -e "${YELLOW}[6/6] Configuring firewall...${NC}"
+
+if command -v ufw &> /dev/null; then
+    if ! ufw status | grep -q "Status: active"; then
+        echo "Enabling UFW..."
+        ufw --force enable
+    fi
+    ufw allow 80/tcp
+    ufw allow 443/tcp
+    ufw allow 8000/tcp
+    echo -e "${GREEN}[✓]${NC} Firewall rules added"
+elif command -v firewall-cmd &> /dev/null; then
+    firewall-cmd --permanent --add-service=http
+    firewall-cmd --permanent --add-service=https
+    firewall-cmd --permanent --add-port=8000/tcp
+    firewall-cmd --reload
+    echo -e "${GREEN}[✓]${NC} Firewall rules added"
+else
+    echo -e "${YELLOW}[!]${NC} No firewall detected. Please manually open ports 80, 443, and 8000"
+fi
+
+# Final summary
+echo ""
+echo "=========================================="
+echo "  Setup Complete!"
+echo "=========================================="
+echo ""
+echo "Access your panel at:"
+echo -e "  ${GREEN}http://$(curl -s ifconfig.me):8000/$ADMIN_SECRET_PATH${NC}"
+echo ""
+echo "To view logs:"
+if command -v docker &> /dev/null && [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
+    echo "  cd $INSTALL_DIR && docker compose logs -f"
+else
+    echo "  tail -f $INSTALL_DIR/python-sub-panel/panel.log"
+fi
+echo ""
+echo "To stop the application:"
+if command -v docker &> /dev/null && [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
+    echo "  cd $INSTALL_DIR && docker compose down"
+else
+    echo "  kill \$(cat $INSTALL_DIR/python-sub-panel/panel.pid)"
+fi
+echo ""
+echo -e "${YELLOW}Next steps:${NC}"
+echo "1. Access the panel using the URL above"
+echo "2. Login with your admin credentials"
+echo "3. Add your VPN servers"
+echo "4. Create clients and generate subscription links"
+echo ""
+echo -e "${YELLOW}Optional: Setup domain with SSL${NC}"
+echo "Run: bash setup-domain.sh"
+echo ""
