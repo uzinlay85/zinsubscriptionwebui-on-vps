@@ -107,40 +107,43 @@ async def flask_login(server: Server) -> Optional[Dict[str, Any]]:
                 
                 csrf_match = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', html) or \
                              re.search(r'csrf_token.*?value=["\']([^"\']+)["\']', html) or \
-                             re.search(r'value=["\']([a-f0-9]{32})["\']', html)
+                             re.search(r'value=["\']([a-f0-9]{32,64})["\']', html)
                 if not csrf_match:
                     return None
                 csrf_token = csrf_match.group(1)
                 
-                # Step 2: POST /login with admin_pass and csrf_token (Hy2_WebUI_ManusAi format)
-                pass_input = server.password or server.auth_password or ""
-                async with session.post(
-                    f"{base_url}/login",
-                    data={
-                        "csrf_token": csrf_token,
-                        "admin_pass": pass_input,
-                        "password": pass_input
-                    },
-                    timeout=aiohttp.ClientTimeout(total=5),
-                    ssl=False
-                ) as login_resp:
-                    if login_resp.status not in [200, 302]:
-                        return None
+                passwords_to_try = []
+                if server.password: passwords_to_try.append(server.password)
+                if server.auth_password and server.auth_password not in passwords_to_try: passwords_to_try.append(server.auth_password)
+                if "admin123" not in passwords_to_try: passwords_to_try.append("admin123")
+                if "admin" not in passwords_to_try: passwords_to_try.append("admin")
                 
-                # Step 3: GET / to get post-login CSRF token
-                async with session.get(
-                    f"{base_url}/",
-                    timeout=aiohttp.ClientTimeout(total=5),
-                    ssl=False
-                ) as home_resp:
-                    if home_resp.status == 200:
-                        home_html = await home_resp.text()
-                        csrf_match2 = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', home_html) or \
-                                     re.search(r'csrf_token.*?value=["\']([^"\']+)["\']', home_html)
-                        if csrf_match2:
-                            csrf_token = csrf_match2.group(1)
+                logged_in_cookie = None
+                fresh_csrf = csrf_token
                 
-                return {"cookie": session.cookie_jar, "csrf_token": csrf_token}
+                for pass_attempt in passwords_to_try:
+                    async with session.post(
+                        f"{base_url}/login",
+                        data={
+                            "csrf_token": csrf_token,
+                            "admin_pass": pass_attempt,
+                            "password": pass_attempt
+                        },
+                        timeout=aiohttp.ClientTimeout(total=5),
+                        ssl=False,
+                        allow_redirects=True
+                    ) as login_resp:
+                        if login_resp.status == 200:
+                            res_html = await login_resp.text()
+                            if "Logout" in res_html or "add-form" in res_html or "user_name" in res_html or "User Management" in res_html:
+                                logged_in_cookie = session.cookie_jar
+                                csrf_match2 = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', res_html)
+                                if csrf_match2:
+                                    fresh_csrf = csrf_match2.group(1)
+                                break
+                
+                if logged_in_cookie:
+                    return {"cookie": logged_in_cookie, "csrf_token": fresh_csrf}
     except Exception:
         pass
     return None
@@ -163,9 +166,11 @@ async def flask_add_user(server: Server, username: str, password: str, limit_gb:
                     "days": str(days)
                 },
                 timeout=aiohttp.ClientTimeout(total=10),
-                ssl=False
+                ssl=False,
+                allow_redirects=True
             ) as resp:
-                return resp.status in [200, 302]
+                text = await resp.text()
+                return resp.status == 200 and (password in text or username in text or "Logout" in text)
     except Exception:
         return False
 
@@ -184,7 +189,8 @@ async def flask_delete_user(server: Server, user_pass: str) -> bool:
                     "user_pass": user_pass
                 },
                 timeout=aiohttp.ClientTimeout(total=10),
-                ssl=False
+                ssl=False,
+                allow_redirects=True
             ) as resp:
                 return resp.status in [200, 302]
     except Exception:
