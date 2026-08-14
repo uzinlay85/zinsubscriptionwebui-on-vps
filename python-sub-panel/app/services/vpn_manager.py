@@ -281,9 +281,11 @@ async def block_client_keys(client: Client, db: Session):
             await outline.set_data_limit(server, k.outline_key_id, 1)
         elif server.type in ["hysteria2", "hysteria2_python"]:
             if server.type == "hysteria2":
-                await hysteria2.express_update_user(server, k.outline_key_id, client.name, "", 0)
+                del_res = await hysteria2.express_delete_user(server, k.outline_key_id)
+                if not del_res:
+                    await hysteria2.flask_delete_user(server, k.outline_key_id)
             else:
-                await hysteria2.flask_delete_user(server, client.name)
+                await hysteria2.flask_delete_user(server, k.outline_key_id)
         elif server.type == "3x-ui":
             try:
                 async with aiohttp.ClientSession() as session:

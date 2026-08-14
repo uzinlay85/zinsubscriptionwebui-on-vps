@@ -41,36 +41,50 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
     
     userinfo_parts = ["upload=0"]
     
-    if client.status != "active":
-        if client.status == "expired":
-            expiry_str = ""
-            expiry_dt = safe_parse_iso(client.expiry_date)
-            if expiry_dt:
-                expiry_str = expiry_dt.strftime("%Y-%m-%d")
-            dummy_node = f"❌ Subscription Expired: {expiry_str}\n"
-            content = dummy_node + "ss://YWVzLTI1Ni1nY2064p2k77iP566h44GX44KL44CC@dummy.invalid:8388#Expired"
-            encoded = base64.b64encode(content.encode()).decode()
-            return Response(
-                content=encoded,
-                media_type="text/plain",
-                headers={
-                    "profile-title": profile_title,
-                    "Subscription-Userinfo": "upload=0; download=0; total=0; expire=0",
-                    "Cache-Control": "no-store"
-                }
-            )
-        else:
-            content = f"🚫 Account {client.status.title()}\nss://YWVzLTI1Ni1nY2064p2k77iP566h44GX44KL44CC@dummy.invalid:8388#{client.status.title()}"
-            encoded = base64.b64encode(content.encode()).decode()
-            return Response(
-                content=encoded,
-                media_type="text/plain",
-                headers={
-                    "profile-title": profile_title,
-                    "Subscription-Userinfo": "upload=0; download=0; total=0; expire=0",
-                    "Cache-Control": "no-store"
-                }
-            )
+    now = datetime.utcnow()
+    
+    # 1. Real-time Expiry Validation
+    is_expired = False
+    expiry_dt = safe_parse_iso(client.expiry_date)
+    if expiry_dt:
+        exp_cmp = expiry_dt.replace(tzinfo=None)
+        if now > exp_cmp:
+            is_expired = True
+            
+    # 2. Real-time Data Limit Validation
+    is_limit_exceeded = False
+    if client.data_limit_gb and client.data_limit_gb > 0:
+        limit_bytes = int(client.data_limit_gb * 1024 * 1024 * 1024)
+        if client.total_usage_bytes >= limit_bytes:
+            is_limit_exceeded = True
+
+    # Block access if status is not active, expired, or data limit exceeded
+    if client.status != "active" or is_expired or is_limit_exceeded:
+        if is_expired and client.status != "expired":
+            client.status = "expired"
+            db.commit()
+            from app.services.vpn_manager import block_client_keys
+            await block_client_keys(client, db)
+        elif is_limit_exceeded and client.status != "disabled":
+            client.status = "disabled"
+            db.commit()
+            from app.services.vpn_manager import block_client_keys
+            await block_client_keys(client, db)
+            
+        status_label = "Expired" if is_expired else ("Data Limit Exceeded" if is_limit_exceeded else client.status.title())
+        expiry_str = expiry_dt.strftime("%Y-%m-%d") if expiry_dt else "N/A"
+        dummy_node = f"❌ Account {status_label}: {expiry_str}\n"
+        content = dummy_node + f"ss://YWVzLTI1Ni1nY2064p2k77iP566h44GX44KL44CC@dummy.invalid:8388#{status_label}"
+        encoded = base64.b64encode(content.encode()).decode()
+        return Response(
+            content=encoded,
+            media_type="text/plain",
+            headers={
+                "profile-title": profile_title,
+                "Subscription-Userinfo": f"upload=0; download={client.total_usage_bytes}; total={int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0}; expire={int(expiry_dt.timestamp()) if expiry_dt else 0}",
+                "Cache-Control": "no-store"
+            }
+        )
     
     all_servers = db.query(Server).all()
     existing_key_server_ids = {k.server_id for k in db.query(ClientKey).filter(ClientKey.client_id == client.id).all()}
