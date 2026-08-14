@@ -161,7 +161,9 @@ async def delete_client_keys(client: Client, db: Session):
             await outline.delete_key(server, k.outline_key_id)
         elif server.type in ["hysteria2", "hysteria2_python"]:
             if server.type == "hysteria2":
-                await hysteria2.express_delete_user(server, k.outline_key_id)
+                del_res = await hysteria2.express_delete_user(server, k.outline_key_id)
+                if not del_res:
+                    await hysteria2.flask_delete_user(server, k.outline_key_id)
             else:
                 await hysteria2.flask_delete_user(server, k.outline_key_id)
         elif server.type == "3x-ui":

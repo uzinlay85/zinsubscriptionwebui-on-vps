@@ -322,18 +322,11 @@ async def sync_keys(client_id: str, db: Session = Depends(get_db)):
     existing_keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
     existing_server_ids = {k.server_id for k in existing_keys}
     all_servers = db.query(Server).all()
-    all_server_ids = [s.id for s in all_servers]
     
-    missing_server_ids = [s_id for s_id in all_server_ids if s_id not in existing_server_ids]
-    target_ids = missing_server_ids if missing_server_ids else all_server_ids
+    missing_server_ids = [s.id for s in all_servers if s.id not in existing_server_ids]
     
-    if not missing_server_ids and existing_keys:
-        for k in existing_keys:
-            db.delete(k)
-        db.commit()
-    
-    if target_ids:
+    if missing_server_ids:
         from app.services.vpn_manager import generate_keys_for_client
-        await generate_keys_for_client(client, target_ids, db)
+        await generate_keys_for_client(client, missing_server_ids, db)
     
-    return {"ok": True, "synced": len(target_ids)}
+    return {"ok": True, "synced": len(missing_server_ids)}
