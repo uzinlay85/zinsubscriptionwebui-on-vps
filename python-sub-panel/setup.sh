@@ -22,7 +22,7 @@ fi
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     OS=$ID
-else:
+else
     echo -e "${RED}Cannot detect OS. This script supports Ubuntu/Debian only.${NC}"
     exit 1
 fi
