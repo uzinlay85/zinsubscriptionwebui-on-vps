@@ -85,40 +85,62 @@ async def express_fetch_users(server: Server) -> List[Dict[str, Any]]:
 
 async def flask_login(server: Server) -> Optional[Dict[str, Any]]:
     try:
+        base_url = server.api_url.rstrip("/")
         async with aiohttp.ClientSession() as session:
+            # Step 1: GET /login or / to acquire initial CSRF token
             async with session.get(
-                server.api_url,
+                f"{base_url}/login",
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False
             ) as resp:
-                if resp.status != 200:
-                    return None
-                html = await resp.text()
-                csrf_match = re.search(r'csrfToken.*?"([^"]+)"', html)
+                if resp.status == 200:
+                    html = await resp.text()
+                else:
+                    async with session.get(
+                        base_url,
+                        timeout=aiohttp.ClientTimeout(total=5),
+                        ssl=False
+                    ) as resp2:
+                        if resp2.status != 200:
+                            return None
+                        html = await resp2.text()
+                
+                csrf_match = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', html) or \
+                             re.search(r'csrf_token.*?value=["\']([^"\']+)["\']', html) or \
+                             re.search(r'value=["\']([a-f0-9]{32})["\']', html)
                 if not csrf_match:
                     return None
                 csrf_token = csrf_match.group(1)
                 
+                # Step 2: POST /login with admin_pass and csrf_token (Hy2_WebUI_ManusAi format)
+                pass_input = server.password or server.auth_password or ""
                 async with session.post(
-                    f"{server.api_url}/login",
-                    data={"username": server.username, "password": server.password},
+                    f"{base_url}/login",
+                    data={
+                        "csrf_token": csrf_token,
+                        "admin_pass": pass_input,
+                        "password": pass_input
+                    },
                     timeout=aiohttp.ClientTimeout(total=5),
                     ssl=False
                 ) as login_resp:
-                    if login_resp.status != 200:
+                    if login_resp.status not in [200, 302]:
                         return None
                 
+                # Step 3: GET / to get post-login CSRF token
                 async with session.get(
-                    server.api_url,
+                    f"{base_url}/",
                     timeout=aiohttp.ClientTimeout(total=5),
                     ssl=False
                 ) as home_resp:
                     if home_resp.status == 200:
                         home_html = await home_resp.text()
-                        csrf_match2 = re.search(r'csrfToken.*?"([^"]+)"', home_html)
-                        csrf_token = csrf_match2.group(1) if csrf_match2 else csrf_token
-            
-            return {"cookie": session.cookie_jar, "csrf_token": csrf_token}
+                        csrf_match2 = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', home_html) or \
+                                     re.search(r'csrf_token.*?value=["\']([^"\']+)["\']', home_html)
+                        if csrf_match2:
+                            csrf_token = csrf_match2.group(1)
+                
+                return {"cookie": session.cookie_jar, "csrf_token": csrf_token}
     except Exception:
         pass
     return None
@@ -129,9 +151,10 @@ async def flask_add_user(server: Server, username: str, password: str, limit_gb:
         return False
     
     try:
+        base_url = server.api_url.rstrip("/")
         async with aiohttp.ClientSession(cookie_jar=auth["cookie"]) as session:
             async with session.post(
-                server.api_url + "/add",
+                f"{base_url}/add",
                 data={
                     "csrf_token": auth["csrf_token"],
                     "user_name": username,
@@ -139,31 +162,31 @@ async def flask_add_user(server: Server, username: str, password: str, limit_gb:
                     "limit_gb": str(limit_gb),
                     "days": str(days)
                 },
-                timeout=aiohttp.ClientTimeout(total=15),
+                timeout=aiohttp.ClientTimeout(total=10),
                 ssl=False
             ) as resp:
-                return resp.status == 200
+                return resp.status in [200, 302]
     except Exception:
         return False
 
-async def flask_delete_user(server: Server, username: str) -> bool:
+async def flask_delete_user(server: Server, user_pass: str) -> bool:
     auth = await flask_login(server)
     if not auth:
         return False
     
     try:
+        base_url = server.api_url.rstrip("/")
         async with aiohttp.ClientSession(cookie_jar=auth["cookie"]) as session:
             async with session.post(
-                server.api_url + "/delete",
+                f"{base_url}/delete",
                 data={
                     "csrf_token": auth["csrf_token"],
-                    "user_pass": ""
+                    "user_pass": user_pass
                 },
-                timeout=aiohttp.ClientTimeout(total=15),
+                timeout=aiohttp.ClientTimeout(total=10),
                 ssl=False
             ) as resp:
-                text = await resp.text()
-                return resp.status == 200 and username in text
+                return resp.status in [200, 302]
     except Exception:
         return False
 

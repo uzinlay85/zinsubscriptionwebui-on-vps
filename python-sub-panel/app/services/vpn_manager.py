@@ -53,6 +53,8 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                 result = await hysteria2.express_create_user(server, client.name, password)
                 if result and result.get("password"):
                     password = result.get("password")
+                else:
+                    await hysteria2.flask_add_user(server, client.name, password)
             else:
                 await hysteria2.flask_add_user(server, client.name, password)
             
