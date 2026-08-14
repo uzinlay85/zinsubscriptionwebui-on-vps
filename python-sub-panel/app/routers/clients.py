@@ -335,7 +335,7 @@ async def reset_usage(client_id: str, db: Session = Depends(get_db)):
     return {"ok": True}
 
 @router.post("/{client_id}/sync-keys")
-async def sync_keys(client_id: str, db: Session = Depends(get_db)):
+async def sync_keys(client_id: str, force: bool = False, db: Session = Depends(get_db)):
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
@@ -343,23 +343,38 @@ async def sync_keys(client_id: str, db: Session = Depends(get_db)):
     if client.status != "active":
         raise HTTPException(status_code=400, detail="Client is not active")
     
-    existing_keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
+    from app.services.vpn_manager import delete_client_keys, generate_keys_for_client
     
-    # Delete broken or outdated keys (e.g. 3x-ui-sub:) so they can be regenerated cleanly
-    invalid_keys = [k for k in existing_keys if not k.access_url or k.access_url.startswith("3x-ui-sub:")]
+    if force:
+        await delete_client_keys(client, db)
+        all_servers = db.query(Server).all()
+        all_server_ids = [s.id for s in all_servers]
+        if all_server_ids:
+            await generate_keys_for_client(client, all_server_ids, db)
+        return {"ok": True, "synced": len(all_server_ids)}
+    
+    existing_keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
+    invalid_keys = [k for k in existing_keys if not k.access_url or k.access_url.startswith("3x-ui-sub:") or "security=none" in k.access_url]
+    
     for ik in invalid_keys:
+        server = db.query(Server).filter(Server.id == ik.server_id).first()
+        if server and server.type == "3x-ui" and ik.uuid:
+            try:
+                from app.services.three_xui import delete_3xui_client
+                await delete_3xui_client(server, ik.uuid)
+            except Exception:
+                pass
         db.delete(ik)
+        
     if invalid_keys:
         db.commit()
         existing_keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
 
     existing_server_ids = {k.server_id for k in existing_keys}
     all_servers = db.query(Server).all()
-    
     missing_server_ids = [s.id for s in all_servers if s.id not in existing_server_ids]
     
     if missing_server_ids:
-        from app.services.vpn_manager import generate_keys_for_client
         await generate_keys_for_client(client, missing_server_ids, db)
     
     return {"ok": True, "synced": len(missing_server_ids)}
