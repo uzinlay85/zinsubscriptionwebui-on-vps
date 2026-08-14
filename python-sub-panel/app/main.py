@@ -47,6 +47,8 @@ async def auth_middleware(request: Request, call_next):
     if ADMIN_SECRET_PATH:
         path_auth = request.cookies.get("path_auth", "")
         if path_auth != "valid":
+            if path == f"/{ADMIN_SECRET_PATH}":
+                return await call_next(request)
             return RedirectResponse(url=f"/{ADMIN_SECRET_PATH}", status_code=302)
     
     admin_auth = request.cookies.get("admin_auth", "")

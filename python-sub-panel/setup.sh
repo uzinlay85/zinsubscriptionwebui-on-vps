@@ -362,6 +362,14 @@ EOF
         echo "  Setup Complete!"
         echo "=========================================="
         echo ""
+        
+        # Load .env to display credentials
+        if [ -f "$INSTALL_DIR/python-sub-panel/.env" ]; then
+            set -a
+            source "$INSTALL_DIR/python-sub-panel/.env"
+            set +a
+        fi
+        
         echo "Your panel is now available at:"
         echo -e "  ${GREEN}https://$DOMAIN/$ADMIN_SECRET_PATH${NC}"
         echo ""
