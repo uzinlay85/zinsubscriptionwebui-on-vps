@@ -146,23 +146,64 @@ async def get_usage(request: Request, db: Session = Depends(get_db)):
     
     return {"metricsMap": metrics_map}
 
+def format_client_response(c: Client) -> dict:
+    now = datetime.utcnow()
+    
+    # 1. Calculate remaining time
+    remaining_time = "Unlimited"
+    if c.expiry_date:
+        try:
+            if "T" in c.expiry_date:
+                exp_dt = datetime.fromisoformat(c.expiry_date.replace("Z", "+00:00")).replace(tzinfo=None)
+            else:
+                exp_dt = datetime.strptime(c.expiry_date.split()[0], "%Y-%m-%d")
+            
+            if now > exp_dt:
+                days_ago = (now - exp_dt).days
+                remaining_time = f"Expired ({days_ago}d ago)" if days_ago > 0 else "Expired today"
+            else:
+                diff = exp_dt - now
+                days = diff.days
+                hours = diff.seconds // 3600
+                if days > 0:
+                    remaining_time = f"{days}d {hours}h left"
+                else:
+                    remaining_time = f"{hours}h left"
+        except Exception:
+            remaining_time = c.expiry_date
+
+    # 2. Calculate online status
+    is_online = False
+    if c.status == "active" and c.last_seen:
+        try:
+            if "T" in c.last_seen:
+                ls_dt = datetime.fromisoformat(c.last_seen.replace("Z", "+00:00")).replace(tzinfo=None)
+            else:
+                ls_dt = datetime.strptime(c.last_seen, "%Y-%m-%d %H:%M:%S")
+            if (now - ls_dt).total_seconds() < 600:
+                is_online = True
+        except Exception:
+            pass
+
+    return {
+        "id": c.id,
+        "name": c.name,
+        "sub_token": c.sub_token,
+        "status": c.status,
+        "created_at": c.created_at,
+        "expiry_date": c.expiry_date,
+        "data_limit_gb": c.data_limit_gb,
+        "total_usage_bytes": c.total_usage_bytes,
+        "last_seen": c.last_seen,
+        "is_online": is_online,
+        "remaining_time": remaining_time
+    }
+
 @router.get("", response_model=List[ClientResponse])
 @router.get("/", response_model=List[ClientResponse])
 async def list_clients(db: Session = Depends(get_db)):
     clients = db.query(Client).order_by(Client.created_at.desc()).all()
-    return [
-        {
-            "id": c.id,
-            "name": c.name,
-            "sub_token": c.sub_token,
-            "status": c.status,
-            "created_at": c.created_at,
-            "expiry_date": c.expiry_date,
-            "data_limit_gb": c.data_limit_gb,
-            "total_usage_bytes": c.total_usage_bytes
-        }
-        for c in clients
-    ]
+    return [format_client_response(c) for c in clients]
 
 @router.get("/{client_id}", response_model=ClientDetailResponse)
 async def get_client(client_id: str, db: Session = Depends(get_db)):
@@ -188,17 +229,9 @@ async def get_client(client_id: str, db: Session = Depends(get_db)):
             "server_type": server.type if server else None
         })
     
-    return {
-        "id": client.id,
-        "name": client.name,
-        "sub_token": client.sub_token,
-        "status": client.status,
-        "created_at": client.created_at,
-        "expiry_date": client.expiry_date,
-        "data_limit_gb": client.data_limit_gb,
-        "total_usage_bytes": client.total_usage_bytes,
-        "keys": key_responses
-    }
+    res = format_client_response(client)
+    res["keys"] = key_responses
+    return res
 
 @router.post("", response_model=ClientResponse)
 @router.post("/", response_model=ClientResponse)
@@ -230,16 +263,7 @@ async def create_client(client_req: ClientCreate, db: Session = Depends(get_db))
         from app.services.vpn_manager import generate_keys_for_client
         await generate_keys_for_client(client, target_server_ids, db)
     
-    return {
-        "id": client.id,
-        "name": client.name,
-        "sub_token": client.sub_token,
-        "status": client.status,
-        "created_at": client.created_at,
-        "expiry_date": client.expiry_date,
-        "data_limit_gb": client.data_limit_gb,
-        "total_usage_bytes": client.total_usage_bytes
-    }
+    return format_client_response(client)
 
 @router.put("/{client_id}", response_model=ClientResponse)
 async def update_client(client_id: str, client_req: ClientUpdate, db: Session = Depends(get_db)):
@@ -266,16 +290,7 @@ async def update_client(client_id: str, client_req: ClientUpdate, db: Session = 
     db.commit()
     db.refresh(client)
     
-    return {
-        "id": client.id,
-        "name": client.name,
-        "sub_token": client.sub_token,
-        "status": client.status,
-        "created_at": client.created_at,
-        "expiry_date": client.expiry_date,
-        "data_limit_gb": client.data_limit_gb,
-        "total_usage_bytes": client.total_usage_bytes
-    }
+    return format_client_response(client)
 
 @router.delete("/{client_id}")
 async def delete_client(client_id: str, db: Session = Depends(get_db)):

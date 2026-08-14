@@ -30,6 +30,7 @@ class Client(Base):
     expiry_date = Column(String, nullable=True)
     data_limit_gb = Column(Integer, nullable=True)
     total_usage_bytes = Column(BigInteger, nullable=False, default=0)
+    last_seen = Column(String, nullable=True)
 
 class ClientKey(Base):
     __tablename__ = "client_keys"

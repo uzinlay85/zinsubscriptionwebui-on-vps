@@ -515,9 +515,11 @@ async def sync_all_usage(db: Session):
             client_total += delta
         
         client.total_usage_bytes += client_total
+        if client_total > 0:
+            client.last_seen = datetime.utcnow().isoformat()
         
         if client.data_limit_gb and client.total_usage_bytes >= client.data_limit_gb * 1024 * 1024 * 1024:
-            client.status = "limit_reached"
+            client.status = "disabled"
             await block_client_keys(client, db)
     
     db.commit()

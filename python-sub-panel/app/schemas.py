@@ -46,6 +46,9 @@ class ClientResponse(ClientBase):
     sub_token: str
     created_at: str
     total_usage_bytes: int
+    last_seen: Optional[str] = None
+    is_online: Optional[bool] = False
+    remaining_time: Optional[str] = None
 
 class ClientKeyResponse(BaseModel):
     id: str

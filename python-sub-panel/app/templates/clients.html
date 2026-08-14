@@ -84,14 +84,14 @@
                 <div id="success" class="hidden text-emerald-400 text-sm"></div>
 
                 <div class="glass-card rounded-2xl border border-white/5 overflow-x-auto">
-                    <table class="w-full text-left min-w-[640px]">
+                    <table class="w-full text-left min-w-[700px]">
                         <thead>
-                            <tr class="border-b border-white/5">
-                                <th class="p-4 text-zinc-400 font-medium">Name</th>
-                                <th class="p-4 text-zinc-400 font-medium">Status</th>
-                                <th class="p-4 text-zinc-400 font-medium">Expiry</th>
-                                <th class="p-4 text-zinc-400 font-medium">Usage</th>
-                                <th class="text-right p-4 text-zinc-400 font-medium">Actions</th>
+                            <tr class="border-b border-white/5 text-xs uppercase tracking-wider text-zinc-400 font-semibold">
+                                <th class="p-4">Client Name</th>
+                                <th class="p-4">Online Status</th>
+                                <th class="p-4">Left Time</th>
+                                <th class="p-4">Data Usage</th>
+                                <th class="text-right p-4">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="clientsTable">
@@ -213,25 +213,65 @@
             }
 
             tbody.innerHTML = clients.map(c => {
-                const usageGB = (c.total_usage_bytes / 1024 / 1024 / 1024).toFixed(2);
+                const usageGB = (c.total_usage_bytes / (1024 * 1024 * 1024)).toFixed(2);
                 const limitGB = c.data_limit_gb ? c.data_limit_gb + ' GB' : 'Unlimited';
-                const expiry = c.expiry_date ? new Date(c.expiry_date).toLocaleDateString() : 'Never';
                 
+                // Calculate Data usage percentage & progress bar
+                let usagePercent = 0;
+                if (c.data_limit_gb && c.data_limit_gb > 0) {
+                    usagePercent = Math.min(100, Math.round((usageGB / c.data_limit_gb) * 100));
+                }
+                const progressColor = usagePercent > 90 ? 'bg-red-500' : (usagePercent > 75 ? 'bg-amber-500' : 'bg-blue-500');
+
+                // Online status badge
+                let statusBadge = '';
+                if (c.is_online) {
+                    statusBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Online</span>`;
+                } else if (c.status === 'active') {
+                    statusBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-zinc-500/10 text-zinc-400 border border-white/5"><span class="w-2 h-2 rounded-full bg-zinc-500"></span> Offline</span>`;
+                } else if (c.status === 'expired') {
+                    statusBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">❌ Expired</span>`;
+                } else {
+                    statusBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">⛔ ${c.status}</span>`;
+                }
+
+                // Left Time badge
+                let leftTimeBadge = '';
+                const rem = c.remaining_time || 'Unlimited';
+                if (rem.includes('Expired')) {
+                    leftTimeBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">❌ ${rem}</span>`;
+                } else if (rem === 'Unlimited' || rem === 'Never') {
+                    leftTimeBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-zinc-500/10 text-zinc-300 border border-white/5">♾️ Unlimited</span>`;
+                } else {
+                    leftTimeBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">⏳ ${rem}</span>`;
+                }
+
                 return `
                     <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
                         <td class="p-4">
-                            <div class="font-medium text-white">${escapeHtml(c.name)}</div>
+                            <div class="font-bold text-white text-base">${escapeHtml(c.name)}</div>
+                            <div class="text-xs font-mono text-zinc-500 mt-0.5">ID: ${c.id.substring(0, 8)}...</div>
                         </td>
                         <td class="p-4">
-                            <span class="px-2 py-1 rounded-full text-xs font-medium ${c.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}">${c.status}</span>
+                            ${statusBadge}
                         </td>
-                        <td class="p-4 text-zinc-400 text-sm">${expiry}</td>
-                        <td class="p-4 text-zinc-400 text-sm">${usageGB} GB / ${limitGB}</td>
-                        <td class="p-4 text-right">
-                            <button onclick="viewKeys('${c.id}')" class="px-3 py-1 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 rounded-lg text-xs font-medium mr-2 transition-colors border border-purple-500/20">🔑 View Keys</button>
-                            <button onclick="copySubLink('${c.sub_token}')" class="px-3 py-1 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded-lg text-xs font-medium mr-2 transition-colors border border-blue-500/20">📋 Copy Sub</button>
-                            <button onclick="editClient('${c.id}')" class="text-zinc-400 hover:text-white mr-2 text-sm">Edit</button>
-                            <button onclick="deleteClient('${c.id}')" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
+                        <td class="p-4">
+                            ${leftTimeBadge}
+                        </td>
+                        <td class="p-4">
+                            <div class="text-sm font-medium text-white">${usageGB} GB <span class="text-xs text-zinc-400">/ ${limitGB}</span></div>
+                            ${c.data_limit_gb ? `
+                            <div class="w-32 bg-white/10 h-1.5 rounded-full overflow-hidden mt-1.5">
+                                <div class="${progressColor} h-full transition-all duration-300" style="width: ${usagePercent}%"></div>
+                            </div>
+                            <div class="text-[10px] text-zinc-400 mt-0.5">${usagePercent}% used</div>
+                            ` : ''}
+                        </td>
+                        <td class="p-4 text-right space-x-1">
+                            <button onclick="viewKeys('${c.id}')" class="px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg text-xs font-semibold transition-colors border border-purple-500/20">🔑 View Keys</button>
+                            <button onclick="copySubLink('${c.sub_token}')" class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-xs font-semibold transition-colors border border-blue-500/20">📋 Copy Sub</button>
+                            <button onclick="editClient('${c.id}')" class="px-2.5 py-1.5 text-zinc-400 hover:text-white text-xs font-medium">Edit</button>
+                            <button onclick="deleteClient('${c.id}')" class="px-2.5 py-1.5 text-red-400 hover:text-red-300 text-xs font-medium">Delete</button>
                         </td>
                     </tr>
                 `;
