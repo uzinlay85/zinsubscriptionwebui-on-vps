@@ -8,8 +8,47 @@
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body class="bg-slate-950 text-white min-h-screen">
-    <div class="flex">
-        <aside class="w-64 bg-slate-900 border-r border-white/5 min-h-screen p-6">
+    <!-- Mobile Top Header -->
+    <header class="md:hidden flex items-center justify-between p-4 bg-slate-900 border-b border-white/5 sticky top-0 z-40">
+        <h1 class="text-lg font-bold text-white tracking-wide">{{ app_name }}</h1>
+        <button onclick="toggleMobileNav()" class="p-2 text-zinc-400 hover:text-white rounded-lg focus:outline-none bg-white/5 border border-white/10">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+        </button>
+    </header>
+
+    <!-- Mobile Drawer Overlay -->
+    <div id="mobileDrawer" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden md:hidden transition-opacity" onclick="toggleMobileNav()">
+        <aside class="w-64 bg-slate-900 h-full p-6 space-y-6 border-r border-white/10" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between">
+                <h1 class="text-xl font-bold text-white">{{ app_name }}</h1>
+                <button onclick="toggleMobileNav()" class="text-zinc-400 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <nav class="space-y-2">
+                <a href="/" class="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">
+                    <span>Dashboard</span>
+                </a>
+                <a href="/servers" class="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">
+                    <span>Servers</span>
+                </a>
+                <a href="/clients" class="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">
+                    <span>Clients</span>
+                </a>
+                <a href="/settings" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-600/20 text-blue-400 font-medium">
+                    <span>Settings</span>
+                </a>
+            </nav>
+        </aside>
+    </div>
+
+    <div class="flex flex-col md:flex-row">
+        <!-- Desktop Sidebar -->
+        <aside class="hidden md:block w-64 bg-slate-900 border-r border-white/5 min-h-screen p-6">
             <div class="mb-8">
                 <h1 class="text-xl font-bold text-white">{{ app_name }}</h1>
             </div>
@@ -29,10 +68,10 @@
             </nav>
         </aside>
         
-        <main class="flex-1 p-8">
+        <main class="flex-1 p-4 sm:p-6 md:p-8 max-w-full overflow-x-hidden">
             <div class="max-w-2xl">
-                <h1 class="text-3xl font-bold text-white mb-2">Settings</h1>
-                <p class="text-zinc-400 mb-8">Configure your panel settings</p>
+                <h1 class="text-2xl sm:text-3xl font-bold text-white mb-2">Settings</h1>
+                <p class="text-zinc-400 text-sm mb-6 sm:mb-8">Configure your panel settings</p>
 
                 <div id="error" class="hidden text-red-400 text-sm mb-4"></div>
                 <div id="success" class="hidden text-emerald-400 text-sm mb-4"></div>
@@ -183,6 +222,10 @@
             el.textContent = msg;
             el.classList.remove('hidden');
             setTimeout(() => el.classList.add('hidden'), 5000);
+        }
+
+        function toggleMobileNav() {
+            document.getElementById('mobileDrawer').classList.toggle('hidden');
         }
 
         // Auto-save on change

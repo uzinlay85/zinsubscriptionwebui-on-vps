@@ -8,8 +8,47 @@
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body class="bg-slate-950 text-white min-h-screen">
-    <div class="flex">
-        <aside class="w-64 bg-slate-900 border-r border-white/5 min-h-screen p-6">
+    <!-- Mobile Top Header -->
+    <header class="md:hidden flex items-center justify-between p-4 bg-slate-900 border-b border-white/5 sticky top-0 z-40">
+        <h1 class="text-lg font-bold text-white tracking-wide">{{ app_name }}</h1>
+        <button onclick="toggleMobileNav()" class="p-2 text-zinc-400 hover:text-white rounded-lg focus:outline-none bg-white/5 border border-white/10">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+        </button>
+    </header>
+
+    <!-- Mobile Drawer Overlay -->
+    <div id="mobileDrawer" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden md:hidden transition-opacity" onclick="toggleMobileNav()">
+        <aside class="w-64 bg-slate-900 h-full p-6 space-y-6 border-r border-white/10" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between">
+                <h1 class="text-xl font-bold text-white">{{ app_name }}</h1>
+                <button onclick="toggleMobileNav()" class="text-zinc-400 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <nav class="space-y-2">
+                <a href="/" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-600/20 text-blue-400 font-medium">
+                    <span>Dashboard</span>
+                </a>
+                <a href="/servers" class="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">
+                    <span>Servers</span>
+                </a>
+                <a href="/clients" class="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">
+                    <span>Clients</span>
+                </a>
+                <a href="/settings" class="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">
+                    <span>Settings</span>
+                </a>
+            </nav>
+        </aside>
+    </div>
+
+    <div class="flex flex-col md:flex-row">
+        <!-- Desktop Sidebar -->
+        <aside class="hidden md:block w-64 bg-slate-900 border-r border-white/5 min-h-screen p-6">
             <div class="mb-8">
                 <h1 class="text-xl font-bold text-white">{{ app_name }}</h1>
             </div>
@@ -29,17 +68,17 @@
             </nav>
         </aside>
         
-        <main class="flex-1 p-8">
-            <div class="space-y-8">
+        <main class="flex-1 p-4 sm:p-6 md:p-8 max-w-full overflow-x-hidden">
+            <div class="space-y-6 sm:space-y-8">
                 <div>
-                    <h1 class="text-4xl font-bold tracking-tight text-white mb-2">Dashboard</h1>
-                    <p class="text-zinc-400">Welcome to your VPN Subscription Panel.</p>
+                    <h1 class="text-2xl sm:text-4xl font-bold tracking-tight text-white mb-2">Dashboard</h1>
+                    <p class="text-zinc-400 text-sm sm:text-base">Welcome to your VPN Subscription Panel.</p>
                 </div>
                 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
                     {% for stat in stats %}
-                    <div class="glass-card p-6 flex items-start gap-4 hover:border-white/10 transition-colors">
-                        <div class="p-4 rounded-2xl {{ stat.bg }} {{ stat.color }}">
+                    <div class="glass-card p-5 sm:p-6 rounded-2xl flex items-start gap-4 hover:border-white/10 transition-colors">
+                        <div class="p-3 sm:p-4 rounded-2xl {{ stat.bg }} {{ stat.color }}">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 {% if stat.icon == "Server" %}
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path>
@@ -51,23 +90,23 @@
                             </svg>
                         </div>
                         <div>
-                            <p class="text-zinc-400 font-medium mb-1">{{ stat.title }}</p>
-                            <h3 class="text-3xl font-bold text-white">{{ stat.value }}</h3>
+                            <p class="text-zinc-400 font-medium text-xs sm:text-sm mb-1">{{ stat.title }}</p>
+                            <h3 class="text-2xl sm:text-3xl font-bold text-white">{{ stat.value }}</h3>
                         </div>
                     </div>
                     {% endfor %}
                 </div>
                 
-                <div class="glass-card p-8 text-center mt-12">
-                    <h2 class="text-2xl font-semibold text-white mb-4">Quick Setup Guide</h2>
-                    <p class="text-zinc-400 max-w-2xl mx-auto mb-8">
+                <div class="glass-card p-6 sm:p-8 rounded-2xl text-center mt-6 sm:mt-12">
+                    <h2 class="text-xl sm:text-2xl font-semibold text-white mb-3 sm:mb-4">Quick Setup Guide</h2>
+                    <p class="text-zinc-400 text-sm sm:text-base max-w-2xl mx-auto mb-6 sm:mb-8">
                         To start providing VPN access, first add a Server from your VPN Manager. Then create a Client to generate their unique subscription link. Finally, assign the client to the server to generate their access keys.
                     </p>
-                    <div class="flex items-center justify-center gap-4">
-                        <a href="/servers" class="px-6 py-3 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors">
+                    <div class="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+                        <a href="/servers" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors text-center">
                             Manage Servers
                         </a>
-                        <a href="/clients" class="px-6 py-3 rounded-full bg-white/5 hover:bg-white/10 text-white font-medium transition-colors border border-white/10">
+                        <a href="/clients" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium transition-colors border border-white/10 text-center">
                             Manage Clients
                         </a>
                     </div>
@@ -75,6 +114,13 @@
             </div>
         </main>
     </div>
+
+    <script>
+        function toggleMobileNav() {
+            const drawer = document.getElementById('mobileDrawer');
+            drawer.classList.toggle('hidden');
+        }
+    </script>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
