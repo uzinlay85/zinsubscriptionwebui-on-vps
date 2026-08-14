@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Setting
 from app.schemas import SettingsUpdate, SettingsResponse
-from typing import Dict, Any
+from typing import Dict, Any, List
 import json
 
 router = APIRouter()
