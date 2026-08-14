@@ -222,9 +222,13 @@ async def create_client(client_req: ClientCreate, db: Session = Depends(get_db))
     db.commit()
     db.refresh(client)
     
-    if client_req.server_ids:
+    target_server_ids = client_req.server_ids
+    if not target_server_ids:
+        target_server_ids = [s.id for s in db.query(Server).all()]
+        
+    if target_server_ids:
         from app.services.vpn_manager import generate_keys_for_client
-        await generate_keys_for_client(client, client_req.server_ids, db)
+        await generate_keys_for_client(client, target_server_ids, db)
     
     return {
         "id": client.id,
