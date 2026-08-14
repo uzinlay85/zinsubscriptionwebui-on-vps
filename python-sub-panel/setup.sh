@@ -148,7 +148,8 @@ EOF
     echo -e "${GREEN}[✓]${NC} Configuration saved to .env"
     echo ""
     echo "Your credentials:"
-    echo "  Admin URL: http://$(curl -s -4 ifconfig.me 2>/dev/null || curl -s icanhazip.com 2>/dev/null):8000/$ADMIN_SECRET_PATH"
+    IP_ADDRESS=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || curl -s -4 ipinfo.io/ip 2>/dev/null || hostname -I | awk '{print $1}')
+    echo "  Admin URL: http://$IP_ADDRESS:8000/$ADMIN_SECRET_PATH"
     echo "  Username: $ADMIN_USERNAME"
     echo "  Password: $ADMIN_PASSWORD"
     echo ""
@@ -244,7 +245,8 @@ echo "  Setup Complete!"
 echo "=========================================="
 echo ""
 echo "Access your panel at:"
-echo -e "  ${GREEN}http://$(curl -s -4 ifconfig.me 2>/dev/null || curl -s icanhazip.com 2>/dev/null):8000/$ADMIN_SECRET_PATH${NC}"
+IP_ADDRESS=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || curl -s -4 ipinfo.io/ip 2>/dev/null || hostname -I | awk '{print $1}')
+echo -e "  ${GREEN}http://$IP_ADDRESS:8000/$ADMIN_SECRET_PATH${NC}"
 echo ""
 echo "To view logs:"
 if command -v docker &> /dev/null && [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
