@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from app.database import get_db, engine, Base
+from app.database import get_db, engine, Base, init_db
 from app.models import Server, Client, ClientKey, Setting
 from app.routers import auth, clients, servers, settings, backup, sub, cron
 from app.tasks import start_scheduler
@@ -26,7 +26,7 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-Base.metadata.create_all(bind=engine)
+init_db()
 
 ADMIN_SECRET_PATH = os.getenv("ADMIN_SECRET_PATH", "")
 AUTH_SECRET = os.getenv("AUTH_SECRET", "change_me")

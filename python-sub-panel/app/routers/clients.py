@@ -151,12 +151,14 @@ def format_client_response(c: Client) -> dict:
     
     # 1. Calculate remaining time
     remaining_time = "Unlimited"
-    if c.expiry_date:
+    exp_val = getattr(c, 'expiry_date', None)
+    if exp_val:
         try:
-            if "T" in c.expiry_date:
-                exp_dt = datetime.fromisoformat(c.expiry_date.replace("Z", "+00:00")).replace(tzinfo=None)
+            exp_str = str(exp_val)
+            if "T" in exp_str:
+                exp_dt = datetime.fromisoformat(exp_str.replace("Z", "+00:00")).replace(tzinfo=None)
             else:
-                exp_dt = datetime.strptime(c.expiry_date.split()[0], "%Y-%m-%d")
+                exp_dt = datetime.strptime(exp_str.split()[0], "%Y-%m-%d")
             
             if now > exp_dt:
                 days_ago = (now - exp_dt).days
@@ -170,16 +172,18 @@ def format_client_response(c: Client) -> dict:
                 else:
                     remaining_time = f"{hours}h left"
         except Exception:
-            remaining_time = c.expiry_date
+            remaining_time = str(exp_val)
 
     # 2. Calculate online status
     is_online = False
-    if c.status == "active" and c.last_seen:
+    last_seen_val = getattr(c, 'last_seen', None)
+    if c.status == "active" and last_seen_val:
         try:
-            if "T" in c.last_seen:
-                ls_dt = datetime.fromisoformat(c.last_seen.replace("Z", "+00:00")).replace(tzinfo=None)
+            ls_str = str(last_seen_val)
+            if "T" in ls_str:
+                ls_dt = datetime.fromisoformat(ls_str.replace("Z", "+00:00")).replace(tzinfo=None)
             else:
-                ls_dt = datetime.strptime(c.last_seen, "%Y-%m-%d %H:%M:%S")
+                ls_dt = datetime.strptime(ls_str.split()[0] + (" " + ls_str.split()[1] if len(ls_str.split()) > 1 else ""), "%Y-%m-%d %H:%M:%S")
             if (now - ls_dt).total_seconds() < 600:
                 is_online = True
         except Exception:
@@ -191,10 +195,10 @@ def format_client_response(c: Client) -> dict:
         "sub_token": c.sub_token,
         "status": c.status,
         "created_at": c.created_at,
-        "expiry_date": c.expiry_date,
+        "expiry_date": exp_val,
         "data_limit_gb": c.data_limit_gb,
-        "total_usage_bytes": c.total_usage_bytes,
-        "last_seen": c.last_seen,
+        "total_usage_bytes": c.total_usage_bytes or 0,
+        "last_seen": last_seen_val,
         "is_online": is_online,
         "remaining_time": remaining_time
     }

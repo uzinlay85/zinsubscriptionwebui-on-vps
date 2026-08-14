@@ -10,6 +10,16 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
+def init_db():
+    Base.metadata.create_all(bind=engine)
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE clients ADD COLUMN last_seen TEXT;"))
+            conn.commit()
+    except Exception:
+        pass
+
 def get_db():
     db = SessionLocal()
     try:
