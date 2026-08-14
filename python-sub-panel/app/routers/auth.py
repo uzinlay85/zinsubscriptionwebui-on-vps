@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Request, Response, HTTPException, Depends, JSONResponse
+from fastapi import APIRouter, Request, Response, HTTPException, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Setting

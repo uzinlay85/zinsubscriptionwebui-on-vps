@@ -332,12 +332,18 @@ EOF
             cd "$INSTALL_DIR"
             docker compose up -d --build
             echo -e "${GREEN}[✓]${NC} Application restarted with Docker"
+        elif command -v docker &> /dev/null && [ -f "$INSTALL_DIR/python-sub-panel/docker-compose.yml" ]; then
+            cd "$INSTALL_DIR/python-sub-panel"
+            docker compose up -d --build
+            echo -e "${GREEN}[✓]${NC} Application restarted with Docker"
         else
             if [ -f "$INSTALL_DIR/panel.pid" ]; then
                 kill $(cat "$INSTALL_DIR/panel.pid") 2>/dev/null || true
             fi
             cd "$INSTALL_DIR"
-            source venv/bin/activate
+            if [ -f "venv/bin/activate" ]; then
+                source venv/bin/activate
+            fi
             nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > panel.log 2>&1 &
             echo $! > panel.pid
             echo -e "${GREEN}[✓]${NC} Application restarted with uvicorn (PID: $(cat panel.pid))"
@@ -376,6 +382,8 @@ echo ""
 echo "To view logs:"
 if command -v docker &> /dev/null && [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
     echo "  cd $INSTALL_DIR && docker compose logs -f"
+elif command -v docker &> /dev/null && [ -f "$INSTALL_DIR/python-sub-panel/docker-compose.yml" ]; then
+    echo "  cd $INSTALL_DIR/python-sub-panel && docker compose logs -f"
 else
     echo "  tail -f $INSTALL_DIR/python-sub-panel/panel.log"
 fi
@@ -383,6 +391,8 @@ echo ""
 echo "To stop the application:"
 if command -v docker &> /dev/null && [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
     echo "  cd $INSTALL_DIR && docker compose down"
+elif command -v docker &> /dev/null && [ -f "$INSTALL_DIR/python-sub-panel/docker-compose.yml" ]; then
+    echo "  cd $INSTALL_DIR/python-sub-panel && docker compose down"
 else
     echo "  kill \$(cat $INSTALL_DIR/python-sub-panel/panel.pid)"
 fi
