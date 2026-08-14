@@ -80,66 +80,70 @@
             
             <form id="serverForm" class="space-y-4">
                 <input type="hidden" id="serverId">
+                <input type="hidden" id="auth_username">
                 
                 <div>
                     <label class="block text-sm font-medium text-zinc-400 mb-2">Server Name</label>
-                    <input type="text" id="name" required class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                    <input type="text" id="name" required placeholder="e.g. Bear Hysteria2" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
                 </div>
 
                 <div>
                     <label class="block text-sm font-medium text-zinc-400 mb-2">Server Type</label>
-                    <select id="type" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                    <select id="type" onchange="updateFormFields()" class="w-full px-4 py-3 bg-slate-800 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                        <option value="hysteria2">Hysteria2 (WebUI / Express)</option>
                         <option value="outline">Outline</option>
-                        <option value="hysteria2">Hysteria2</option>
                         <option value="3x-ui">3x-ui</option>
                     </select>
                 </div>
 
                 <div>
                     <label class="block text-sm font-medium text-zinc-400 mb-2">API URL</label>
-                    <input type="text" id="api_url" required placeholder="https://..." class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                    <input type="text" id="api_url" required placeholder="https://bear-b.truehand.top/" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                    <p id="apiUrlHint" class="text-xs text-zinc-400 mt-1">Base domain or server API endpoint URL.</p>
                 </div>
 
-                <div>
+                <!-- Outline Specific Fields -->
+                <div id="field-cert_sha256" class="server-type-field hidden">
                     <label class="block text-sm font-medium text-zinc-400 mb-2">Certificate SHA-256 (Outline only)</label>
-                    <input type="text" id="cert_sha256" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                    <input type="text" id="cert_sha256" placeholder="e.g. A1B2C3D4..." class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-zinc-400 mb-2">Auth Username</label>
-                        <input type="text" id="auth_username" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                <!-- Hysteria2 Specific Fields -->
+                <div id="field-hysteria_pass" class="server-type-field hidden">
+                    <label class="block text-sm font-medium text-zinc-400 mb-2">Panel Admin Password (Default: admin123)</label>
+                    <input type="text" id="auth_password" placeholder="admin123" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                    <p class="text-xs text-zinc-400 mt-1">Admin password of your Hysteria2 WebUI panel for creating users.</p>
+                </div>
+
+                <!-- 3x-ui Specific Fields -->
+                <div id="field-3xui_auth" class="server-type-field hidden space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-400 mb-2">3x-ui Username</label>
+                            <input type="text" id="username" placeholder="admin" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-400 mb-2">3x-ui Password</label>
+                            <input type="text" id="password" placeholder="admin" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                        </div>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-zinc-400 mb-2">Auth Password</label>
-                        <input type="text" id="auth_password" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                        <label class="block text-sm font-medium text-zinc-400 mb-2">Inbound ID</label>
+                        <input type="number" id="inbound_id" placeholder="1" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-zinc-400 mb-2">Panel Username</label>
-                        <input type="text" id="username" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-zinc-400 mb-2">Panel Password</label>
-                        <input type="text" id="password" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-zinc-400 mb-2">Inbound ID (3x-ui only)</label>
-                    <input type="number" id="inbound_id" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-zinc-400 mb-2">External Domain</label>
-                        <input type="text" id="external_domain" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-zinc-400 mb-2">External Port</label>
-                        <input type="number" id="external_port" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                <!-- External Domain & Port Fields -->
+                <div id="field-external" class="server-type-field hidden">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-400 mb-2">External Domain (Optional)</label>
+                            <input type="text" id="external_domain" placeholder="bear-b.truehand.top" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-zinc-400 mb-2">External Port</label>
+                            <input type="number" id="external_port" placeholder="10443" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                        </div>
                     </div>
                 </div>
 
@@ -234,10 +238,31 @@
             return div.innerHTML;
         }
 
+        function updateFormFields() {
+            const type = document.getElementById('type').value;
+            
+            document.querySelectorAll('.server-type-field').forEach(el => el.classList.add('hidden'));
+            
+            if (type === 'outline') {
+                document.getElementById('field-cert_sha256').classList.remove('hidden');
+                document.getElementById('apiUrlHint').textContent = 'Outline management API URL (e.g. https://ip:port/secret/access-keys)';
+            } else if (type === 'hysteria2' || type === 'hysteria2_python') {
+                document.getElementById('field-hysteria_pass').classList.remove('hidden');
+                document.getElementById('field-external').classList.remove('hidden');
+                document.getElementById('apiUrlHint').textContent = 'Base URL of your Hysteria2 WebUI (e.g. https://bear-b.truehand.top/)';
+            } else if (type === '3x-ui') {
+                document.getElementById('field-3xui_auth').classList.remove('hidden');
+                document.getElementById('field-external').classList.remove('hidden');
+                document.getElementById('apiUrlHint').textContent = '3x-ui Panel URL (e.g. http://ip:2053/)';
+            }
+        }
+
         function openModal() {
             document.getElementById('serverForm').reset();
             document.getElementById('serverId').value = '';
+            document.getElementById('type').value = 'hysteria2';
             document.getElementById('modalTitle').textContent = 'Add Server';
+            updateFormFields();
             document.getElementById('serverModal').classList.remove('hidden');
         }
 
@@ -263,6 +288,7 @@
             document.getElementById('external_port').value = server.external_port || '';
 
             document.getElementById('modalTitle').textContent = 'Edit Server';
+            updateFormFields();
             document.getElementById('serverModal').classList.remove('hidden');
         }
 
