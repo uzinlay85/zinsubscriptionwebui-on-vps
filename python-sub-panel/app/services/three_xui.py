@@ -67,52 +67,85 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
             if not logged_in:
                 return None
                 
-            inbound_id = server.inbound_id or 1
+            inbound_id = server.inbound_id
+            target_inbound = None
             
-            protocol = "vless"
-            net = "tcp"
-            security = "none"
-            path = ""
-            sni = ext_host
-            pbk = ""
-            fp = "chrome"
-            sid = ""
-            
-            async with session.get(
-                f"{api_base}/panel/api/inbounds/get/{inbound_id}",
-                timeout=aiohttp.ClientTimeout(total=5),
-                ssl=False
-            ) as get_resp:
-                if get_resp.status == 200:
-                    data = await get_resp.json()
-                    if data.get("success"):
-                        obj = data.get("obj", {})
-                        protocol = obj.get("protocol", "vless").lower()
-                        
-                        stream_raw = obj.get("streamSettings", "{}")
-                        try:
-                            stream = json.loads(stream_raw) if isinstance(stream_raw, str) else stream_raw
-                        except Exception:
-                            stream = {}
-                            
-                        net = stream.get("network", "tcp")
-                        security = stream.get("security", "none")
-                        
-                        if net == "ws":
-                            path = stream.get("wsSettings", {}).get("path", "/")
-                        elif net == "grpc":
-                            path = stream.get("grpcSettings", {}).get("serviceName", "")
-                            
-                        if security == "tls":
-                            sni = stream.get("tlsSettings", {}).get("serverName") or ext_host
-                        elif security == "reality":
-                            real = stream.get("realitySettings", {})
-                            pbk = real.get("publicKey", "")
-                            fp = real.get("fingerprint", "chrome")
-                            snis = real.get("serverNames", [])
-                            sni = snis[0] if snis else ext_host
-                            sids = real.get("shortIds", [])
-                            sid = sids[0] if sids else ""
+            # Step 1: Fetch list of all inbounds to locate active target inbound
+            try:
+                async with session.get(
+                    f"{api_base}/panel/api/inbounds/list",
+                    timeout=aiohttp.ClientTimeout(total=5),
+                    ssl=False
+                ) as list_resp:
+                    if list_resp.status == 200:
+                        ldata = await list_resp.json()
+                        if ldata.get("success"):
+                            inbound_list = ldata.get("obj", [])
+                            if inbound_list:
+                                if inbound_id:
+                                    for inb in inbound_list:
+                                        if str(inb.get("id")) == str(inbound_id):
+                                            target_inbound = inb
+                                            break
+                                if not target_inbound:
+                                    target_inbound = inbound_list[0]
+                                    inbound_id = target_inbound.get("id")
+            except Exception:
+                pass
+                
+            # Step 2: Fallback single get if list was empty
+            if not target_inbound and inbound_id:
+                try:
+                    async with session.get(
+                        f"{api_base}/panel/api/inbounds/get/{inbound_id}",
+                        timeout=aiohttp.ClientTimeout(total=5),
+                        ssl=False
+                    ) as get_resp:
+                        if get_resp.status == 200:
+                            gdata = await get_resp.json()
+                            if gdata.get("success"):
+                                target_inbound = gdata.get("obj", {})
+                except Exception:
+                    pass
+
+            if target_inbound:
+                inbound_id = target_inbound.get("id")
+                protocol = target_inbound.get("protocol", "vless").lower()
+                ext_port = server.external_port or target_inbound.get("port") or ext_port
+                
+                stream_raw = target_inbound.get("streamSettings", "{}")
+                try:
+                    stream = json.loads(stream_raw) if isinstance(stream_raw, str) else stream_raw
+                except Exception:
+                    stream = {}
+                    
+                net = stream.get("network", "tcp")
+                security = stream.get("security", "none")
+                
+                if net == "ws":
+                    path = stream.get("wsSettings", {}).get("path", "/")
+                elif net == "grpc":
+                    path = stream.get("grpcSettings", {}).get("serviceName", "")
+                    
+                if security == "tls":
+                    sni = stream.get("tlsSettings", {}).get("serverName") or ext_host
+                elif security == "reality":
+                    real = stream.get("realitySettings", {})
+                    pbk = real.get("publicKey", "")
+                    fp = real.get("fingerprint", "chrome")
+                    snis = real.get("serverNames", [])
+                    sni = snis[0] if snis else ext_host
+                    sids = real.get("shortIds", [])
+                    sid = sids[0] if sids else ""
+            else:
+                protocol = "vless"
+                net = "tcp"
+                security = "none"
+                path = ""
+                sni = ext_host
+                pbk = ""
+                fp = "chrome"
+                sid = ""
 
             c_data = {
                 "id": client_uuid,
