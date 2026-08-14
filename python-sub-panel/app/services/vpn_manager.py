@@ -86,65 +86,25 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
         elif server.type == "3x-ui":
             client_uuid = generate_uuid()
             sub_id = generate_sub_id()
-            password = generate_password()
             
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        server.api_url,
-                        timeout=aiohttp.ClientTimeout(total=5),
-                        ssl=False
-                    ) as resp:
-                        if resp.status == 200:
-                            html = await resp.text()
-                            csrf_match = re.search(r'csrfToken.*?"([^"]+)"', html)
-                            if csrf_match:
-                                csrf_token = csrf_match.group(1)
-                                
-                                async with session.post(
-                                    server.api_url + "/login",
-                                    data={"username": server.username, "password": server.password},
-                                    timeout=aiohttp.ClientTimeout(total=5),
-                                    ssl=False
-                                ) as login_resp:
-                                    if login_resp.status == 200:
-                                        import json
-                                        client_data = {
-                                            "email": client.name,
-                                            "id": client_uuid,
-                                            "password": password,
-                                            "limitIp": 0,
-                                            "totalGB": client.data_limit_gb * 1024 * 1024 * 1024 if client.data_limit_gb else 0,
-                                            "expiryTime": int((datetime.utcnow().timestamp() + (30 * 24 * 60 * 60)) * 1000),
-                                            "enable": True,
-                                            "subId": sub_id,
-                                            "tgId": "",
-                                            "reset": 0
-                                        }
-                                        
-                                        async with session.post(
-                                            server.api_url + f"/panel/api/clients/add",
-                                            json={"client": client_data, "inboundIds": [server.inbound_id]},
-                                            timeout=aiohttp.ClientTimeout(total=5),
-                                            ssl=False
-                                        ) as add_resp:
-                                            if add_resp.status == 200:
-                                                result_data = await add_resp.json()
-                                                if result_data.get("success"):
-                                                    access_url = f"3x-ui-sub:{sub_id}"
-                                                    client_key = ClientKey(
-                                                        id=key_id,
-                                                        client_id=client.id,
-                                                        server_id=server.id,
-                                                        outline_key_id=sub_id,
-                                                        access_url=access_url,
-                                                        created_at=now,
-                                                        uuid=client_uuid,
-                                                        last_seen_bytes=0
-                                                    )
-                                                    db.add(client_key)
-            except Exception:
-                pass
+            from app.services.three_xui import add_3xui_client
+            access_url = await add_3xui_client(server, client, client_uuid, sub_id)
+            if not access_url:
+                ext_host = server.external_domain or server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0].split(':')[0]
+                ext_port = server.external_port or 443
+                access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?type=tcp&security=none#{server.name} - {client.name}"
+                
+            client_key = ClientKey(
+                id=key_id,
+                client_id=client.id,
+                server_id=server.id,
+                outline_key_id=sub_id,
+                access_url=access_url,
+                created_at=now,
+                uuid=client_uuid,
+                last_seen_bytes=0
+            )
+            db.add(client_key)
     
     db.commit()
 
@@ -167,56 +127,9 @@ async def delete_client_keys(client: Client, db: Session):
             else:
                 await hysteria2.flask_delete_user(server, k.outline_key_id)
         elif server.type == "3x-ui":
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        server.api_url,
-                        timeout=aiohttp.ClientTimeout(total=5),
-                        ssl=False
-                    ) as resp:
-                        if resp.status == 200:
-                            html = await resp.text()
-                            csrf_match = re.search(r'csrfToken.*?"([^"]+)"', html)
-                            if csrf_match:
-                                csrf_token = csrf_match.group(1)
-                                
-                                async with session.post(
-                                    server.api_url + "/login",
-                                    data={"username": server.username, "password": server.password},
-                                    timeout=aiohttp.ClientTimeout(total=5),
-                                    ssl=False
-                                ) as login_resp:
-                                    if login_resp.status == 200:
-                                        async with session.post(
-                                            server.api_url + f"/panel/api/inbounds/{server.inbound_id}/delClient/{k.uuid}",
-                                            timeout=aiohttp.ClientTimeout(total=5),
-                                            ssl=False
-                                        ) as del_resp:
-                                            if del_resp.status != 200:
-                                                async with session.get(
-                                                    server.api_url + f"/panel/api/inbounds/get/{server.inbound_id}",
-                                                    timeout=aiohttp.ClientTimeout(total=5),
-                                                    ssl=False
-                                                ) as get_resp:
-                                                    if get_resp.status == 200:
-                                                        data = await get_resp.json()
-                                                        if data.get("success"):
-                                                            inbound = data.get("obj", {})
-                                                            settings = json.loads(inbound.get("settings", "{}"))
-                                                            clients_list = settings.get("clients", [])
-                                                            clients_list = [c for c in clients_list if c.get("id") != k.uuid]
-                                                            settings["clients"] = clients_list
-                                                            inbound["settings"] = json.dumps(settings)
-                                                            
-                                                            async with session.post(
-                                                                server.api_url + f"/panel/api/inbounds/update/{server.inbound_id}",
-                                                                json=inbound,
-                                                                timeout=aiohttp.ClientTimeout(total=5),
-                                                                ssl=False
-                                                            ) as update_resp:
-                                                                pass
-            except Exception:
-                pass
+            if k.uuid:
+                from app.services.three_xui import delete_3xui_client
+                await delete_3xui_client(server, k.uuid)
         
         db.delete(k)
     
