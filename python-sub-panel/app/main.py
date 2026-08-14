@@ -38,7 +38,7 @@ SYNC_INTERVAL = int(os.getenv("SYNC_INTERVAL_MINUTES", "10"))
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
     
-    public_paths = ["/api/sub/", "/health", "/static/", "/favicon.ico"]
+    public_paths = ["/api/sub/", "/health", "/static/", "/favicon.ico", "/login"]
     is_public = any(path.startswith(p) for p in public_paths)
     
     if is_public:

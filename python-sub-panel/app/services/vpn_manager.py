@@ -9,7 +9,7 @@ import aiohttp
 import json
 import re
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 def generate_id():
     return str(uuid.uuid4())
