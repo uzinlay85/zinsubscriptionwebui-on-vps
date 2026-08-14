@@ -378,3 +378,43 @@ async def sync_keys(client_id: str, force: bool = False, db: Session = Depends(g
         await generate_keys_for_client(client, missing_server_ids, db)
     
     return {"ok": True, "synced": len(missing_server_ids)}
+
+@router.post("/{client_id}/keys/{server_id}/regenerate")
+async def regenerate_single_key(client_id: str, server_id: str, db: Session = Depends(get_db)):
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+        
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+        
+    existing_key = db.query(ClientKey).filter(
+        ClientKey.client_id == client_id,
+        ClientKey.server_id == server_id
+    ).first()
+    
+    if existing_key:
+        if server.type == "outline":
+            from app.services import outline
+            await outline.delete_key(server, existing_key.outline_key_id)
+        elif server.type in ["hysteria2", "hysteria2_python"]:
+            from app.services import hysteria2
+            if server.type == "hysteria2":
+                del_res = await hysteria2.express_delete_user(server, existing_key.outline_key_id)
+                if not del_res:
+                    await hysteria2.flask_delete_user(server, existing_key.outline_key_id)
+            else:
+                await hysteria2.flask_delete_user(server, existing_key.outline_key_id)
+        elif server.type == "3x-ui":
+            if existing_key.uuid:
+                from app.services.three_xui import delete_3xui_client
+                await delete_3xui_client(server, existing_key.uuid)
+                
+        db.delete(existing_key)
+        db.commit()
+        
+    from app.services.vpn_manager import generate_keys_for_client
+    await generate_keys_for_client(client, [server_id], db)
+    
+    return format_client_response(client)

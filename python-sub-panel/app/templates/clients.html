@@ -402,9 +402,14 @@
                                     <span class="font-medium text-white">${escapeHtml(k.server_name || 'Server')}</span>
                                     <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">${k.server_type || 'vpn'}</span>
                                 </div>
-                                <button onclick="copyKeyUrl('${escapeHtml(k.access_url || '')}')" class="px-3 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-lg text-xs font-medium border border-emerald-500/20 transition-colors">
-                                    📋 Copy Key
-                                </button>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="regenerateSingleKey('${clientId}', '${k.server_id}')" class="px-2.5 py-1 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 rounded-lg text-xs font-medium border border-amber-500/20 transition-colors flex items-center gap-1" title="Delete and re-create key for this server only">
+                                        🔄 Re-generate
+                                    </button>
+                                    <button onclick="copyKeyUrl('${escapeHtml(k.access_url || '')}')" class="px-3 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-lg text-xs font-medium border border-emerald-500/20 transition-colors">
+                                        📋 Copy Key
+                                    </button>
+                                </div>
                             </div>
                             <div class="p-2.5 bg-black/40 rounded-lg font-mono text-xs text-zinc-300 break-all select-all border border-white/5">
                                 ${escapeHtml(k.access_url || 'No access URL')}
@@ -421,6 +426,21 @@
 
         function closeKeysModal() {
             document.getElementById('keysModal').classList.add('hidden');
+        }
+
+        async function regenerateSingleKey(clientId, serverId) {
+            try {
+                showSuccess('Re-creating key for this server...');
+                const resp = await fetch(`/api/clients/${clientId}/keys/${serverId}/regenerate`, { method: 'POST' });
+                if (resp.ok) {
+                    showSuccess('Key re-created successfully!');
+                    viewKeys(clientId);
+                } else {
+                    showError('Failed to re-create key');
+                }
+            } catch (err) {
+                showError('Failed to re-create key');
+            }
         }
 
         async function syncClientKeys(clientId, force = false) {
