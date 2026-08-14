@@ -85,6 +85,20 @@ The script will:
 http://your-vps-ip:8000/<generated-secret-path>
 ```
 
+**To completely remove the panel from your VPS:**
+```bash
+cd /opt/vpn-sub-panel/python-sub-panel
+bash uninstall.sh
+```
+
+The uninstall script will:
+1. 🛑 Stop and remove Docker containers
+2. 🛑 Stop and remove systemd service (if using venv)
+3. 🛑 Kill uvicorn processes
+4. 🗑️ Remove Nginx configuration and SSL certificates
+5. 🗑️ Delete installation directory (optional)
+6. 🗑️ Remove Docker (optional)
+
 ---
 
 ### 📋 Prerequisites
