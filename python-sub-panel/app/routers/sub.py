@@ -20,6 +20,14 @@ def get_brand_name(db: Session) -> str:
         return panel_name_setting.value
     return "VPN Panel"
 
+def safe_parse_iso(date_str: Optional[str]) -> Optional[datetime]:
+    if not date_str:
+        return None
+    try:
+        return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
 @router.get("/{token}")
 async def get_subscription(request: Request, token: str, db: Session = Depends(get_db)):
     client = db.query(Client).filter(Client.sub_token == token).first()
@@ -27,7 +35,8 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
         raise HTTPException(status_code=404, detail="Client not found")
     
     brand = get_brand_name(db)
-    creation_date = datetime.fromisoformat(client.created_at.replace("Z", "+00:00")).strftime("%d.%m.%Y")
+    created_dt = safe_parse_iso(client.created_at)
+    creation_date = created_dt.strftime("%d.%m.%Y") if created_dt else "N/A"
     profile_title = f"{client.name} - {brand} [{creation_date}]"
     
     userinfo_parts = ["upload=0"]
@@ -35,8 +44,8 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
     if client.status != "active":
         if client.status == "expired":
             expiry_str = ""
-            if client.expiry_date:
-                expiry_dt = datetime.fromisoformat(client.expiry_date.replace("Z", "+00:00"))
+            expiry_dt = safe_parse_iso(client.expiry_date)
+            if expiry_dt:
                 expiry_str = expiry_dt.strftime("%Y-%m-%d")
             dummy_node = f"❌ Subscription Expired: {expiry_str}\n"
             content = dummy_node + "ss://YWVzLTI1Ni1nY2064p2k77iP566h44GX44KL44CC@dummy.invalid:8388#Expired"
@@ -73,17 +82,17 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
     userinfo_parts.append(f"download={total_usage}")
     userinfo_parts.append(f"total={data_limit}")
     
-    if client.expiry_date:
-        expiry_dt = datetime.fromisoformat(client.expiry_date.replace("Z", "+00:00"))
+    expiry_dt = safe_parse_iso(client.expiry_date)
+    if expiry_dt:
         userinfo_parts.append(f"expire={int(expiry_dt.timestamp())}")
     else:
         userinfo_parts.append("expire=0")
     
     nodes.append(f"📊 Usage: {total_usage / (1024*1024*1024):.2f} GB / {client.data_limit_gb or 'Unlimited'} GB")
     
-    if client.expiry_date:
-        expiry_dt = datetime.fromisoformat(client.expiry_date.replace("Z", "+00:00"))
-        now = datetime.utcnow().replace(tzinfo=expiry_dt.tzinfo)
+    if expiry_dt:
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
         days_left = (expiry_dt - now).days
         if days_left >= 0:
             nodes.append(f"⏳ Expire: {expiry_dt.strftime('%Y-%m-%d')} ({days_left} Days Left)")

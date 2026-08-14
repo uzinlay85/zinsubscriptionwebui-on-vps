@@ -13,9 +13,15 @@ CRON_SECRET = os.getenv("CRON_SECRET", "change_me")
 
 def check_auth(request: Request):
     auth_header = request.headers.get("authorization", "")
-    if not auth_header.startswith("Bearer "):
+    query_secret = request.query_params.get("secret", "") or request.query_params.get("token", "")
+    
+    if auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+    elif query_secret:
+        token = query_secret
+    else:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    token = auth_header.split(" ")[1]
+        
     if token != CRON_SECRET:
         raise HTTPException(status_code=401, detail="Invalid token")
     return True

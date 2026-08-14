@@ -479,7 +479,10 @@ async def sync_all_usage(db: Session):
         
         for k in keys:
             metrics = server_metrics.get(k.server_id, {})
-            current_bytes = metrics.get(k.outline_key_id, 0)
+            current_bytes = metrics.get(k.outline_key_id)
+            if current_bytes is None:
+                current_bytes = metrics.get(client.name, 0)
+            current_bytes = int(current_bytes or 0)
             
             if current_bytes < k.last_seen_bytes * 0.9:
                 delta = current_bytes

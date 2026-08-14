@@ -38,7 +38,7 @@ SYNC_INTERVAL = int(os.getenv("SYNC_INTERVAL_MINUTES", "10"))
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
     
-    public_paths = ["/api/sub/", "/health", "/static/", "/favicon.ico", "/login", "/api/auth/login", "/api/auth/logout"]
+    public_paths = ["/api/sub/", "/api/cron/", "/health", "/static/", "/favicon.ico", "/login", "/api/auth/login", "/api/auth/logout"]
     is_public = any(path.startswith(p) for p in public_paths)
     
     if is_public:
@@ -53,7 +53,7 @@ async def auth_middleware(request: Request, call_next):
     
     admin_auth = request.cookies.get("admin_auth", "")
     if admin_auth != AUTH_SECRET:
-        if path == f"/{ADMIN_SECRET_PATH}" and ADMIN_SECRET_PATH:
+        if ADMIN_SECRET_PATH and path == f"/{ADMIN_SECRET_PATH}":
             return await call_next(request)
         return RedirectResponse(url="/login", status_code=302)
     
@@ -104,13 +104,12 @@ async def clients_page(request: Request):
 async def settings_page(request: Request):
     return templates.TemplateResponse("settings.html", {"request": request, "app_name": APP_NAME})
 
-@app.get(f"/{ADMIN_SECRET_PATH}")
-async def secret_path_entry(response: Response):
-    if not ADMIN_SECRET_PATH:
-        return RedirectResponse(url="/", status_code=302)
-    response = RedirectResponse(url="/", status_code=302)
-    response.set_cookie(key="path_auth", value="valid", httponly=True, max_age=86400)
-    return response
+if ADMIN_SECRET_PATH:
+    @app.get(f"/{ADMIN_SECRET_PATH}")
+    async def secret_path_entry(response: Response):
+        res = RedirectResponse(url="/", status_code=302)
+        res.set_cookie(key="path_auth", value="valid", httponly=True, max_age=86400)
+        return res
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(clients.router, prefix="/api/clients", tags=["clients"])
