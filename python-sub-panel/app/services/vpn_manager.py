@@ -69,6 +69,7 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
         elif server.type == "3x-ui":
             client_uuid = generate_uuid()
             sub_id = generate_sub_id()
+            password = generate_password()
             
             try:
                 async with aiohttp.ClientSession() as session:

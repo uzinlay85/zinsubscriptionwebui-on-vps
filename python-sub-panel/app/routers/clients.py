@@ -146,6 +146,7 @@ async def get_usage(request: Request, db: Session = Depends(get_db)):
     
     return {"metricsMap": metrics_map}
 
+@router.get("", response_model=List[ClientResponse])
 @router.get("/", response_model=List[ClientResponse])
 async def list_clients(db: Session = Depends(get_db)):
     clients = db.query(Client).order_by(Client.created_at.desc()).all()
@@ -199,6 +200,7 @@ async def get_client(client_id: str, db: Session = Depends(get_db)):
         "keys": key_responses
     }
 
+@router.post("", response_model=ClientResponse)
 @router.post("/", response_model=ClientResponse)
 async def create_client(client_req: ClientCreate, db: Session = Depends(get_db)):
     client_id = generate_id()

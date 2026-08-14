@@ -15,6 +15,7 @@ router = APIRouter()
 def generate_id():
     return str(uuid.uuid4())
 
+@router.get("", response_model=List[ServerResponse])
 @router.get("/", response_model=List[ServerResponse])
 async def list_servers(db: Session = Depends(get_db)):
     servers = db.query(Server).order_by(Server.created_at.desc()).all()
@@ -58,6 +59,7 @@ async def get_server(server_id: str, db: Session = Depends(get_db)):
         "external_port": server.external_port
     }
 
+@router.post("", response_model=ServerResponse)
 @router.post("/", response_model=ServerResponse)
 async def create_server(server_req: ServerCreate, db: Session = Depends(get_db)):
     server_id = generate_id()
