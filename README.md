@@ -85,6 +85,41 @@ The script will:
 http://your-vps-ip:8000/<generated-secret-path>
 ```
 
+#### ✅ Post-Setup Verification Checklist
+
+After running `setup.sh`, verify your installation with these checks:
+
+```bash
+# 1. Check container is running
+cd /opt/vpn-sub-panel/python-sub-panel
+docker compose ps
+
+# 2. Check application health
+curl -s http://localhost:8000/health
+# Expected: {"status":"ok","timestamp":"..."}
+
+# 3. Check Nginx is running
+systemctl status nginx
+
+# 4. Check SSL certificate (if domain setup was chosen)
+certbot certificates
+
+# 5. Test subscription endpoint (replace with your actual token)
+curl -s http://localhost:8000/api/sub/your-client-token
+```
+
+**Common Issues & Solutions:**
+
+| Issue | Solution |
+|---|---|
+| `ERR_TOO_MANY_REDIRECTS` | Clear browser cookies, or check `.env` for correct `ADMIN_SECRET_PATH` |
+| `502 Bad Gateway` | App not running: `docker compose logs -f` |
+| `Connection refused` | Firewall: `ufw allow 8000/tcp` |
+| `SSL certificate error` | Run `certbot renew` |
+| `Page not found` | Ensure you're visiting `https://domain.com/<ADMIN_SECRET_PATH>` |
+
+---
+
 **To completely remove the panel from your VPS:**
 ```bash
 # If installed via setup.sh (Docker default)

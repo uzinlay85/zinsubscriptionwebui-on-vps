@@ -160,9 +160,16 @@ fi
 
 # Load .env variables for display
 if [ -f .env ]; then
-    set -a
-    source .env
-    set +a
+    while IFS= read -r line; do
+        line=$(echo "$line" | sed 's/#.*//' | xargs)
+        if [ -n "$line" ]; then
+            var_name=$(echo "$line" | cut -d'=' -f1)
+            var_value=$(echo "$line" | cut -d'=' -f2-)
+            if [ -n "$var_name" ]; then
+                eval "$var_name=\"$var_value\""
+            fi
+        fi
+    done < .env
 fi
 
 # Step 4: Create data directory
@@ -365,9 +372,16 @@ EOF
         
         # Load .env to display credentials
         if [ -f "$INSTALL_DIR/python-sub-panel/.env" ]; then
-            set -a
-            source "$INSTALL_DIR/python-sub-panel/.env"
-            set +a
+            while IFS= read -r line; do
+                line=$(echo "$line" | sed 's/#.*//' | xargs)
+                if [ -n "$line" ]; then
+                    var_name=$(echo "$line" | cut -d'=' -f1)
+                    var_value=$(echo "$line" | cut -d'=' -f2-)
+                    if [ -n "$var_name" ]; then
+                        eval "$var_name=\"$var_value\""
+                    fi
+                fi
+            done < "$INSTALL_DIR/python-sub-panel/.env"
         fi
         
         echo "Your panel is now available at:"
@@ -421,13 +435,14 @@ echo ""
 echo -e "${YELLOW}Optional: Setup domain with SSL later${NC}"
 echo "Run: bash setup-domain.sh"
 echo ""
-echo ""
-echo -e "${YELLOW}Next steps:${NC}"
-echo "1. Access the panel using the URL above"
-echo "2. Login with your admin credentials"
-echo "3. Add your VPN servers"
-echo "4. Create clients and generate subscription links"
-echo ""
-echo -e "${YELLOW}Optional: Setup domain with SSL later${NC}"
-echo "Run: bash setup-domain.sh"
+
+# Health check verification
+echo -e "${YELLOW}Running health check...${NC}"
+sleep 2
+if curl -s http://localhost:8000/health > /dev/null; then
+    echo -e "${GREEN}[✓]${NC} Application is healthy and responding"
+else
+    echo -e "${YELLOW}[!]${NC} Application may still be starting..."
+    echo "  Run: docker compose logs -f"
+fi
 echo ""
