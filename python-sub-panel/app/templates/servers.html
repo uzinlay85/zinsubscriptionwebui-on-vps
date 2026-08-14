@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servers - {{ app_name }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="bg-slate-950 text-white min-h-screen">
+    <div class="flex">
+        <aside class="w-64 bg-slate-900 border-r border-white/5 min-h-screen p-6">
+            <div class="mb-8">
+                <h1 class="text-xl font-bold text-white">{{ app_name }}</h1>
+            </div>
+            <nav class="space-y-2">
+                <a href="/" class="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">
+                    <span>Dashboard</span>
+                </a>
+                <a href="/servers" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 text-white">
+                    <span>Servers</span>
+                </a>
+                <a href="/clients" class="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">
+                    <span>Clients</span>
+                </a>
+                <a href="/settings" class="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">
+                    <span>Settings</span>
+                </a>
+            </nav>
+        </aside>
+        
+        <main class="flex-1 p-8">
+            <div class="space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-3xl font-bold text-white">Servers</h1>
+                        <p class="text-zinc-400 mt-1">Manage your VPN servers</p>
+                    </div>
+                    <button onclick="openModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-colors">
+                        Add Server
+                    </button>
+                </div>
+
+                <div id="error" class="hidden text-red-400 text-sm"></div>
+                <div id="success" class="hidden text-emerald-400 text-sm"></div>
+
+                <div class="glass-card overflow-hidden">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b border-white/5">
+                                <th class="text-left p-4 text-zinc-400 font-medium">Name</th>
+                                <th class="text-left p-4 text-zinc-400 font-medium">Type</th>
+                                <th class="text-left p-4 text-zinc-400 font-medium">API URL</th>
+                                <th class="text-left p-4 text-zinc-400 font-medium">Status</th>
+                                <th class="text-right p-4 text-zinc-400 font-medium">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="serversTable">
+                            <tr>
+                                <td colspan="5" class="p-8 text-center text-zinc-400">Loading servers...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add/Edit Server Modal -->
+    <div id="serverModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+        <div class="bg-slate-900 border border-white/10 rounded-2xl p-8 max-w-lg w-full mx-4">
+            <div class="flex items-center justify-between mb-6">
+                <h2 id="modalTitle" class="text-2xl font-bold text-white">Add Server</h2>
+                <button onclick="closeModal()" class="text-zinc-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <form id="serverForm" class="space-y-4">
+                <input type="hidden" id="serverId">
+                
+                <div>
+                    <label class="block text-sm font-medium text-zinc-400 mb-2">Server Name</label>
+                    <input type="text" id="name" required class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-zinc-400 mb-2">Server Type</label>
+                    <select id="type" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                        <option value="outline">Outline</option>
+                        <option value="hysteria2">Hysteria2</option>
+                        <option value="3x-ui">3x-ui</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-zinc-400 mb-2">API URL</label>
+                    <input type="text" id="api_url" required placeholder="https://..." class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-zinc-400 mb-2">Certificate SHA-256 (Outline only)</label>
+                    <input type="text" id="cert_sha256" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-zinc-400 mb-2">Auth Username</label>
+                        <input type="text" id="auth_username" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-zinc-400 mb-2">Auth Password</label>
+                        <input type="text" id="auth_password" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-zinc-400 mb-2">Panel Username</label>
+                        <input type="text" id="username" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-zinc-400 mb-2">Panel Password</label>
+                        <input type="text" id="password" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-zinc-400 mb-2">Inbound ID (3x-ui only)</label>
+                    <input type="number" id="inbound_id" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-zinc-400 mb-2">External Domain</label>
+                        <input type="text" id="external_domain" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-zinc-400 mb-2">External Port</label>
+                        <input type="number" id="external_port" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button type="submit" class="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-colors">
+                        Save Server
+                    </button>
+                    <button type="button" onclick="closeModal()" class="px-4 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium transition-colors border border-white/10">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let servers = [];
+
+        async function loadServers() {
+            try {
+                const resp = await fetch('/api/servers/');
+                if (resp.ok) {
+                    servers = await resp.json();
+                    renderServers();
+                }
+            } catch (err) {
+                showError('Failed to load servers');
+            }
+        }
+
+        function renderServers() {
+            const tbody = document.getElementById('serversTable');
+            if (servers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-zinc-400">No servers configured. Add your first server to get started.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = servers.map(s => `
+                <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                    <td class="p-4">
+                        <div class="font-medium text-white">${escapeHtml(s.name)}</div>
+                    </td>
+                    <td class="p-4">
+                        <span class="px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(s.type)}">${s.type}</span>
+                    </td>
+                    <td class="p-4 text-zinc-400 text-sm">${escapeHtml(s.api_url)}</td>
+                    <td class="p-4">
+                        <span id="status-${s.id}" class="text-zinc-400 text-sm">Unknown</span>
+                    </td>
+                    <td class="p-4 text-right">
+                        <button onclick="editServer('${s.id}')" class="text-blue-400 hover:text-blue-300 mr-3">Edit</button>
+                        <button onclick="deleteServer('${s.id}')" class="text-red-400 hover:text-red-300">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function getTypeColor(type) {
+            const colors = {
+                outline: 'bg-blue-500/10 text-blue-400',
+                hysteria2: 'bg-purple-500/10 text-purple-400',
+                '3x-ui': 'bg-emerald-500/10 text-emerald-400'
+            };
+            return colors[type] || 'bg-zinc-500/10 text-zinc-400';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function openModal() {
+            document.getElementById('serverForm').reset();
+            document.getElementById('serverId').value = '';
+            document.getElementById('modalTitle').textContent = 'Add Server';
+            document.getElementById('serverModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('serverModal').classList.add('hidden');
+        }
+
+        async function editServer(id) {
+            const server = servers.find(s => s.id === id);
+            if (!server) return;
+
+            document.getElementById('serverId').value = server.id;
+            document.getElementById('name').value = server.name;
+            document.getElementById('type').value = server.type;
+            document.getElementById('api_url').value = server.api_url;
+            document.getElementById('cert_sha256').value = server.cert_sha256 || '';
+            document.getElementById('auth_username').value = server.auth_username || '';
+            document.getElementById('auth_password').value = server.auth_password || '';
+            document.getElementById('username').value = server.username || '';
+            document.getElementById('password').value = server.password || '';
+            document.getElementById('inbound_id').value = server.inbound_id || '';
+            document.getElementById('external_domain').value = server.external_domain || '';
+            document.getElementById('external_port').value = server.external_port || '';
+
+            document.getElementById('modalTitle').textContent = 'Edit Server';
+            document.getElementById('serverModal').classList.remove('hidden');
+        }
+
+        async function deleteServer(id) {
+            if (!confirm('Are you sure you want to delete this server?')) return;
+            
+            try {
+                const resp = await fetch(`/api/servers/${id}`, { method: 'DELETE' });
+                if (resp.ok) {
+                    showSuccess('Server deleted successfully');
+                    loadServers();
+                } else {
+                    showError('Failed to delete server');
+                }
+            } catch (err) {
+                showError('Failed to delete server');
+            }
+        }
+
+        document.getElementById('serverForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('serverId').value;
+            const data = {
+                name: document.getElementById('name').value,
+                type: document.getElementById('type').value,
+                api_url: document.getElementById('api_url').value,
+                cert_sha256: document.getElementById('cert_sha256').value || null,
+                auth_username: document.getElementById('auth_username').value || null,
+                auth_password: document.getElementById('auth_password').value || null,
+                username: document.getElementById('username').value || null,
+                password: document.getElementById('password').value || null,
+                inbound_id: document.getElementById('inbound_id').value ? parseInt(document.getElementById('inbound_id').value) : null,
+                external_domain: document.getElementById('external_domain').value || null,
+                external_port: document.getElementById('external_port').value ? parseInt(document.getElementById('external_port').value) : null
+            };
+
+            try {
+                const url = id ? `/api/servers/${id}` : '/api/servers/';
+                const method = id ? 'PUT' : 'POST';
+                const resp = await fetch(url, {
+                    method,
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+
+                if (resp.ok) {
+                    showSuccess(id ? 'Server updated successfully' : 'Server added successfully');
+                    closeModal();
+                    loadServers();
+                } else {
+                    const err = await resp.json();
+                    showError(err.detail || 'Failed to save server');
+                }
+            } catch (err) {
+                showError('Failed to save server');
+            }
+        });
+
+        function showError(msg) {
+            const el = document.getElementById('error');
+            el.textContent = msg;
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 5000);
+        }
+
+        function showSuccess(msg) {
+            const el = document.getElementById('success');
+            el.textContent = msg;
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 5000);
+        }
+
+        // Load servers on page load
+        loadServers();
+    </script>
+</body>
+</html>
