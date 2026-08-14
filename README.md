@@ -460,6 +460,273 @@ Now access your panel at `https://yourdomain.com/<ADMIN_SECRET_PATH>`
 
 ---
 
+### 🌐 Complete Domain Setup (Nginx + SSL)
+
+This section covers the full end-to-end process for connecting your panel to a real domain with HTTPS.
+
+#### 1. Buy / Prepare a Domain
+
+- Buy a domain from any registrar (Namecheap, GoDaddy, Cloudflare, etc.)
+- Example: `vpn.example.com`
+
+#### 2. Point Domain to Your VPS
+
+Go to your domain registrar or DNS provider and add an **A record**:
+
+| Type | Name / Root | Value / IP | TTL |
+|---|---|---|---|
+| A | `@` | `<your-vps-ip>` | 3600 |
+| A | `www` | `<your-vps-ip>` | 3600 |
+
+Or if you are using a subdomain:
+
+| Type | Name / Root | Value / IP | TTL |
+|---|---|---|---|
+| A | `vpn` | `<your-vps-ip>` | 3600 |
+
+Verify DNS propagation:
+
+```bash
+dig vpn.example.com
+# or
+nslookup vpn.example.com
+```
+
+#### 3. Allow HTTP/HTTPS Through Firewall
+
+```bash
+# If using ufw
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw reload
+
+# If using firewalld
+firewall-cmd --permanent --add-service=http
+firewall-cmd --permanent --add-service=https
+firewall-cmd --reload
+```
+
+#### 4. Install Nginx
+
+```bash
+apt update
+apt install -y nginx
+```
+
+#### 5. Create Nginx Config
+
+```bash
+nano /etc/nginx/sites-available/vpn-panel
+```
+
+Paste the following (replace `vpn.example.com` with your actual domain):
+
+```nginx
+# Redirect HTTP to HTTPS
+server {
+    listen 80;
+    listen [::]:80;
+    server_name vpn.example.com;
+
+    # For Certbot challenge
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    # Redirect all other traffic to HTTPS
+    location / {
+        return 301 https://$server_name$request_uri;
+    }
+}
+
+# HTTPS server
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name vpn.example.com;
+
+    # SSL certificates (will be obtained via Certbot)
+    ssl_certificate /etc/letsencrypt/live/vpn.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/vpn.example.com/privkey.pem;
+
+    # SSL settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers on;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:50m;
+    ssl_session_tickets off;
+
+    # Security headers
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
+    # Logging
+    access_log /var/log/nginx/vpn-panel.access.log;
+    error_log /var/log/nginx/vpn-panel.error.log;
+
+    # Proxy settings
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 10s;
+        proxy_read_timeout 10s;
+        proxy_buffering off;
+    }
+
+    # Health check endpoint
+    location /health {
+        proxy_pass http://127.0.0.1:8000/health;
+        access_log off;
+    }
+}
+```
+
+#### 6. Enable the Site
+
+```bash
+# Create symlink
+ln -s /etc/nginx/sites-available/vpn-panel /etc/nginx/sites-enabled/
+
+# Remove default site if exists
+rm -f /etc/nginx/sites-enabled/default
+
+# Test Nginx config
+nginx -t
+
+# Reload Nginx
+systemctl reload nginx
+```
+
+#### 7. Obtain SSL Certificate with Certbot
+
+```bash
+# Install Certbot
+apt install -y certbot python3-certbot-nginx
+
+# Get certificate
+certbot --nginx -d vpn.example.com
+
+# Follow the prompts:
+# 1. Enter your email
+# 2. Agree to Terms of Service
+# 3. Choose whether to redirect HTTP to HTTPS (recommended: Yes)
+```
+
+Certbot will automatically:
+- Obtain the SSL certificate
+- Update your Nginx config with SSL paths
+- Set up auto-renewal
+
+#### 8. Test Auto-Renewal
+
+```bash
+# Dry run
+certbot renew --dry-run
+
+# Check renewal timer
+systemctl status certbot.timer
+```
+
+#### 9. Configure Application .env
+
+Update your `.env` file:
+
+```bash
+cd /home/zinko/zinsubscriptionwebui-on-vps/python-sub-panel
+nano .env
+```
+
+Make sure these values are set:
+
+```env
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=your_secure_password_here
+AUTH_SECRET=your_random_long_secret_key_here
+CRON_SECRET=your_super_secret_cron_token_here
+ADMIN_SECRET_PATH=daweitharlay
+APP_NAME=My VPN Panel
+```
+
+**Important:** Change the default passwords and secrets to strong random values.
+
+#### 10. Start / Restart the Application
+
+##### If using Docker:
+
+```bash
+cd /home/zinko/zinsubscriptionwebui-on-vps/python-sub-panel
+docker compose up -d --build
+docker compose logs -f
+```
+
+##### If using systemd (venv):
+
+```bash
+systemctl restart vpn-panel
+systemctl status vpn-panel
+```
+
+##### If running directly:
+
+```bash
+cd /home/zinko/zinsubscriptionwebui-on-vps/python-sub-panel
+source venv/bin/activate
+uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+#### 11. Access Your Panel
+
+Open your browser and visit:
+
+```
+https://vpn.example.com/daweitharlay
+```
+
+This will:
+1. Hit the Nginx HTTPS server
+2. Proxy to your FastAPI app on port 8000
+3. Set the `path_auth` cookie
+4. Redirect to the login page
+5. After login, show the dashboard
+
+#### 12. Verify Everything Works
+
+```bash
+# Check Nginx is running
+systemctl status nginx
+
+# Check your app is running
+curl -I http://127.0.0.1:8000/health
+
+# Check SSL certificate
+openssl s_client -connect vpn.example.com:443 -servername vpn.example.com
+
+# Check HTTPS response
+curl -I https://vpn.example.com/health
+```
+
+---
+
+#### Quick Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| `502 Bad Gateway` | App is not running on port 8000. Check `docker compose logs` or `systemctl status vpn-panel` |
+| `SSL certificate error` | Certbot cert not obtained or expired. Run `certbot renew` |
+| `Permission denied` | Check file permissions on `data/` folder: `chmod 755 data/` |
+| `Connection refused` | Firewall blocking port 8000 or 443. Run `ufw status` |
+| `404 after login` | Check `ADMIN_SECRET_PATH` in `.env` matches the URL you're visiting |
+
+---
+
 #### Environment Variables (Python Edition)
 
 | Variable | Default | Description |
