@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - {{ app_name }}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="bg-slate-950 text-white min-h-screen">
+    <div class="flex">
+        <aside class="w-64 bg-slate-900 border-r border-white/5 min-h-screen p-6">
+            <div class="mb-8">
+                <h1 class="text-xl font-bold text-white">{{ app_name }}</h1>
+            </div>
+            <nav class="space-y-2">
+                <a href="/" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 text-white">
+                    <span>Dashboard</span>
+                </a>
+                <a href="/servers" class="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">
+                    <span>Servers</span>
+                </a>
+                <a href="/clients" class="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">
+                    <span>Clients</span>
+                </a>
+                <a href="/settings" class="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors">
+                    <span>Settings</span>
+                </a>
+            </nav>
+        </aside>
+        
+        <main class="flex-1 p-8">
+            <div class="space-y-8">
+                <div>
+                    <h1 class="text-4xl font-bold tracking-tight text-white mb-2">Dashboard</h1>
+                    <p class="text-zinc-400">Welcome to your VPN Subscription Panel.</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {% for stat in stats %}
+                    <div class="glass-card p-6 flex items-start gap-4 hover:border-white/10 transition-colors">
+                        <div class="p-4 rounded-2xl {{ stat.bg }} {{ stat.color }}">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                {% if stat.icon == "Server" %}
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path>
+                                {% elif stat.icon == "Users" %}
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                                {% elif stat.icon == "Key" %}
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                                {% endif %}
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-zinc-400 font-medium mb-1">{{ stat.title }}</p>
+                            <h3 class="text-3xl font-bold text-white">{{ stat.value }}</h3>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="glass-card p-8 text-center mt-12">
+                    <h2 class="text-2xl font-semibold text-white mb-4">Quick Setup Guide</h2>
+                    <p class="text-zinc-400 max-w-2xl mx-auto mb-8">
+                        To start providing VPN access, first add a Server from your VPN Manager. Then create a Client to generate their unique subscription link. Finally, assign the client to the server to generate their access keys.
+                    </p>
+                    <div class="flex items-center justify-center gap-4">
+                        <a href="/servers" class="px-6 py-3 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors">
+                            Manage Servers
+                        </a>
+                        <a href="/clients" class="px-6 py-3 rounded-full bg-white/5 hover:bg-white/10 text-white font-medium transition-colors border border-white/10">
+                            Manage Clients
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'in': 'fadeIn 0.5s ease-out',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</body>
+</html>

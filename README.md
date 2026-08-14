@@ -1,6 +1,6 @@
-# Unified Subscription Panel (Outline, Hysteria2 & 3x-ui)
+# Unified VPN Subscription Panel
 
-A modern, high-performance, and feature-rich unified web panel to manage **Outline**, **Hysteria2**, and **3x-ui** (Xray/V2ray) VPN servers. Issue a single universal subscription link for your users, and control their access, expiry, and track live data usage across multiple servers from a single dashboard.
+A modern, feature-rich unified web panel to manage **Outline**, **Hysteria2**, and **3x-ui** (Xray/V2ray) VPN servers. Issue a single universal subscription link for your users, and control their access, expiry, and track live data usage across multiple servers from a single dashboard.
 
 မြန်မာဘာသာဖြင့် ဖတ်ရှုရန် အောက်သို့ ဆင်းပါ။
 
@@ -9,6 +9,7 @@ A modern, high-performance, and feature-rich unified web panel to manage **Outli
 ## 🇺🇸 English Documentation
 
 ### 🌟 Key Features & Improvements
+
 * **Multi-Protocol Support**: Manage **Outline**, **Hysteria2**, and **3x-ui** servers from one interface.
 * **Universal Subscription Links**: Serve Clash, Sing-box JSON, or Base64 (V2ray/Shadowsocks) formats automatically based on the user-agent via `/api/sub/[token]`.
 * **Zero-Downtime Subscription Resilience**: 
@@ -58,6 +59,7 @@ A modern, high-performance, and feature-rich unified web panel to manage **Outli
 ---
 
 ### 📋 Prerequisites
+
 1. **Supabase Account**: For the PostgreSQL database.
 2. **Vercel Account**: For free hosting of the Next.js panel.
 3. **VPN Servers**:
@@ -231,132 +233,133 @@ e.g.  # | Protocol | ...
 
 ---
 
+### 🐍 Python FastAPI Edition (VPS-Only, Zero External Dependencies)
 
-## 🇲🇲 မြန်မာဘာသာ လမ်းညွှန်
+ပရောဂျက်ရဲ့ **အမြန်ဆန်းခြံ့ပြီး VPS တစ်လုံးတည်းပေါ်မှာ အသုံးပြုနိုင်မည့် Python FastAPI ဗားရှင်း** ကို အောက်ပါအတိုင်း တည်ဆောက်ထားပါသည်။ Next.js + Supabase အစား **FastAPI + SQLite** ကို အသုံးပြုထားပြီး၊ VPS တစ်လုံးတည်းပေါ်မှာ လုံးဝလွတ်လပ်စွာ အလုပ်လုပ်နိုင်ပါတယ်။
 
-Outline, Hysteria2 နှင့် 3x-ui (Xray/V2ray) ဆာဗာ သုံးမျိုးစလုံးကို နေရာတစ်တည်းကနေ ထိန်းချုပ်လို့ရမယ့် ခေတ်မီ Subscription Web Panel တစ်ခု ဖြစ်ပါတယ်။ အသုံးပြုသူ (Client) တွေအတွက် Sub Link တစ်ခုတည်း ပေးရုံနဲ့ ဆာဗာအားလုံးရဲ့ Key တွေကို အလွယ်တကူ ရယူအသုံးပြုနိုင်မှာပါ။
+#### အဓိက အကျိုးကျေးဇူးများ
 
-### 🌟 ထူးခြားကောင်းမွန်သော လုပ်ဆောင်ချက်များ
-* **စနစ်စုံသုံးနိုင်ခြင်း**: Outline, Hysteria2 နှင့် 3x-ui ဆာဗာအားလုံးကို မျက်နှာပြင်တစ်ခုတည်းတွင် ပေါင်းစည်းစီမံနိုင်ခြင်း။
-* **Sub Link မပျက်စီးစေသော စနစ်**:
-  * ဆာဗာတစ်ခုခု ပျက်နေလျှင် (ဥပမာ 3x-ui server down ဖြစ်နေလျှင်) subscription link တောင်းခံမှု မကျဆင်းသွားစေရန် `5s timeout` သတ်မှတ်ထားပြီး အခြားအလုပ်လုပ်သော ဆာဗာများကိုသာ အလိုအလျောက် ရွေးချယ်ပေးပို့ပေးခြင်း။
-  * အကောင့်ပိတ်ထားသူ သို့မဟုတ် သက်တမ်းကုန်သွားသူများအား HTTP 200 OK ပြန်ပေးပြီး dummy proxy node (ဥပမာ `🚫 Account Suspended` သို့မဟုတ် `❌ Subscription Expired`) ကိုသာ ပြသပေးခြင်းဖြင့် client app များမှ sub link ဖျက်ပစ်ခြင်းကို ကာကွယ်ပေးခြင်း။
-* **အဆင့်မြင့်လုံခြုံရေးစနစ် (RLS + Service Role Key)**:
-  * Supabase tables များအားလုံးတွင် RLS (Row Level Security) ဖွင့်ထားပြီး ပြင်ပမှ anonymous data တိုက်ရိုက်ခိုးယူခြင်းကို လုံးဝကာကွယ်ထားခြင်း။
-  * Web backend (server-side) တွင် `SUPABASE_SERVICE_ROLE_KEY` ကိုအသုံးပြု၍ RLS ကိုကျော်ကာ သတ်မှတ်ခွင့်ရှိသူသာ ဒေတာဖတ်/ရေး လုပ်ဆောင်စေခြင်း။
-* **ခိုင်မာသော Cron Auth စနစ်**: Cron endpoints အားလုံးသို့ `/api/cron/*` လှမ်းခေါ်ရာတွင် `Authorization: Bearer <CRON_SECRET>` header ပါမှသာ လုပ်ဆောင်ခွင့်ပြုခြင်း။
-* **VPS Crontab နှင့် ချိတ်ဆက်အသုံးပြုနိုင်ခြင်း**: Vercel Free Plan တွင် အချိန်တို cron မရသော ပြဿနာအား မိမိ၏ Linux VPS crontab မှ curl ဖြင့် အချိန်ကိုက် လှမ်းခေါ်ခိုင်းပြီး အခမဲ့ဖြေရှင်းနိုင်ခြင်း။
-* **ပွတ်သပ်ထားသော UI/UX**: browser alert/confirm Dialogue ဘောက်စ်များအစား client list ထဲတွင် အလိုအလျောက် သက်ဝင်လှုပ်ရှားမည့် custom inline confirm row ကို ပြောင်းလဲအသုံးပြုထားခြင်း။
+1. **RAM အသုံးပြုမှု အလွန်နည်းခြင်း**: FastAPI (Python ASGI) ဖြင့် Production တွင် RAM 30MB - 50MB ဝန်းကျင်သာ စားသုံးမည်ဖြစ်ပြီး 512MB RAM ရှိသော VPS သေးသေးလေးပေါ်မှာပင် အလွန်မြန်ဆန်စွာ အလုပ်လုပ်နိုင်ပါသည်။
+2. **SQLite ဒေတာဘေ့စ် (Zero-Config Database)**: Supabase သို့မဟုတ် သီးခြား PostgreSQL container ထပ်လိုတော့ဘဲ `/data/panel.db` ဖိုင်တစ်ခုတည်းဖြင့် ဒေတာအားလုံးကို အလွယ်တကူ သိမ်းဆည်းပေးပါသည်။ Backup လုပ်ရန်လည်း ထိုဖိုင်တစ်ခုတည်းကို ကူးယူရန် လုံလောက်ပါသည်။
+3. **Built-in Background Tasks (APScheduler)**: VPS ၏ system crontab ကို သီးခြားခွဲစရာမလိုဘဲ အပလီကေးရှင်းအတွင်းမှာပင် Usage sync လုပ်ခြင်းနှင့် Expiry စစ်ဆေးခြင်းတို့ကို Background မှ အလိုအလျောက် လုပ်ဆောင်ပေးပါသည်။
+4. **Universal Subscription Links & Fallback**: အသုံးပြုသူများအတွက် Sub Link တစ်ခုတည်းဖြင့် Outline နှင့် အခြားဆာဗာများ၏ Key များကို User-Agent အလိုက် အလိုအလျောက် ထုတ်ပေးသည်။ အကောင့်သက်တမ်းကုန် သို့မဟုတ် ပိတ်ထားသူများအတွက် HTTP 200 OK နှင့်အတူ Fallback Dummy Proxy Node ကို ပြသပေးသောကြောင့် Client App များတွင် Link ပျက်ခြင်း မရှိပါ။
 
----
+#### 📁 Project Structure (Python Edition)
 
-### 🚀 တည်ဆောက်ခြင်းနှင့် အသုံးပြုခြင်း လမ်းညွှန်
-
-#### ၁။ Supabase Database ပြင်ဆင်ခြင်း
-[Supabase](https://supabase.com) တွင် အကောင့်ဖွင့်ပြီး project အသစ်ဆောက်ပါ။ **SQL Editor** သို့သွားပြီး အောက်ပါ SQL commands များကို Run ပေးပါ:
-
-*(အထက်ဖော်ပြပါ English Documentation ရှိ SQL Schema အတိုင်း Supabase Database တွင် ထည့်သွင်းပါ)*
-
-#### ၂။ Supabase Table များအား RLS ဖွင့်ပါ
-Supabase database ထဲရှိ Table Editor သို့သွားပြီး table တစ်ခုချင်းစီ (`clients`, `servers`, `client_keys`, `settings`) ၏ ညာဘက်အပေါ်ထောင့်ရှိ **RLS Disabled** ကို နှိပ်ပြီး **Enable RLS** ပြုလုပ်ပေးပါ။
-
-#### ၃။ Vercel ပေါ်သို့ တင်ခြင်း
-1. သင်၏ GitHub repository အား Vercel သို့ Import လုပ်ပါ။
-2. **Environment Variables** တွင် အောက်ပါတို့ကို ထည့်ပါ:
-   * `NEXT_PUBLIC_SUPABASE_URL`: Supabase Project URL
-   * `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon public key
-   * `SUPABASE_SERVICE_ROLE_KEY`: Supabase service_role key (Project Settings > API မှ ယူပါ)
-   * `ADMIN_USERNAME`: Admin Panel သို့ ဝင်ရန် မိမိထားလိုသော Username (ဥပမာ - `admin`)
-   * `ADMIN_PASSWORD`: Admin Panel သို့ ဝင်ရန် မိမိထားလိုသော Password
-   * `AUTH_SECRET`: လုံခြုံရေးအတွက် မိမိစိတ်ကြိုက် အင်္ဂလိပ်စာလုံး ရှည်ရှည်တစ်ခု (ဥပမာ - `my_super_secret_key_123`)
-   * `CRON_SECRET`: Cron job ခေါ်ယူခွင့်ပြုရန် သတ်မှတ်ထားသော လျှို့ဝှက်စကားစု (ဥပမာ - `my-super-secret-cron-2026`)
-   * `ADMIN_SECRET_PATH`: Login page ကို စတင်ဝင်ရောက်ခွင့်ပြုမည့် လျှို့ဝှက်လမ်းကြောင်းစကားစု (ဥပမာ - `daweitharlay`)။ ဤလမ်းကြောင်းအား browser တွင် `https://your-domain.com/daweitharlay` ဟု အရင်ဆုံး ဝင်ရောက်ရိုက်နှိပ်မှသာ Login page ကို ပွင့်စေမည်ဖြစ်ပြီး မဟုတ်ပါက 404 Error သာ ပြသပါလိမ့်မည်။
-4. **Deploy** ကို နှိပ်လိုက်ပါက အသင့် အသုံးပြုနိုင်ပါပြီ။
-
----
-
-### ⚙️ VPS Crontab တွင် Cron job များ သတ်မှတ်ခြင်း (အကြံပြုချက်)
-Vercel Free plan တွင် ဒေတာပုံမှန် sync လုပ်ရန် VPS Linux server ၏ Crontab ကို အသုံးပြုရပါမည်။
-
-1. သင့် VPS ဆာဗာထဲသို့ SSH ဝင်ပါ။
-2. `crontab -e` ဟု ရိုက်နှိပ်ပါ။
-3. ဖိုင်၏ အောက်ဆုံးတွင် အောက်ပါစာကြောင်းများကို ကူးယူထည့်သွင်းပါ (`my-super-secret-cron-2026` နေရာတွင် သင်၏ Vercel `CRON_SECRET` တန်ဖိုးအား အစားထိုးပါ):
-   ```bash
-   # ၁၀ မိနစ်တစ်ကြိမ် ဒေတာအသုံးပြုမှု sync လုပ်ရန်
-   */10 * * * * curl -s -H "Authorization: Bearer my-super-secret-cron-2026" "https://your-app.vercel.app/api/cron/sync-usage" > /dev/null
-
-   # နေ့စဉ် ည ၁၂:၀၀ တွင် သက်တမ်းကုန်ဆုံးသူများကို စစ်ဆေးပိတ်ချရန်
-   0 0 * * * curl -s -H "Authorization: Bearer my-super-secret-cron-2026" "https://your-app.vercel.app/api/cron/check-expiry" > /dev/null
-
-   # နေ့စဉ် ညဉ့်နက် ၃:၀၀ တွင် Database အား WebDAV သို့ Backup တင်ရန်
-   0 3 * * * curl -s -H "Authorization: Bearer my-super-secret-cron-2026" "https://your-app.vercel.app/api/cron/auto-backup" > /dev/null
-   ```
-4. ဖိုင်အား Save လုပ်ပြီး ထွက်ပါ။ (`Ctrl+O` -> `Enter` -> `Ctrl+X`)
-
----
-
-### ☁️ Cloud Auto Backup ထည့်သွင်းနည်း (WebDAV / Koofr)
-1. [Koofr](https://koofr.eu) တွင် အကောင့်ဖွင့်ပြီး **Preferences > Password > App Passwords** တွင် Password အသစ်တစ်ခုထုတ်ယူပါ။
-2. သင့် Panel ၏ **Settings > Backup & Restore** တွင် ဖြည့်ပါ:
-   * **URL**: `https://app.koofr.net/dav/Koofr` (Folder သီးသန့်ခွဲလိုပါက အဆုံးတွင် `/FolderName` ဟု ရေးပါ)
-   * **Username**: Koofr အကောင့် email
-   * **Password**: Koofr မှ ထုတ်ပေးလိုက်သော App Password
-3. **Enable Daily Auto Backup** အား ဖွင့်ပြီး သိမ်းဆည်းပါ။
-
----
-
-### 🖥️ ဆာဗာ Add လုပ်နည်း (လိုအပ်သော အချက်အလက် ရှာဖွေနည်း)
-
-Servers page တွင် **Add Server** ကို နှိပ်ပါ။ ဆာဗာ အမျိုးအစားပေါ်မူတည်ပြီး ဖြည့်ရမည့် field များ ကွဲပြားသည်။
-
----
-
-#### 🔵 Outline ဆာဗာ
-
-| Field | ဘယ်နေရာမှ ယူမလဲ |
-|---|---|
-| **Server Name** | မိမိစိတ်ကြိုက် ဆာဗာအမည် (ဥပမာ `SG-01 Outline`) |
-| **Outline API URL** | VPS သို့ SSH ဝင်ပြီး `cat /opt/outline/access.txt` ရိုက်ပါ → `apiUrl` တန်ဖိုးကို ကူးပါ |
-| **Certificate SHA-256** | အထက်ပါ `access.txt` ထွက်ရလာသော output မှ `certSha256` တန်ဖိုးကို ကူးပါ |
-
-**`access.txt` ထွက်ရသော output ပုံစံ:**
-```json
-{"apiUrl":"https://123.45.67.89:12345/AbCdEfGhIjKlMn","certSha256":"AB:CD:EF:12:34:56:..."}
 ```
-`apiUrl` → **Outline API URL** တွင် ထည့်ပါ။
-`certSha256` → **Certificate SHA-256** တွင် ထည့်ပါ။
+python-sub-panel/
+├── app/
+│   ├── __init__.py
+│   ├── database.py       # SQLAlchemy + SQLite setup
+│   ├── models.py         # Server, Client, ClientKey, Setting tables
+│   ├── schemas.py        # Pydantic request/response models
+│   ├── main.py           # FastAPI entry point + auth middleware
+│   ├── tasks.py          # APScheduler background jobs
+│   ├── routers/
+│   │   ├── auth.py       # Login/logout with timing-safe comparison
+│   │   ├── clients.py    # Client CRUD + usage metrics fetch
+│   │   ├── servers.py    # Server CRUD + status ping + orphan keys
+│   │   ├── settings.py   # App settings management
+│   │   ├── backup.py     # JSON export/import + WebDAV backup
+│   │   ├── sub.py        # Universal subscription link generator
+│   │   └── cron.py       # Cron endpoints (Bearer token auth)
+│   ├── services/
+│   │   ├── outline.py    # Outline VPN API integration
+│   │   ├── hysteria2.py  # Hysteria2 Express + Flask panel integration
+│   │   └── vpn_manager.py # Multi-protocol orchestrator
+│   ├── templates/
+│   │   ├── login.html    # Admin login page
+│   │   └── dashboard.html # Admin dashboard
+│   └── static/
+│       └── styles.css    # Glassmorphic dark theme CSS
+├── data/                 # SQLite DB storage (mounted volume)
+├── requirements.txt
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+└── README.md
+```
+
+#### ⚙️ VPS Deployment (Python Edition)
+
+```bash
+# 1. SSH into your VPS
+ssh ubuntu@your-vps-ip
+
+# 2. Clone or copy the project
+git clone https://github.com/uzinlay85/zinsubscriptionwebui-on-vps.git
+cd zinsubscriptionwebui-on-vps/python-sub-panel
+
+# 3. Copy environment file and edit
+cp .env.example .env
+nano .env
+
+# 4. Start with Docker Compose
+docker compose up -d --build
+
+# 5. Access admin panel
+# Browser: http://<your-vps-ip>:8000/<ADMIN_SECRET_PATH>
+```
+
+#### Environment Variables (Python Edition)
+
+| Variable | Default | Description |
+|---|---|---|
+| `ADMIN_USERNAME` | `admin` | Admin login username |
+| `ADMIN_PASSWORD` | `securepassword123` | Admin login password |
+| `AUTH_SECRET` | `change_me` | Session cookie secret |
+| `CRON_SECRET` | `my-super-secret-cron-2026` | Cron job auth token |
+| `ADMIN_SECRET_PATH` | `daweitharlay` | Hidden path for admin access |
+| `APP_NAME` | `My VPN Panel` | Brand name in subscription links |
+| `PANEL_NAME` | `VPN Panel` | Panel display name |
+| `SYNC_INTERVAL_MINUTES` | `10` | Usage sync interval |
+| `DATABASE_URL` | `sqlite:///./data/panel.db` | SQLite database path |
+
+#### Background Tasks (Python Edition)
+
+The Python edition includes built-in background tasks using APScheduler:
+
+| Task | Frequency | Description |
+|---|---|---|
+| Usage Sync | Every `SYNC_INTERVAL_MINUTES` | Fetches metrics from all servers, calculates deltas, updates usage |
+| Expiry Check | Daily at midnight | Blocks expired clients on all servers |
+| Auto Backup | Daily at 3:00 AM | Uploads JSON backup to WebDAV if enabled |
+
+No external crontab required — everything runs inside the container.
 
 ---
 
-#### 🟣 Hysteria2 ဆာဗာ
+### 📊 Tech Stack Comparison
 
-| Field | ဘယ်နေရာမှ ယူမလဲ |
-|---|---|
-| **Server Name** | မိမိစိတ်ကြိုက် ဆာဗာအမည် (ဥပမာ `US-01 Hysteria`) |
-| **Server API URL** | VPS တွင် Hysteria2 Express Backend ကို install လုပ်ထားသော URL — ဥပမာ `https://yourdomain.com/admin_path` |
-| **Auth Username** | Hysteria2 Backend ကို configure လုပ်ရာတွင် သတ်မှတ်ထားသော admin username |
-| **Auth Password** | Hysteria2 Backend ကို configure လုပ်ရာတွင် သတ်မှတ်ထားသော admin password |
+| Feature | Next.js Edition | Python FastAPI Edition |
+|---|---|---|
+| **Runtime** | Node.js 18+ | Python 3.11+ |
+| **Database** | Supabase (PostgreSQL) | SQLite (file-based) |
+| **Hosting** | Vercel + VPS Cron | Single VPS (Docker) |
+| **RAM Usage** | ~150-300MB | ~30-50MB |
+| **External Deps** | Supabase account required | Zero external dependencies |
+| **Background Tasks** | VPS Crontab | Built-in APScheduler |
+| **Best For** | Teams needing cloud DB | Solo operators, minimal VPS |
 
 ---
 
-#### 🟢 3x-ui ဆာဗာ
+### 🔒 Security Features
 
-| Field | ဘယ်နေရာမှ ယူမလဲ |
-|---|---|
-| **Server Name** | မိမိစိတ်ကြိုက် ဆာဗာအမည် (ဥပမာ `DE-01 3x-ui`) |
-| **3x-ui Panel URL** | 3x-ui panel ၏ ပြည့်စုံသော URL — ဥပမာ `http://123.45.67.89:2053` |
-| **Panel Username** | 3x-ui panel ဝင်ရောက်ရာတွင် သုံးသော username (ပုံမှန် `admin`) |
-| **Panel Password** | 3x-ui panel ဝင်ရောက်ရာတွင် သုံးသော password |
-| **Inbound ID** | 3x-ui panel → **Inbounds** သို့သွားပြီး ဘယ်ဆုံးကော်လံရှိ **#** နံပါတ်ကို ကြည့်ပါ |
-| **External Domain** *(ရွေးချယ်ရန်)* | Inbound ကို CDN သို့မဟုတ် reverse proxy domain ဖြင့် ချိတ်ဆက်ထားလျှင် ထည့်ပါ (ဥပမာ `sg.yourdomain.com`) — မဟုတ်ပါက ဗလာထားပါ |
-| **External Port** *(ရွေးချယ်ရန်)* | Reverse proxy ၏ port (ဥပမာ `443`) — မဟုတ်ပါက ဗလာထားပါ |
+* **Path-based secret gate** (`ADMIN_SECRET_PATH`) before login page
+* **HTTP-only, SameSite=Strict session cookies**
+* **Timing-safe credential comparison** to prevent timing attacks
+* **Bearer token authentication** for all cron endpoints
+* **5-second connection timeouts** on all external API requests
+* **No sensitive data exposure** in logs or error messages
 
-**3x-ui တွင် Inbound ID ရှာနည်း:**
-```
-3x-ui Panel → Inbounds (ဝင်ချောင်းများ) → table ၏ ဘယ်ဆုံး # ကော်လံရှိ ဂဏန်းကို ကြည့်ပါ
+---
 
-ဥပမာ:
-  # | Protocol | ...
-  1 | vmess    | ...   ← Inbound ID = 1
-  2 | vless    | ...   ← Inbound ID = 2
-```
+### 🤝 Contributing
+
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+
+---
+
+### 📄 License
+
+This project is licensed under the MIT License.

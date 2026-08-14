@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - {{ app_name }}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="bg-slate-950 text-white min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-md p-8">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-white mb-2">{{ app_name }}</h1>
+            <p class="text-zinc-400">Admin Panel Login</p>
+        </div>
+        
+        <form id="loginForm" class="space-y-6">
+            <div>
+                <label class="block text-sm font-medium text-zinc-400 mb-2">Username</label>
+                <input type="text" id="username" name="username" required
+                    class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-zinc-400 mb-2">Password</label>
+                <input type="password" id="password" name="password" required
+                    class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+            </div>
+            
+            <div id="error" class="hidden text-red-400 text-sm text-center"></div>
+            
+            <button type="submit" 
+                class="w-full px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors">
+                Sign In
+            </button>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorEl = document.getElementById('error');
+            
+            try {
+                const resp = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username, password})
+                });
+                
+                if (resp.ok) {
+                    window.location.href = '/';
+                } else {
+                    const data = await resp.json();
+                    errorEl.textContent = data.detail || 'Login failed';
+                    errorEl.classList.remove('hidden');
+                }
+            } catch (err) {
+                errorEl.textContent = 'Network error';
+                errorEl.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

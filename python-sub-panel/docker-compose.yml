@@ -1,0 +1,23 @@
+services:
+  panel:
+    build: .
+    container_name: vpn-sub-panel
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=securepassword123
+      - AUTH_SECRET=change_this_to_a_random_long_secret_key_123456789
+      - CRON_SECRET=my-super-secret-cron-2026
+      - ADMIN_SECRET_PATH=daweitharlay
+      - APP_NAME=My VPN Panel
+      - PANEL_NAME=VPN Panel
+      - SYNC_INTERVAL_MINUTES=10
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
