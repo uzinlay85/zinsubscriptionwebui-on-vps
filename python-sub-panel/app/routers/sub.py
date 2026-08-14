@@ -115,7 +115,19 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
         if server.type == "outline":
             nodes.append(k.access_url)
         elif server.type in ["hysteria2", "hysteria2_python"]:
-            nodes.append(k.access_url)
+            if k.access_url and k.access_url.strip():
+                nodes.append(k.access_url.strip())
+            else:
+                raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
+                if ':' in raw_host_port:
+                    parsed_host, parsed_port = raw_host_port.split(':')[0], raw_host_port.split(':')[1]
+                else:
+                    parsed_host, parsed_port = raw_host_port, "10443"
+                host = server.external_domain or parsed_host
+                port = server.external_port or int(parsed_port)
+                pwd = k.outline_key_id or f"{client.name}_key"
+                fallback_url = f"hy2://{pwd}@{host}:{port}/?security=tls&sni={host}#{server.name} - {client.name}"
+                nodes.append(fallback_url)
         elif server.type == "3x-ui":
             if k.access_url.startswith("3x-ui-sub:"):
                 sub_id = k.access_url.replace("3x-ui-sub:", "")
