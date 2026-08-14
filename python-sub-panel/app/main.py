@@ -92,6 +92,18 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         "stats": stats
     })
 
+@app.get("/servers", response_class=HTMLResponse)
+async def servers_page(request: Request):
+    return templates.TemplateResponse("servers.html", {"request": request, "app_name": APP_NAME})
+
+@app.get("/clients", response_class=HTMLResponse)
+async def clients_page(request: Request):
+    return templates.TemplateResponse("clients.html", {"request": request, "app_name": APP_NAME})
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    return templates.TemplateResponse("settings.html", {"request": request, "app_name": APP_NAME})
+
 @app.get(f"/{ADMIN_SECRET_PATH}")
 async def secret_path_entry(response: Response):
     if not ADMIN_SECRET_PATH:
