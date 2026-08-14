@@ -176,6 +176,22 @@ async def update_server(server_id: str, server_req: ServerUpdate, db: Session = 
     db.commit()
     db.refresh(server)
     
+    # Refresh existing client keys access_url for this server
+    existing_keys = db.query(ClientKey).filter(ClientKey.server_id == server_id).all()
+    if existing_keys:
+        for k in existing_keys:
+            client = db.query(Client).filter(Client.id == k.client_id).first()
+            if client and server.type in ["hysteria2", "hysteria2_python"]:
+                raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
+                if ':' in raw_host_port:
+                    parsed_host, parsed_port = raw_host_port.split(':')[0], raw_host_port.split(':')[1]
+                else:
+                    parsed_host, parsed_port = raw_host_port, "10443"
+                host = server.external_domain or parsed_host
+                port = server.external_port or int(parsed_port)
+                k.access_url = f"hy2://{k.outline_key_id}@{host}:{port}/?security=tls&sni={host}#{server.name} - {client.name}"
+        db.commit()
+    
     return {
         "id": server.id,
         "name": server.name,

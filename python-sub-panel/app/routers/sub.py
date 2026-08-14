@@ -72,8 +72,16 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
                 }
             )
     
+    all_servers = db.query(Server).all()
+    existing_key_server_ids = {k.server_id for k in db.query(ClientKey).filter(ClientKey.client_id == client.id).all()}
+    missing_server_ids = [s.id for s in all_servers if s.id not in existing_key_server_ids]
+    
+    if missing_server_ids and client.status == "active":
+        from app.services.vpn_manager import generate_keys_for_client
+        await generate_keys_for_client(client, missing_server_ids, db)
+    
     keys = db.query(ClientKey).filter(ClientKey.client_id == client.id).all()
-    servers = {s.id: s for s in db.query(Server).all()}
+    servers = {s.id: s for s in all_servers}
     
     nodes = []
     total_usage = client.total_usage_bytes
