@@ -87,8 +87,16 @@ http://your-vps-ip:8000/<generated-secret-path>
 
 **To completely remove the panel from your VPS:**
 ```bash
+# If installed via setup.sh (Docker default)
 cd /opt/vpn-sub-panel/python-sub-panel
 bash uninstall.sh
+
+# OR if you manually cloned the repo
+cd /home/zinko/zinsubscriptionwebui-on-vps/python-sub-panel
+bash uninstall.sh
+
+# OR run from any directory - script will auto-detect
+bash /path/to/uninstall.sh
 ```
 
 The uninstall script will:
