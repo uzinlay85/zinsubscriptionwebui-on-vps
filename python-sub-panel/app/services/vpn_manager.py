@@ -47,24 +47,29 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
         
         elif server.type in ["hysteria2", "hysteria2_python"]:
             password = generate_password()
+            user_id = password
             if server.type == "hysteria2":
                 result = await hysteria2.express_create_user(server, client.name, password)
+                if result:
+                    user_id = str(result.get("user_id", password))
             else:
-                result = await hysteria2.flask_add_user(server, client.name, password)
+                await hysteria2.flask_add_user(server, client.name, password)
             
-            if result:
-                access_url = f"hysteria2://{client.name}:{password}@{server.api_url.replace('https://', '').replace('http://', '').split('/')[0]}:443?insecure=0&sni={server.api_url.replace('https://', '').replace('http://', '').split('/')[0]}#{client.name}"
-                client_key = ClientKey(
-                    id=key_id,
-                    client_id=client.id,
-                    server_id=server.id,
-                    outline_key_id=result.get("user_id", password),
-                    access_url=access_url,
-                    created_at=now,
-                    uuid=None,
-                    last_seen_bytes=0
-                )
-                db.add(client_key)
+            host = server.external_domain or server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0].split(':')[0]
+            port = server.external_port or 443
+            access_url = f"hysteria2://{client.name}:{password}@{host}:{port}?insecure=1&sni={host}#{server.name} - {client.name}"
+            
+            client_key = ClientKey(
+                id=key_id,
+                client_id=client.id,
+                server_id=server.id,
+                outline_key_id=user_id,
+                access_url=access_url,
+                created_at=now,
+                uuid=None,
+                last_seen_bytes=0
+            )
+            db.add(client_key)
         
         elif server.type == "3x-ui":
             client_uuid = generate_uuid()

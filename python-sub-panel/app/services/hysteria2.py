@@ -5,19 +5,29 @@ import re
 from typing import Optional, Dict, Any, List
 from app.models import Client, ClientKey, Server
 
+def get_auth_headers(server: Server) -> Dict[str, str]:
+    headers = {}
+    if server.auth_username and server.auth_password:
+        token = base64.b64encode(f"{server.auth_username}:{server.auth_password}".encode()).decode()
+        headers["Authorization"] = f"Basic {token}"
+    return headers
+
 async def express_create_user(server: Server, username: str, password: str, expiry_days: int = 0) -> Optional[Dict[str, Any]]:
     try:
+        url = f"{server.api_url.rstrip('/')}/api/users"
+        headers = get_auth_headers(server)
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{server.api_url}/api/users",
+                url,
                 json={"username": username, "password": password, "expiry_days": expiry_days},
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False
             ) as resp:
-                if resp.status == 200:
+                if resp.status in [200, 201]:
                     data = await resp.json()
                     return {
-                        "user_id": data.get("id", ""),
+                        "user_id": str(data.get("id", "") or username),
                         "username": username,
                         "password": password
                     }
@@ -27,47 +37,43 @@ async def express_create_user(server: Server, username: str, password: str, expi
 
 async def express_delete_user(server: Server, user_id: str) -> bool:
     try:
+        url = f"{server.api_url.rstrip('/')}/api/users/{user_id}"
+        headers = get_auth_headers(server)
         async with aiohttp.ClientSession() as session:
             async with session.delete(
-                f"{server.api_url}/api/users/{user_id}",
+                url,
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False
             ) as resp:
-                return resp.status == 200
+                return resp.status in [200, 204]
     except Exception:
         return False
 
 async def express_update_user(server: Server, user_id: str, username: str, password: str, expiry_days: int) -> bool:
     try:
+        url = f"{server.api_url.rstrip('/')}/api/users/{user_id}"
+        headers = get_auth_headers(server)
         async with aiohttp.ClientSession() as session:
             async with session.put(
-                f"{server.api_url}/api/users/{user_id}",
+                url,
                 json={"username": username, "password": password, "expiry_days": expiry_days},
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False
             ) as resp:
-                return resp.status == 200
-    except Exception:
-        return False
-
-async def express_update_user(server: Server, user_id: str, username: str, password: str, expiry_days: int) -> bool:
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.put(
-                f"{server.api_url}/api/users/{user_id}",
-                json={"username": username, "password": password, "expiry_days": expiry_days},
-                timeout=aiohttp.ClientTimeout(total=5),
-                ssl=False
-            ) as resp:
-                return resp.status == 200
+                return resp.status in [200, 204]
     except Exception:
         return False
 
 async def express_fetch_users(server: Server) -> List[Dict[str, Any]]:
     try:
+        url = f"{server.api_url.rstrip('/')}/api/users"
+        headers = get_auth_headers(server)
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                f"{server.api_url}/api/users",
+                url,
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False
             ) as resp:

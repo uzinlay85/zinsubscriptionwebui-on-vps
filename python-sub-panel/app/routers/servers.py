@@ -38,6 +38,43 @@ async def list_servers(db: Session = Depends(get_db)):
         for s in servers
     ]
 
+@router.get("/status", response_model=List[ServerStatusResponse])
+@router.get("/status/", response_model=List[ServerStatusResponse])
+async def get_status(db: Session = Depends(get_db)):
+    servers = db.query(Server).all()
+    
+    async def ping_server(server):
+        try:
+            start = time.time()
+            url = server.api_url.rstrip("/")
+            if server.type == "outline":
+                url = f"{url}/access-keys"
+            elif server.type in ["hysteria2", "hysteria2_python"]:
+                url = f"{url}/api/users"
+            
+            headers = {}
+            if server.auth_username and server.auth_password:
+                import base64
+                token = base64.b64encode(f"{server.auth_username}:{server.auth_password}".encode()).decode()
+                headers["Authorization"] = f"Basic {token}"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    url,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=5),
+                    ssl=False
+                ) as resp:
+                    latency = int((time.time() - start) * 1000)
+                    is_online = resp.status < 500
+                    return {"id": server.id, "online": is_online, "latency": latency}
+        except Exception:
+            return {"id": server.id, "online": False, "latency": None}
+    
+    tasks = [ping_server(s) for s in servers]
+    results = await asyncio.gather(*tasks)
+    return results
+
 @router.get("/{server_id}", response_model=ServerResponse)
 async def get_server(server_id: str, db: Session = Depends(get_db)):
     server = db.query(Server).filter(Server.id == server_id).first()
@@ -165,29 +202,6 @@ async def delete_server(server_id: str, db: Session = Depends(get_db)):
     db.delete(server)
     db.commit()
     return {"ok": True}
-
-@router.get("/status", response_model=List[ServerStatusResponse])
-async def get_status(db: Session = Depends(get_db)):
-    servers = db.query(Server).all()
-    results = []
-    
-    async def ping_server(server):
-        try:
-            start = time.time()
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    server.api_url,
-                    timeout=aiohttp.ClientTimeout(total=5),
-                    ssl=False
-                ) as resp:
-                    latency = int((time.time() - start) * 1000)
-                    return {"id": server.id, "online": True, "latency": latency}
-        except Exception:
-            return {"id": server.id, "online": False, "latency": None}
-    
-    tasks = [ping_server(s) for s in servers]
-    results = await asyncio.gather(*tasks)
-    return results
 
 @router.get("/{server_id}/orphans")
 async def get_orphans(server_id: str, db: Session = Depends(get_db)):
