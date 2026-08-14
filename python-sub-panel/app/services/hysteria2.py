@@ -251,7 +251,8 @@ async def flask_fetch_users(server: Server) -> List[Dict[str, Any]]:
                         rx_b = parse_bytes_from_str(rx_match.group(1), rx_match.group(2)) if rx_match else 0
                         total_bytes = tx_b + rx_b
                         
-                    is_online = ("status-online" in row or "🟢 Online" in row or "Online" in row)
+                    # Strict Online status check (MUST NOT match 'Offline')
+                    is_online = ("status-online" in row or "🟢 Online" in row) and ("status-offline" not in row and "⚪ Offline" not in row)
                     ls_match = re.search(r'(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})', row)
                     last_seen = ls_match.group(1) if ls_match else None
                     

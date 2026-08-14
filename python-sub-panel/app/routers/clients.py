@@ -206,6 +206,11 @@ def format_client_response(c: Client) -> dict:
 @router.get("", response_model=List[ClientResponse])
 @router.get("/", response_model=List[ClientResponse])
 async def list_clients(db: Session = Depends(get_db)):
+    try:
+        from app.services.vpn_manager import sync_all_usage
+        await sync_all_usage(db)
+    except Exception:
+        pass
     clients = db.query(Client).order_by(Client.created_at.desc()).all()
     return [format_client_response(c) for c in clients]
 
