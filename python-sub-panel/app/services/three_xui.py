@@ -129,28 +129,74 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
                 c_data["flow"] = "xtls-rprx-vision"
 
             added = False
-            async with session.post(
-                f"{api_base}/panel/api/inbounds/addClient",
-                json={"id": inbound_id, "settings": json.dumps({"clients": [c_data]})},
-                timeout=aiohttp.ClientTimeout(total=5),
-                ssl=False
-            ) as add_resp1:
-                if add_resp1.status == 200:
-                    res1 = await add_resp1.json()
-                    if res1.get("success"):
-                        added = True
-
-            if not added:
+            
+            # Method 1: POST /panel/api/inbounds/addClient with id and settings JSON string
+            try:
                 async with session.post(
-                    f"{api_base}/panel/api/inbounds/{inbound_id}/addClient",
-                    json={"clients": [c_data]},
+                    f"{api_base}/panel/api/inbounds/addClient",
+                    json={"id": int(inbound_id), "settings": json.dumps({"clients": [c_data]})},
                     timeout=aiohttp.ClientTimeout(total=5),
                     ssl=False
-                ) as add_resp2:
-                    if add_resp2.status == 200:
-                        res2 = await add_resp2.json()
-                        if res2.get("success"):
+                ) as add_resp1:
+                    if add_resp1.status == 200:
+                        res1 = await add_resp1.json()
+                        if res1.get("success"):
                             added = True
+            except Exception:
+                pass
+
+            # Method 2: POST /panel/api/inbounds/{inbound_id}/addClient
+            if not added:
+                try:
+                    async with session.post(
+                        f"{api_base}/panel/api/inbounds/{inbound_id}/addClient",
+                        json={"clients": [c_data]},
+                        timeout=aiohttp.ClientTimeout(total=5),
+                        ssl=False
+                    ) as add_resp2:
+                        if add_resp2.status == 200:
+                            res2 = await add_resp2.json()
+                            if res2.get("success"):
+                                added = True
+                except Exception:
+                    pass
+
+            # Method 3: Inbound Update Fallback (Reads inbound, appends client to settings, updates inbound)
+            if not added:
+                try:
+                    async with session.get(
+                        f"{api_base}/panel/api/inbounds/get/{inbound_id}",
+                        timeout=aiohttp.ClientTimeout(total=5),
+                        ssl=False
+                    ) as get_resp2:
+                        if get_resp2.status == 200:
+                            gdata = await get_resp2.json()
+                            if gdata.get("success"):
+                                inb_obj = gdata.get("obj", {})
+                                inb_settings_raw = inb_obj.get("settings", "{}")
+                                try:
+                                    inb_settings = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else inb_settings_raw
+                                except Exception:
+                                    inb_settings = {}
+                                    
+                                existing_clients = inb_settings.get("clients", [])
+                                existing_clients = [cl for cl in existing_clients if cl.get("email") != client.name and cl.get("id") != client_uuid]
+                                existing_clients.append(c_data)
+                                inb_settings["clients"] = existing_clients
+                                inb_obj["settings"] = json.dumps(inb_settings)
+                                
+                                async with session.post(
+                                    f"{api_base}/panel/api/inbounds/update/{inbound_id}",
+                                    json=inb_obj,
+                                    timeout=aiohttp.ClientTimeout(total=5),
+                                    ssl=False
+                                ) as update_resp:
+                                    if update_resp.status == 200:
+                                        ures = await update_resp.json()
+                                        if ures.get("success"):
+                                            added = True
+                except Exception:
+                    pass
 
             if protocol == "vless":
                 if security == "reality":
@@ -194,11 +240,54 @@ async def delete_3xui_client(server: Server, client_uuid: str) -> bool:
                 return False
                 
             inbound_id = server.inbound_id or 1
-            async with session.post(
-                f"{api_base}/panel/api/inbounds/{inbound_id}/delClient/{client_uuid}",
-                timeout=aiohttp.ClientTimeout(total=5),
-                ssl=False
-            ) as del_resp:
-                return del_resp.status == 200
+            deleted = False
+            try:
+                async with session.post(
+                    f"{api_base}/panel/api/inbounds/{inbound_id}/delClient/{client_uuid}",
+                    timeout=aiohttp.ClientTimeout(total=5),
+                    ssl=False
+                ) as del_resp:
+                    if del_resp.status == 200:
+                        res = await del_resp.json()
+                        if res.get("success"):
+                            deleted = True
+            except Exception:
+                pass
+                
+            if not deleted:
+                try:
+                    async with session.get(
+                        f"{api_base}/panel/api/inbounds/get/{inbound_id}",
+                        timeout=aiohttp.ClientTimeout(total=5),
+                        ssl=False
+                    ) as get_resp:
+                        if get_resp.status == 200:
+                            gdata = await get_resp.json()
+                            if gdata.get("success"):
+                                inb_obj = gdata.get("obj", {})
+                                inb_settings_raw = inb_obj.get("settings", "{}")
+                                try:
+                                    inb_settings = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else inb_settings_raw
+                                except Exception:
+                                    inb_settings = {}
+                                    
+                                existing_clients = inb_settings.get("clients", [])
+                                existing_clients = [cl for cl in existing_clients if cl.get("id") != client_uuid]
+                                inb_settings["clients"] = existing_clients
+                                inb_obj["settings"] = json.dumps(inb_settings)
+                                
+                                async with session.post(
+                                    f"{api_base}/panel/api/inbounds/update/{inbound_id}",
+                                    json=inb_obj,
+                                    timeout=aiohttp.ClientTimeout(total=5),
+                                    ssl=False
+                                ) as update_resp:
+                                    if update_resp.status == 200:
+                                        ures = await update_resp.json()
+                                        if ures.get("success"):
+                                            deleted = True
+                except Exception:
+                    pass
+            return deleted
     except Exception:
         return False

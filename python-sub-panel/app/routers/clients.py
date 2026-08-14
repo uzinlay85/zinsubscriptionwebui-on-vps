@@ -344,6 +344,15 @@ async def sync_keys(client_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Client is not active")
     
     existing_keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
+    
+    # Delete broken or outdated keys (e.g. 3x-ui-sub:) so they can be regenerated cleanly
+    invalid_keys = [k for k in existing_keys if not k.access_url or k.access_url.startswith("3x-ui-sub:")]
+    for ik in invalid_keys:
+        db.delete(ik)
+    if invalid_keys:
+        db.commit()
+        existing_keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
+
     existing_server_ids = {k.server_id for k in existing_keys}
     all_servers = db.query(Server).all()
     
