@@ -157,35 +157,12 @@ async def delete_server_keys(server: Server, db: Session):
             else:
                 await hysteria2.flask_delete_user(server, k.outline_key_id)
         elif server.type == "3x-ui":
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        server.api_url,
-                        timeout=aiohttp.ClientTimeout(total=5),
-                        ssl=False
-                    ) as resp:
-                        if resp.status == 200:
-                            html = await resp.text()
-                            csrf_match = re.search(r'csrfToken.*?"([^"]+)"', html)
-                            if csrf_match:
-                                csrf_token = csrf_match.group(1)
-                                
-                                async with session.post(
-                                    server.api_url + "/login",
-                                    data={"username": server.username, "password": server.password},
-                                    timeout=aiohttp.ClientTimeout(total=5),
-                                    ssl=False
-                                ) as login_resp:
-                                    if login_resp.status == 200:
-                                        if k.uuid:
-                                            async with session.post(
-                                                server.api_url + f"/panel/api/inbounds/{server.inbound_id}/delClient/{k.uuid}",
-                                                timeout=aiohttp.ClientTimeout(total=5),
-                                                ssl=False
-                                            ) as del_resp:
-                                                pass
-            except Exception:
-                pass
+            if k.uuid:
+                try:
+                    from app.services.three_xui import delete_3xui_client
+                    await delete_3xui_client(server, k.uuid)
+                except Exception:
+                    pass
         
         db.delete(k)
     
@@ -210,53 +187,12 @@ async def block_client_keys(client: Client, db: Session):
             else:
                 await hysteria2.flask_delete_user(server, k.outline_key_id)
         elif server.type == "3x-ui":
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        server.api_url,
-                        timeout=aiohttp.ClientTimeout(total=5),
-                        ssl=False
-                    ) as resp:
-                        if resp.status == 200:
-                            html = await resp.text()
-                            csrf_match = re.search(r'csrfToken.*?"([^"]+)"', html)
-                            if csrf_match:
-                                csrf_token = csrf_match.group(1)
-                                
-                                async with session.post(
-                                    server.api_url + "/login",
-                                    data={"username": server.username, "password": server.password},
-                                    timeout=aiohttp.ClientTimeout(total=5),
-                                    ssl=False
-                                ) as login_resp:
-                                    if login_resp.status == 200:
-                                        async with session.get(
-                                            server.api_url + f"/panel/api/inbounds/get/{server.inbound_id}",
-                                            timeout=aiohttp.ClientTimeout(total=5),
-                                            ssl=False
-                                        ) as get_resp:
-                                            if get_resp.status == 200:
-                                                data = await get_resp.json()
-                                                if data.get("success"):
-                                                    inbound = data.get("obj", {})
-                                                    settings = json.loads(inbound.get("settings", "{}"))
-                                                    clients_list = settings.get("clients", [])
-                                                    for c in clients_list:
-                                                        if c.get("id") == k.uuid:
-                                                            c["enable"] = False
-                                                            break
-                                                    settings["clients"] = clients_list
-                                                    inbound["settings"] = json.dumps(settings)
-                                                    
-                                                    async with session.post(
-                                                        server.api_url + f"/panel/api/inbounds/update/{server.inbound_id}",
-                                                        json=inbound,
-                                                        timeout=aiohttp.ClientTimeout(total=5),
-                                                        ssl=False
-                                                    ) as update_resp:
-                                                        pass
-            except Exception:
-                pass
+            if k.uuid:
+                try:
+                    from app.services.three_xui import set_3xui_client_enabled
+                    await set_3xui_client_enabled(server, k.uuid, False)
+                except Exception:
+                    pass
 
 async def unblock_client_keys(client: Client, db: Session):
     keys = db.query(ClientKey).filter(ClientKey.client_id == client.id).all()
@@ -275,53 +211,12 @@ async def unblock_client_keys(client: Client, db: Session):
             else:
                 await hysteria2.flask_add_user(server, client.name, k.outline_key_id)
         elif server.type == "3x-ui":
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        server.api_url,
-                        timeout=aiohttp.ClientTimeout(total=5),
-                        ssl=False
-                    ) as resp:
-                        if resp.status == 200:
-                            html = await resp.text()
-                            csrf_match = re.search(r'csrfToken.*?"([^"]+)"', html)
-                            if csrf_match:
-                                csrf_token = csrf_match.group(1)
-                                
-                                async with session.post(
-                                    server.api_url + "/login",
-                                    data={"username": server.username, "password": server.password},
-                                    timeout=aiohttp.ClientTimeout(total=5),
-                                    ssl=False
-                                ) as login_resp:
-                                    if login_resp.status == 200:
-                                        async with session.get(
-                                            server.api_url + f"/panel/api/inbounds/get/{server.inbound_id}",
-                                            timeout=aiohttp.ClientTimeout(total=5),
-                                            ssl=False
-                                        ) as get_resp:
-                                            if get_resp.status == 200:
-                                                data = await get_resp.json()
-                                                if data.get("success"):
-                                                    inbound = data.get("obj", {})
-                                                    settings = json.loads(inbound.get("settings", "{}"))
-                                                    clients_list = settings.get("clients", [])
-                                                    for c in clients_list:
-                                                        if c.get("id") == k.uuid:
-                                                            c["enable"] = True
-                                                            break
-                                                    settings["clients"] = clients_list
-                                                    inbound["settings"] = json.dumps(settings)
-                                                    
-                                                    async with session.post(
-                                                        server.api_url + f"/panel/api/inbounds/update/{server.inbound_id}",
-                                                        json=inbound,
-                                                        timeout=aiohttp.ClientTimeout(total=5),
-                                                        ssl=False
-                                                    ) as update_resp:
-                                                        pass
-            except Exception:
-                pass
+            if k.uuid:
+                try:
+                    from app.services.three_xui import set_3xui_client_enabled
+                    await set_3xui_client_enabled(server, k.uuid, True)
+                except Exception:
+                    pass
 
 async def get_orphan_keys(server: Server, db: Session) -> List[Dict[str, Any]]:
     if server.type == "outline":
