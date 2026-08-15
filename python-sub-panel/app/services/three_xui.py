@@ -196,6 +196,12 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
                 net = stream.get("network", "tcp")
                 security = stream.get("security", "none")
                 
+                path = ""
+                sni = ext_host
+                pbk = ""
+                fp = "chrome"
+                sid = ""
+                
                 if net == "ws":
                     path = stream.get("wsSettings", {}).get("path", "/")
                 elif net == "grpc":
