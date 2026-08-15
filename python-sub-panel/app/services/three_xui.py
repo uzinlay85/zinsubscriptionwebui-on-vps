@@ -234,10 +234,17 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
             added = False
             
             # Different 3x-ui versions accept different addClient payload structures.
+            ib_id_int = 1
+            if inbound_id is not None:
+                try:
+                    ib_id_int = int(inbound_id)
+                except (ValueError, TypeError):
+                    pass
+
             add_client_payloads = [
-                {"id": int(inbound_id), "settings": {"clients": [c_data]}},
-                {"id": int(inbound_id), "settings": json.dumps({"clients": [c_data]})},
-                {"id": int(inbound_id), "settings": json.dumps({"clients": [c_data]}, separators=(",", ":"))},
+                {"id": ib_id_int, "settings": {"clients": [c_data]}},
+                {"id": ib_id_int, "settings": json.dumps({"clients": [c_data]})},
+                {"id": ib_id_int, "settings": json.dumps({"clients": [c_data]}, separators=(",", ":"))},
                 {"clients": [c_data]},
             ]
 
