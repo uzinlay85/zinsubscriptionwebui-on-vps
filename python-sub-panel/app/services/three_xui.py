@@ -20,48 +20,80 @@ def get_base_urls(server: Server) -> List[str]:
 async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional[str]:
     u_name = server.username or server.auth_username or "admin"
     u_pass = server.password or server.auth_password or "admin"
-    
+
     base_urls = get_base_urls(server)
     for api_base in base_urls:
         try:
             async with session.get(f"{api_base}/login", timeout=aiohttp.ClientTimeout(total=5), ssl=False) as resp:
-                html = await resp.text() if resp.status == 200 else ""
-                
-            csrf_token = ""
-            csrf_match = re.search(r'csrfToken.*?"([^"]+)"', html) or re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', html)
-            if csrf_match:
-                csrf_token = csrf_match.group(1)
-                
-            post_data = {"username": u_name, "password": u_pass}
-            if csrf_token:
-                post_data["csrf_token"] = csrf_token
-                
-            await session.post(
-                f"{api_base}/login",
-                data=post_data,
-                timeout=aiohttp.ClientTimeout(total=5),
-                ssl=False,
-                allow_redirects=True
-            )
-            
-            async with session.get(f"{api_base}/panel/api/inbounds/list", timeout=aiohttp.ClientTimeout(total=5), ssl=False) as verify_resp:
-                if verify_resp.status == 200:
-                    vdata = await verify_resp.json()
-                    if vdata.get("success") is True:
-                        return api_base
+                html = await resp.text() if resp.status in (200, 302) else ""
 
-            await session.post(
-                f"{api_base}/login",
-                json={"username": u_name, "password": u_pass},
-                timeout=aiohttp.ClientTimeout(total=5),
-                ssl=False
-            )
-            
-            async with session.get(f"{api_base}/panel/api/inbounds/list", timeout=aiohttp.ClientTimeout(total=5), ssl=False) as verify_resp2:
-                if verify_resp2.status == 200:
-                    vdata2 = await verify_resp2.json()
-                    if vdata2.get("success") is True:
-                        return api_base
+            csrf_token = extract_csrf_token(html)
+            csrf_headers = {"X-CSRF-Token": csrf_token} if csrf_token else {}
+
+            login_attempts = []
+            if csrf_token:
+                login_attempts.append({"username": u_name, "password": u_pass, "csrf_token": csrf_token})
+                login_attempts.append({"username": u_name, "password": u_pass})
+            else:
+                login_attempts.append({"username": u_name, "password": u_pass})
+            login_attempts.append({"username": u_name, "password": u_pass})
+
+            login_ok = False
+            for payload in login_attempts:
+                try:
+                    await session.post(
+                        f"{api_base}/login",
+                        data=payload,
+                        headers=csrf_headers,
+                        timeout=aiohttp.ClientTimeout(total=5),
+                        ssl=False,
+                        allow_redirects=True
+                    )
+                    async with session.get(
+                        f"{api_base}/panel/api/inbounds/list",
+                        headers=csrf_headers,
+                        timeout=aiohttp.ClientTimeout(total=5),
+                        ssl=False
+                    ) as verify_resp:
+                        if verify_resp.status == 200:
+                            try:
+                                vdata = await verify_resp.json()
+                            except Exception:
+                                vdata = {}
+                            if vdata.get("success") is True:
+                                login_ok = True
+                                break
+                except Exception:
+                    continue
+
+            if login_ok:
+                return api_base
+
+            for payload in [{"username": u_name, "password": u_pass}, {"username": u_name, "password": u_pass, "csrf_token": csrf_token} if csrf_token else {"username": u_name, "password": u_pass}]:
+                try:
+                    await session.post(
+                        f"{api_base}/login",
+                        json=payload,
+                        headers=csrf_headers,
+                        timeout=aiohttp.ClientTimeout(total=5),
+                        ssl=False,
+                        allow_redirects=True
+                    )
+                    async with session.get(
+                        f"{api_base}/panel/api/inbounds/list",
+                        headers=csrf_headers,
+                        timeout=aiohttp.ClientTimeout(total=5),
+                        ssl=False
+                    ) as verify_resp2:
+                        if verify_resp2.status == 200:
+                            try:
+                                vdata2 = await verify_resp2.json()
+                            except Exception:
+                                vdata2 = {}
+                            if vdata2.get("success") is True:
+                                return api_base
+                except Exception:
+                    continue
         except Exception as e:
             print(f"3x-ui login error for {api_base}: {e}")
     return None
@@ -77,6 +109,24 @@ def parse_server_host_port(server: Server):
     ext_host = server.external_domain or host
     ext_port = server.external_port or int(port)
     return ext_host, ext_port
+
+
+def extract_csrf_token(html: str) -> str:
+    if not html:
+        return ""
+    patterns = [
+        r'csrfToken\s*[:=]\s*["\']([^"\']+)["\']',
+        r'csrf[-_ ]token\s*[:=]\s*["\']([^"\']+)["\']',
+        r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']',
+        r'content=["\']([^"\']*csrf[^"\']*)["\']',
+        r'"csrfToken"\s*:\s*"([^"]+)"'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, html, flags=re.I)
+        if match:
+            return match.group(1)
+    return ""
+
 
 async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_id: str) -> Optional[str]:
     ext_host, ext_port = parse_server_host_port(server)
@@ -183,36 +233,55 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
 
             added = False
             
-            # Method 1: POST /panel/api/inbounds/addClient with id and settings JSON string
-            try:
-                async with session.post(
-                    f"{api_base}/panel/api/inbounds/addClient",
-                    json={"id": int(inbound_id), "settings": json.dumps({"clients": [c_data]})},
-                    timeout=aiohttp.ClientTimeout(total=5),
-                    ssl=False
-                ) as add_resp1:
-                    if add_resp1.status == 200:
-                        res1 = await add_resp1.json()
-                        if res1.get("success"):
-                            added = True
-            except Exception:
-                pass
+            # Different 3x-ui versions accept different addClient payload structures.
+            add_client_payloads = [
+                {"id": int(inbound_id), "settings": {"clients": [c_data]}},
+                {"id": int(inbound_id), "settings": json.dumps({"clients": [c_data]})},
+                {"id": int(inbound_id), "settings": json.dumps({"clients": [c_data]}, separators=(",", ":"))},
+                {"clients": [c_data]},
+            ]
+
+            for payload in add_client_payloads:
+                if added:
+                    break
+                try:
+                    async with session.post(
+                        f"{api_base}/panel/api/inbounds/addClient",
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=5),
+                        ssl=False
+                    ) as add_resp:
+                        if add_resp.status == 200:
+                            try:
+                                res = await add_resp.json()
+                            except Exception:
+                                res = {}
+                            if res.get("success"):
+                                added = True
+                                break
+                except Exception:
+                    pass
 
             # Method 2: POST /panel/api/inbounds/{inbound_id}/addClient
             if not added:
-                try:
-                    async with session.post(
-                        f"{api_base}/panel/api/inbounds/{inbound_id}/addClient",
-                        json={"clients": [c_data]},
-                        timeout=aiohttp.ClientTimeout(total=5),
-                        ssl=False
-                    ) as add_resp2:
-                        if add_resp2.status == 200:
-                            res2 = await add_resp2.json()
-                            if res2.get("success"):
-                                added = True
-                except Exception:
-                    pass
+                for payload in [{"clients": [c_data]}, {"settings": {"clients": [c_data]}}]:
+                    try:
+                        async with session.post(
+                            f"{api_base}/panel/api/inbounds/{inbound_id}/addClient",
+                            json=payload,
+                            timeout=aiohttp.ClientTimeout(total=5),
+                            ssl=False
+                        ) as add_resp2:
+                            if add_resp2.status == 200:
+                                try:
+                                    res2 = await add_resp2.json()
+                                except Exception:
+                                    res2 = {}
+                                if res2.get("success"):
+                                    added = True
+                                    break
+                    except Exception:
+                        pass
 
             # Method 3: Inbound Update Fallback (Reads inbound, appends client to settings, updates inbound)
             if not added:
