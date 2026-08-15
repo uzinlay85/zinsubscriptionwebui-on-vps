@@ -43,26 +43,31 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
     base_urls = get_base_urls(server)
 
     for api_base in base_urls:
-        # Try form-data POST (most common for 3x-ui)
+        # Try form-data POST then JSON POST
         for payload_type in ["form", "json"]:
             try:
                 if payload_type == "form":
-                    login_resp = await session.post(
+                    async with session.post(
                         f"{api_base}/login",
                         data={"username": u_name, "password": u_pass},
                         timeout=aiohttp.ClientTimeout(total=5),
                         ssl=False,
                         allow_redirects=True
-                    )
+                    ) as login_resp:
+                        login_status = login_resp.status
+                        login_text = await login_resp.text()
                 else:
-                    login_resp = await session.post(
+                    async with session.post(
                         f"{api_base}/login",
                         json={"username": u_name, "password": u_pass},
                         timeout=aiohttp.ClientTimeout(total=5),
                         ssl=False,
                         allow_redirects=True
-                    )
-                login_resp.release()
+                    ) as login_resp:
+                        login_status = login_resp.status
+                        login_text = await login_resp.text()
+
+                print(f"3x-ui login ({payload_type}) for {api_base}: HTTP {login_status}")
 
                 # Verify session is valid by hitting the API
                 async with session.get(
@@ -70,15 +75,17 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
                     timeout=aiohttp.ClientTimeout(total=5),
                     ssl=False
                 ) as verify_resp:
+                    verify_text = await verify_resp.text()
+                    print(f"3x-ui verify inbounds/list: HTTP {verify_resp.status} body={verify_text[:120]}")
                     if verify_resp.status == 200:
                         try:
-                            vdata = await verify_resp.json()
+                            vdata = json.loads(verify_text)
                         except Exception:
                             vdata = {}
                         if vdata.get("success") is True:
                             return api_base
             except Exception as e:
-                print(f"3x-ui login attempt ({payload_type}) error for {api_base}: {e}")
+                print(f"3x-ui login attempt ({payload_type}) error for {api_base}: {type(e).__name__}: {e}")
                 continue
 
     print(f"3x-ui login failed for server {server.name} ({server.api_url})")
@@ -99,7 +106,9 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
     sid = ""
 
     try:
-        async with aiohttp.ClientSession() as session:
+        # Use unsafe CookieJar to allow cookies from all hosts including IP addresses
+        jar = aiohttp.CookieJar(unsafe=True)
+        async with aiohttp.ClientSession(cookie_jar=jar) as session:
             api_base = await login_3xui(session, server)
             if not api_base:
                 print(f"3x-ui: Cannot login for server {server.name}")
@@ -340,7 +349,8 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
 
 async def delete_3xui_client(server: Server, client_uuid: str) -> bool:
     try:
-        async with aiohttp.ClientSession() as session:
+        jar = aiohttp.CookieJar(unsafe=True)
+        async with aiohttp.ClientSession(cookie_jar=jar) as session:
             api_base = await login_3xui(session, server)
             if not api_base:
                 return False
@@ -411,7 +421,8 @@ async def delete_3xui_client(server: Server, client_uuid: str) -> bool:
 async def set_3xui_client_enabled(server: Server, client_uuid: str, enabled: bool) -> bool:
     """Enable or disable a client on 3x-ui panel."""
     try:
-        async with aiohttp.ClientSession() as session:
+        jar = aiohttp.CookieJar(unsafe=True)
+        async with aiohttp.ClientSession(cookie_jar=jar) as session:
             api_base = await login_3xui(session, server)
             if not api_base:
                 return False
