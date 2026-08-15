@@ -47,11 +47,13 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
                     res_text = await login_resp.text()
                     try:
                         res_json = json.loads(res_text)
-                        if res_json.get("success"):
+                        if res_json.get("success") is True:
                             return api_base
+                        elif res_json.get("success") is False:
+                            continue
                     except Exception:
                         pass
-                    if "success" in res_text or "inbounds" in res_text or "Clients" in res_text:
+                    if '"success":true' in res_text.replace(" ", "").lower():
                         return api_base
 
             async with session.post(
@@ -64,11 +66,13 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
                     res_text2 = await login_resp2.text()
                     try:
                         res_json2 = json.loads(res_text2)
-                        if res_json2.get("success"):
+                        if res_json2.get("success") is True:
                             return api_base
+                        elif res_json2.get("success") is False:
+                            continue
                     except Exception:
                         pass
-                    if "success" in res_text2 or "inbounds" in res_text2:
+                    if '"success":true' in res_text2.replace(" ", "").lower():
                         return api_base
         except Exception:
             pass
