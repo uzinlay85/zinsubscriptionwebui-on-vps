@@ -36,46 +36,34 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
             if csrf_token:
                 post_data["csrf_token"] = csrf_token
                 
-            async with session.post(
+            await session.post(
                 f"{api_base}/login",
                 data=post_data,
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False,
                 allow_redirects=True
-            ) as login_resp:
-                if login_resp.status == 200:
-                    res_text = await login_resp.text()
-                    try:
-                        res_json = json.loads(res_text)
-                        if res_json.get("success") is True:
-                            return api_base
-                        elif res_json.get("success") is False:
-                            continue
-                    except Exception:
-                        pass
-                    if '"success":true' in res_text.replace(" ", "").lower():
+            )
+            
+            async with session.get(f"{api_base}/panel/api/inbounds/list", timeout=aiohttp.ClientTimeout(total=5), ssl=False) as verify_resp:
+                if verify_resp.status == 200:
+                    vdata = await verify_resp.json()
+                    if vdata.get("success") is True:
                         return api_base
 
-            async with session.post(
+            await session.post(
                 f"{api_base}/login",
                 json={"username": u_name, "password": u_pass},
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False
-            ) as login_resp2:
-                if login_resp2.status == 200:
-                    res_text2 = await login_resp2.text()
-                    try:
-                        res_json2 = json.loads(res_text2)
-                        if res_json2.get("success") is True:
-                            return api_base
-                        elif res_json2.get("success") is False:
-                            continue
-                    except Exception:
-                        pass
-                    if '"success":true' in res_text2.replace(" ", "").lower():
+            )
+            
+            async with session.get(f"{api_base}/panel/api/inbounds/list", timeout=aiohttp.ClientTimeout(total=5), ssl=False) as verify_resp2:
+                if verify_resp2.status == 200:
+                    vdata2 = await verify_resp2.json()
+                    if vdata2.get("success") is True:
                         return api_base
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"3x-ui login error for {api_base}: {e}")
     return None
 
 def parse_server_host_port(server: Server):

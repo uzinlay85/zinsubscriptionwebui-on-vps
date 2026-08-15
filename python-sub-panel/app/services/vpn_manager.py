@@ -27,6 +27,22 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
     servers = db.query(Server).filter(Server.id.in_(server_ids)).all()
     
     for server in servers:
+        # Delete any pre-existing key for this exact (client_id, server_id) to prevent duplicate cards
+        old_keys = db.query(ClientKey).filter(
+            ClientKey.client_id == client.id,
+            ClientKey.server_id == server.id
+        ).all()
+        for ok in old_keys:
+            if server.type == "3x-ui" and ok.uuid:
+                try:
+                    from app.services.three_xui import delete_3xui_client
+                    await delete_3xui_client(server, ok.uuid)
+                except Exception:
+                    pass
+            db.delete(ok)
+        if old_keys:
+            db.commit()
+            
         key_id = generate_id()
         now = datetime.utcnow().isoformat()
         
@@ -67,8 +83,6 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
             host = server.external_domain or parsed_host
             port = server.external_port or int(parsed_port)
             
-            # Exact format matching Hy2_WebUI_ManusAi:
-            # hy2://<user_pass>@<domain>:<port>/?security=tls&sni=<domain>#<server_name> - <client_name>
             access_url = f"hy2://{password}@{host}:{port}/?security=tls&sni={host}#{server.name} - {client.name}"
             
             client_key = ClientKey(
@@ -89,22 +103,18 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
             
             from app.services.three_xui import add_3xui_client
             access_url = await add_3xui_client(server, client, client_uuid, sub_id)
-            if not access_url:
-                ext_host = server.external_domain or server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0].split(':')[0]
-                ext_port = server.external_port or 443
-                access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?type=tcp&security=none#{server.name} - {client.name}"
-                
-            client_key = ClientKey(
-                id=key_id,
-                client_id=client.id,
-                server_id=server.id,
-                outline_key_id=sub_id,
-                access_url=access_url,
-                created_at=now,
-                uuid=client_uuid,
-                last_seen_bytes=0
-            )
-            db.add(client_key)
+            if access_url:
+                client_key = ClientKey(
+                    id=key_id,
+                    client_id=client.id,
+                    server_id=server.id,
+                    outline_key_id=sub_id,
+                    access_url=access_url,
+                    created_at=now,
+                    uuid=client_uuid,
+                    last_seen_bytes=0
+                )
+                db.add(client_key)
     
     db.commit()
 
