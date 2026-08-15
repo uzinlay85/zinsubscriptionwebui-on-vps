@@ -67,6 +67,8 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
                     continue
 
             if login_ok:
+                if csrf_headers:
+                    session.headers.update(csrf_headers)
                 return api_base
 
             for payload in [{"username": u_name, "password": u_pass}, {"username": u_name, "password": u_pass, "csrf_token": csrf_token} if csrf_token else {"username": u_name, "password": u_pass}]:
@@ -91,6 +93,8 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
                             except Exception:
                                 vdata2 = {}
                             if vdata2.get("success") is True:
+                                if csrf_headers:
+                                    session.headers.update(csrf_headers)
                                 return api_base
                 except Exception:
                     continue
