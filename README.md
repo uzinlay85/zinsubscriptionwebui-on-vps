@@ -8,6 +8,8 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?style=flat&logo=docker)](https://www.docker.com)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+> 📘 **[👉 VPS တစ်ခုတည်း၊ Domain တစ်ခုတည်းပေါ်တွင် VPN (၃) မျိုး + Sublink Panel (၄-ခု-တွဲ) တပ်ဆင်နည်း အပြည့်အစုံ ကြည့်ရန် ဤနေရာကို နှိပ်ပါ (ALL_IN_ONE_VPS_SETUP_GUIDE.md)](ALL_IN_ONE_VPS_SETUP_GUIDE.md)**
+
 ---
 
 ## 🌟 အဓိက ပါဝင်သော စွမ်းဆောင်ရည်များ (Key Features)
