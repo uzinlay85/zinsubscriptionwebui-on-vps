@@ -2,6 +2,7 @@ import asyncio
 import logging
 import json
 import base64
+import re
 from typing import Optional, Dict, Any, List
 import aiohttp
 from app.models import Server, Client
@@ -85,6 +86,43 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server, timeout: Op
             "Origin": origin,
             "Referer": f"{api_base}/",
         }
+
+        # Step 0: Fetch root panel URL to initialize session cookie and extract CSRF token
+        root_url = build_url(api_base, "")
+        csrf_token = ""
+        try:
+            async with session.get(
+                root_url,
+                headers={"User-Agent": headers["User-Agent"]},
+                timeout=req_timeout,
+                ssl=ssl_verify
+            ) as root_resp:
+                root_html = await root_resp.text()
+                csrf_match = re.search(r'name="csrf-token"\s+content="([^"]+)"', root_html)
+                if csrf_match:
+                    csrf_token = csrf_match.group(1)
+        except Exception as e:
+            logger.debug(f"3x-ui pre-fetch root failed for {root_url} (ssl={ssl_verify}): {e}")
+            # Fallback ssl=False if SSL cert verification fails
+            if ssl_verify:
+                ssl_verify = False
+                try:
+                    async with session.get(
+                        root_url,
+                        headers={"User-Agent": headers["User-Agent"]},
+                        timeout=req_timeout,
+                        ssl=False
+                    ) as root_resp:
+                        root_html = await root_resp.text()
+                        csrf_match = re.search(r'name="csrf-token"\s+content="([^"]+)"', root_html)
+                        if csrf_match:
+                            csrf_token = csrf_match.group(1)
+                except Exception:
+                    pass
+
+        if csrf_token:
+            headers["X-CSRF-Token"] = csrf_token
+            headers["X-Requested-With"] = "XMLHttpRequest"
 
         login_url = build_url(api_base, "login")
 
