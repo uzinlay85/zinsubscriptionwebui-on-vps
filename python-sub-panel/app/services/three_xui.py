@@ -42,51 +42,53 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
 
     base_urls = get_base_urls(server)
 
+    # Browser-like headers - 3x-ui may reject requests without proper User-Agent
+    browser_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Content-Type": "application/json",
+    }
+
     for api_base in base_urls:
-        # Try form-data POST then JSON POST
-        for payload_type in ["form", "json"]:
-            try:
-                if payload_type == "form":
-                    async with session.post(
-                        f"{api_base}/login",
-                        data={"username": u_name, "password": u_pass},
-                        timeout=aiohttp.ClientTimeout(total=5),
-                        ssl=False,
-                        allow_redirects=True
-                    ) as login_resp:
-                        login_status = login_resp.status
-                        login_text = await login_resp.text()
-                else:
-                    async with session.post(
-                        f"{api_base}/login",
-                        json={"username": u_name, "password": u_pass},
-                        timeout=aiohttp.ClientTimeout(total=5),
-                        ssl=False,
-                        allow_redirects=True
-                    ) as login_resp:
-                        login_status = login_resp.status
-                        login_text = await login_resp.text()
+        try:
+            # 3x-ui login uses JSON POST
+            async with session.post(
+                f"{api_base}/login",
+                json={"username": u_name, "password": u_pass},
+                headers=browser_headers,
+                timeout=aiohttp.ClientTimeout(total=5),
+                ssl=False,
+                allow_redirects=True
+            ) as login_resp:
+                login_status = login_resp.status
+                login_text = await login_resp.text()
 
-                print(f"3x-ui login ({payload_type}) for {api_base}: HTTP {login_status}")
+            print(f"3x-ui login for {api_base}: HTTP {login_status}")
 
-                # Verify session is valid by hitting the API
-                async with session.get(
-                    f"{api_base}/panel/api/inbounds/list",
-                    timeout=aiohttp.ClientTimeout(total=5),
-                    ssl=False
-                ) as verify_resp:
-                    verify_text = await verify_resp.text()
-                    print(f"3x-ui verify inbounds/list: HTTP {verify_resp.status} body={verify_text[:120]}")
-                    if verify_resp.status == 200:
-                        try:
-                            vdata = json.loads(verify_text)
-                        except Exception:
-                            vdata = {}
-                        if vdata.get("success") is True:
-                            return api_base
-            except Exception as e:
-                print(f"3x-ui login attempt ({payload_type}) error for {api_base}: {type(e).__name__}: {e}")
+            if login_status == 403:
+                print(f"3x-ui: 403 Forbidden - IP may be rate-limited by 3x-ui panel")
                 continue
+
+            # Verify session is authenticated
+            async with session.get(
+                f"{api_base}/panel/api/inbounds/list",
+                headers={"User-Agent": browser_headers["User-Agent"]},
+                timeout=aiohttp.ClientTimeout(total=5),
+                ssl=False
+            ) as verify_resp:
+                verify_text = await verify_resp.text()
+                print(f"3x-ui verify inbounds/list: HTTP {verify_resp.status} body={verify_text[:150]}")
+                if verify_resp.status == 200:
+                    try:
+                        vdata = json.loads(verify_text)
+                    except Exception:
+                        vdata = {}
+                    if vdata.get("success") is True:
+                        return api_base
+        except Exception as e:
+            print(f"3x-ui login error for {api_base}: {type(e).__name__}: {e}")
+            continue
 
     print(f"3x-ui login failed for server {server.name} ({server.api_url})")
     return None
