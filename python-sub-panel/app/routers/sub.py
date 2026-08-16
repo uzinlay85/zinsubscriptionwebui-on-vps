@@ -101,12 +101,12 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
             
         status_label = "Expired" if is_expired else ("Data Limit Exceeded" if is_limit_exceeded else client.status.title())
         expiry_str = expiry_dt.strftime("%Y-%m-%d") if expiry_dt else "N/A"
-        dummy_node = f"❌ Account {status_label}: {expiry_str}\n"
-        content = dummy_node + f"ss://YWVzLTI1Ni1nY2064p2k77iP566h44GX44KL44CC@dummy.invalid:8388#{status_label}"
+        content = f"ss://YWVzLTI1Ni1nY2064p2k77iP566h44GX44KL44CC@dummy.invalid:8388#{status_label} - {expiry_str}"
         encoded = base64.b64encode(content.encode()).decode()
         resp_headers = {
             "profile-title": profile_title,
             "Subscription-Userinfo": f"upload=0; download={client.total_usage_bytes}; total={int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0}; expire={int(expiry_dt.timestamp()) if expiry_dt else 0}",
+            "profile-update-interval": "24",
             "Cache-Control": "no-store"
         }
         set_cached_sub(token, encoded, resp_headers)
@@ -135,19 +135,6 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
         userinfo_parts.append(f"expire={int(expiry_dt.timestamp())}")
     else:
         userinfo_parts.append("expire=0")
-    
-    nodes.append(f"📊 Usage: {total_usage / (1024*1024*1024):.2f} GB / {client.data_limit_gb or 'Unlimited'} GB")
-    
-    if expiry_dt:
-        now = datetime.utcnow()
-        if expiry_dt.tzinfo is not None:
-            from datetime import timezone
-            now = datetime.now(timezone.utc)
-        days_left = (expiry_dt - now).days
-        if days_left >= 0:
-            nodes.append(f"⏳ Expire: {expiry_dt.strftime('%Y-%m-%d')} ({days_left} Days Left)")
-        else:
-            nodes.append(f"❌ Expired: {expiry_dt.strftime('%Y-%m-%d')}")
     
     for k in keys:
         server = servers.get(k.server_id)
@@ -210,7 +197,9 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
             elif k.access_url:
                 nodes.append(k.access_url)
     
-    content = "\n".join(nodes)
+    valid_prefixes = ("vless://", "hy2://", "hysteria2://", "ss://", "vmess://", "trojan://", "tuic://", "wireguard://", "shadowsocks://")
+    clean_nodes = [n.strip() for n in nodes if n and n.strip().startswith(valid_prefixes)]
+    content = "\n".join(clean_nodes)
     
     format_type = request.query_params.get("format", "").lower()
     
@@ -221,6 +210,7 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
             headers={
                 "profile-title": profile_title,
                 "Subscription-Userinfo": "; ".join(userinfo_parts),
+                "profile-update-interval": "24",
                 "Cache-Control": "no-store"
             }
         )
@@ -229,6 +219,7 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
     resp_headers = {
         "profile-title": profile_title,
         "Subscription-Userinfo": "; ".join(userinfo_parts),
+        "profile-update-interval": "24",
         "Cache-Control": "no-store"
     }
     if not format_type:
