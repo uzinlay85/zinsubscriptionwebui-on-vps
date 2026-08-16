@@ -83,33 +83,50 @@ async def express_fetch_users(server: Server) -> List[Dict[str, Any]]:
         pass
     return []
 
+def get_candidate_base_urls(server: Server) -> List[str]:
+    raw = (server.api_url or "").rstrip("/")
+    if not raw:
+        return []
+    urls = [raw]
+    if "127.0.0.1" in raw or "localhost" in raw:
+        urls.append(raw.replace("127.0.0.1", "host.docker.internal").replace("localhost", "host.docker.internal"))
+    elif "host.docker.internal" in raw:
+        urls.append(raw.replace("host.docker.internal", "127.0.0.1"))
+    return urls
+
 async def flask_login(server: Server) -> Optional[Dict[str, Any]]:
-    try:
-        base_url = server.api_url.rstrip("/")
-        async with aiohttp.ClientSession() as session:
-            # Step 1: GET /login or / to acquire initial CSRF token
-            async with session.get(
-                f"{base_url}/login",
-                timeout=aiohttp.ClientTimeout(total=5),
-                ssl=False
-            ) as resp:
-                if resp.status == 200:
-                    html = await resp.text()
-                else:
-                    async with session.get(
-                        base_url,
-                        timeout=aiohttp.ClientTimeout(total=5),
-                        ssl=False
-                    ) as resp2:
-                        if resp2.status != 200:
-                            return None
-                        html = await resp2.text()
+    candidate_urls = get_candidate_base_urls(server)
+    for base_url in candidate_urls:
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Step 1: GET /login or base_url to acquire initial CSRF token
+                html = ""
+                async with session.get(
+                    f"{base_url}/login",
+                    timeout=aiohttp.ClientTimeout(total=5),
+                    ssl=False,
+                    allow_redirects=True
+                ) as resp:
+                    if resp.status == 200:
+                        html = await resp.text()
+                    else:
+                        async with session.get(
+                            base_url,
+                            timeout=aiohttp.ClientTimeout(total=5),
+                            ssl=False,
+                            allow_redirects=True
+                        ) as resp2:
+                            if resp2.status == 200:
+                                html = await resp2.text()
+                
+                if not html:
+                    continue
                 
                 csrf_match = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', html) or \
                              re.search(r'csrf_token.*?value=["\']([^"\']+)["\']', html) or \
                              re.search(r'value=["\']([a-f0-9]{32,64})["\']', html)
                 if not csrf_match:
-                    return None
+                    continue
                 csrf_token = csrf_match.group(1)
                 
                 passwords_to_try = []
@@ -117,9 +134,6 @@ async def flask_login(server: Server) -> Optional[Dict[str, Any]]:
                 if server.auth_password and server.auth_password not in passwords_to_try: passwords_to_try.append(server.auth_password)
                 if "admin123" not in passwords_to_try: passwords_to_try.append("admin123")
                 if "admin" not in passwords_to_try: passwords_to_try.append("admin")
-                
-                logged_in_cookie = None
-                fresh_csrf = csrf_token
                 
                 for pass_attempt in passwords_to_try:
                     async with session.post(
@@ -136,16 +150,17 @@ async def flask_login(server: Server) -> Optional[Dict[str, Any]]:
                         if login_resp.status == 200:
                             res_html = await login_resp.text()
                             if "Logout" in res_html or "add-form" in res_html or "user_name" in res_html or "User Management" in res_html:
-                                logged_in_cookie = session.cookie_jar
+                                fresh_csrf = csrf_token
                                 csrf_match2 = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', res_html)
                                 if csrf_match2:
                                     fresh_csrf = csrf_match2.group(1)
-                                break
-                
-                if logged_in_cookie:
-                    return {"cookie": logged_in_cookie, "csrf_token": fresh_csrf}
-    except Exception:
-        pass
+                                return {
+                                    "cookie": session.cookie_jar,
+                                    "csrf_token": fresh_csrf,
+                                    "working_base_url": base_url
+                                }
+        except Exception:
+            continue
     return None
 
 async def flask_add_user(server: Server, username: str, password: str, limit_gb: int = 0, days: int = 0) -> bool:
@@ -154,7 +169,7 @@ async def flask_add_user(server: Server, username: str, password: str, limit_gb:
         return False
     
     try:
-        base_url = server.api_url.rstrip("/")
+        base_url = auth.get("working_base_url") or server.api_url.rstrip("/")
         async with aiohttp.ClientSession(cookie_jar=auth["cookie"]) as session:
             async with session.post(
                 f"{base_url}/add",
@@ -180,7 +195,7 @@ async def flask_delete_user(server: Server, user_pass: str) -> bool:
         return False
     
     try:
-        base_url = server.api_url.rstrip("/")
+        base_url = auth.get("working_base_url") or server.api_url.rstrip("/")
         async with aiohttp.ClientSession(cookie_jar=auth["cookie"]) as session:
             async with session.post(
                 f"{base_url}/delete",
@@ -219,7 +234,7 @@ async def flask_fetch_users(server: Server) -> List[Dict[str, Any]]:
         return []
     
     try:
-        base_url = server.api_url.rstrip("/")
+        base_url = auth.get("working_base_url") or server.api_url.rstrip("/")
         async with aiohttp.ClientSession(cookie_jar=auth["cookie"]) as session:
             async with session.get(
                 base_url,
