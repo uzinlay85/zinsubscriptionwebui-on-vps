@@ -118,7 +118,7 @@ async def create_server(server_req: ServerCreate, db: Session = Depends(get_db))
 
         jar = aiohttp.CookieJar(unsafe=True)
         async with aiohttp.ClientSession(cookie_jar=jar) as session:
-            api_base = await login_3xui(session, _TempServer())
+            api_base, _ = await login_3xui(session, _TempServer())
 
         if not api_base:
             raise HTTPException(

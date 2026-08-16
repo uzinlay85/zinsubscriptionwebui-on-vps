@@ -242,7 +242,7 @@ async def fetch_3xui_metrics(server: Server, keys: list) -> Dict[str, int]:
     try:
         async with aiohttp.ClientSession() as session:
             from app.services.three_xui import login_3xui, build_url, get_ssl_setting, DEFAULT_TIMEOUT
-            api_base = await login_3xui(session, server)
+            api_base, headers = await login_3xui(session, server)
             if not api_base:
                 return {}
             
@@ -250,6 +250,7 @@ async def fetch_3xui_metrics(server: Server, keys: list) -> Dict[str, int]:
             ssl_verify = get_ssl_setting(server)
             async with session.get(
                 traffics_url,
+                headers=headers,
                 timeout=DEFAULT_TIMEOUT,
                 ssl=ssl_verify
             ) as resp:
