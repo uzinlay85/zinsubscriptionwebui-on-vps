@@ -171,10 +171,25 @@ async def flask_add_user(server: Server, username: str, password: str, limit_gb:
     try:
         base_url = auth.get("working_base_url") or server.api_url.rstrip("/")
         async with aiohttp.ClientSession(cookie_jar=auth["cookie"]) as session:
+            # Step 1: GET main page to acquire fresh CSRF token from the active logged-in session
+            fresh_csrf = auth.get("csrf_token", "")
+            async with session.get(
+                base_url,
+                timeout=aiohttp.ClientTimeout(total=10),
+                ssl=False,
+                allow_redirects=True
+            ) as get_resp:
+                if get_resp.status == 200:
+                    page_html = await get_resp.text()
+                    csrf_match = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', page_html)
+                    if csrf_match:
+                        fresh_csrf = csrf_match.group(1)
+            
+            # Step 2: POST /add with the session cookie and fresh CSRF token
             async with session.post(
                 f"{base_url}/add",
                 data={
-                    "csrf_token": auth["csrf_token"],
+                    "csrf_token": fresh_csrf,
                     "user_name": username,
                     "user_pass": password,
                     "limit_gb": str(limit_gb),
@@ -182,10 +197,13 @@ async def flask_add_user(server: Server, username: str, password: str, limit_gb:
                 },
                 timeout=aiohttp.ClientTimeout(total=10),
                 ssl=False,
-                allow_redirects=False
+                allow_redirects=True
             ) as resp:
-                # 302 redirect to index or 200 means user added successfully
-                return resp.status in [200, 302]
+                text = await resp.text()
+                # If 200/302 and either redirected to table or status success
+                if resp.status in [200, 302]:
+                    return True
+                return password in text or username in text
     except Exception:
         return False
 
