@@ -143,11 +143,23 @@ async def client_portal_page(request: Request, token: str, db: Session = Depends
         total_gb_str = "Unlimited"
         usage_percent = min(100, int((used_gb / 100) * 100)) if used_gb > 0 else 0
 
-    # Build Sub URL
-    base_url = str(request.base_url).rstrip("/")
+    # Build Public Sub URL respecting Nginx / Reverse Proxy headers
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if not host or "127.0.0.1" in host or "localhost" in host:
+        host_header = request.headers.get("host")
+        if host_header and "127.0.0.1" not in host_header and "localhost" not in host_header:
+            host = host_header
+        else:
+            host = str(request.base_url).replace("http://", "").replace("https://", "").rstrip("/")
+            
+    base_url = f"{proto}://{host}".rstrip("/")
     sub_url = f"{base_url}/api/sub/{token}"
+    short_sub_url = f"{base_url}/sub/{token}"
+    
     sub_url_encoded = urllib.parse.quote(sub_url, safe="")
     sub_url_b64 = base64.b64encode(sub_url.encode()).decode()
+    name_encoded = urllib.parse.quote(f"{client.name} - {brand_name}", safe="")
 
     # Get active nodes
     keys = db.query(ClientKey).filter(ClientKey.client_id == client.id).all()
@@ -172,8 +184,10 @@ async def client_portal_page(request: Request, token: str, db: Session = Depends
         "total_gb_str": total_gb_str,
         "usage_percent": usage_percent,
         "sub_url": sub_url,
+        "short_sub_url": short_sub_url,
         "sub_url_encoded": sub_url_encoded,
         "sub_url_b64": sub_url_b64,
+        "name_encoded": name_encoded,
         "nodes": node_list,
         "current_year": datetime.utcnow().year
     })

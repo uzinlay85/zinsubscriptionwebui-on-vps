@@ -96,32 +96,32 @@
                 
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     <!-- 1. HAPP -->
-                    <a href="happ://add/{{ sub_url_encoded }}" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-emerald-500/5">
+                    <button onclick="openApp('happ', 'HAPP')" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-emerald-500/5 cursor-pointer">
                         <span class="text-xl mb-1">⚡</span>
                         <span class="text-xs font-bold tracking-wide">HAPP</span>
                         <span class="text-[10px] text-emerald-400/70 mt-0.5">iOS / Android</span>
-                    </a>
+                    </button>
 
                     <!-- 2. v2rayTun -->
-                    <a href="v2raytun://install-sub?url={{ sub_url_encoded }}" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-sky-500/5">
+                    <button onclick="openApp('v2raytun', 'v2rayTun')" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-sky-500/5 cursor-pointer">
                         <span class="text-xl mb-1">🌐</span>
                         <span class="text-xs font-bold tracking-wide">v2rayTun</span>
                         <span class="text-[10px] text-sky-400/70 mt-0.5">iOS / Android</span>
-                    </a>
+                    </button>
 
                     <!-- 3. v2rayNG -->
-                    <a href="v2rayng://install-sub?url={{ sub_url_encoded }}" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-blue-500/5">
+                    <button onclick="openApp('v2rayng', 'v2rayNG')" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-blue-500/5 cursor-pointer">
                         <span class="text-xl mb-1">🚀</span>
                         <span class="text-xs font-bold tracking-wide">v2rayNG</span>
                         <span class="text-[10px] text-blue-400/70 mt-0.5">Android</span>
-                    </a>
+                    </button>
 
                     <!-- 4. Hiddify -->
-                    <a href="hiddify://install-sub?url={{ sub_url_encoded }}#{{ brand_name }}" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-purple-500/5">
+                    <button onclick="openApp('hiddify', 'Hiddify')" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-purple-500/5 cursor-pointer">
                         <span class="text-xl mb-1">🪂</span>
                         <span class="text-xs font-bold tracking-wide">Hiddify</span>
                         <span class="text-[10px] text-purple-400/70 mt-0.5">All Platforms</span>
-                    </a>
+                    </button>
                 </div>
             </div>
 
@@ -147,6 +147,11 @@
                 </div>
             </div>
 
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 border border-blue-500/30 text-white text-xs sm:text-sm px-4 py-3 rounded-2xl shadow-2xl z-50 transition-all opacity-0 pointer-events-none duration-300 max-w-md text-center">
+            <span id="toastMsg">Notification</span>
         </div>
 
         <!-- Node List Card -->
@@ -190,6 +195,18 @@
     </div>
 
     <script>
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            toastMsg.innerText = message;
+            toast.classList.remove('opacity-0', 'pointer-events-none');
+            toast.classList.add('opacity-100');
+            setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0', 'pointer-events-none');
+            }, 3500);
+        }
+
         function copySubUrl() {
             const input = document.getElementById('subUrlInput');
             input.select();
@@ -197,6 +214,7 @@
             const btn = document.getElementById('btnCopy');
             const originalHtml = btn.innerHTML;
             btn.innerHTML = '<span>✅ Copied!</span>';
+            showToast('Subscription URL copied to clipboard!');
             setTimeout(() => { btn.innerHTML = originalHtml; }, 2000);
         }
 
@@ -204,12 +222,47 @@
             navigator.clipboard.writeText(keyText);
             const orig = btn.innerText;
             btn.innerText = 'Copied!';
+            showToast('Key copied to clipboard!');
             setTimeout(() => { btn.innerText = orig; }, 1500);
         }
 
         function toggleQR() {
             const qr = document.getElementById('qrBox');
             qr.classList.toggle('hidden');
+        }
+
+        function openApp(appType, appName) {
+            const subUrl = "{{ sub_url }}";
+            const subUrlEncoded = encodeURIComponent(subUrl);
+            const subUrlB64 = "{{ sub_url_b64 }}";
+            const remark = encodeURIComponent("{{ client.name }} - {{ brand_name }}");
+            
+            // 1. Copy subscription link to clipboard automatically
+            try {
+                navigator.clipboard.writeText(subUrl);
+            } catch (e) {}
+
+            let deepLink = "";
+            if (appType === 'happ') {
+                // HAPP app scheme
+                deepLink = `happ://add/sub://${subUrlB64}#${remark}`;
+            } else if (appType === 'v2raytun') {
+                // v2rayTun app scheme
+                deepLink = `v2raytun://install-sub?url=${subUrlEncoded}`;
+            } else if (appType === 'v2rayng') {
+                // v2rayNG app scheme
+                deepLink = `v2rayng://install-sub?url=${subUrlEncoded}`;
+            } else if (appType === 'hiddify') {
+                // Hiddify app scheme
+                deepLink = `hiddify://install-sub?url=${subUrlEncoded}#${remark}`;
+            }
+
+            showToast(`Opening ${appName}... Sublink copied to clipboard! If not auto-imported, tap "Import from clipboard".`);
+
+            // 2. Launch App Scheme
+            setTimeout(() => {
+                window.location.href = deepLink;
+            }, 250);
         }
     </script>
 </body>
