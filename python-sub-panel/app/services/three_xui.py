@@ -9,14 +9,7 @@ from app.models import Server, Client
 
 def get_base_urls(server: Server) -> List[str]:
     raw = server.api_url.rstrip('/')
-    urls = [raw]
-    if "://" in raw:
-        scheme = raw.split("://")[0]
-        host_part = raw.split("://")[1].split("/")[0]
-        origin = f"{scheme}://{host_part}"
-        if origin not in urls:
-            urls.append(origin)
-    return urls
+    return [raw]
 
 
 def parse_server_host_port(server: Server):
@@ -42,36 +35,27 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
 
     base_urls = get_base_urls(server)
 
-    # Browser-like headers - 3x-ui may reject requests without proper User-Agent
-    browser_headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Content-Type": "application/json",
-    }
-
     for api_base in base_urls:
-        # Build Origin from the base URL (e.g. https://hostvds-vl.truehand.top)
         origin = api_base
         if "://" in api_base:
             parts = api_base.split("://")
             host_part = parts[1].split("/")[0]
             origin = f"{parts[0]}://{host_part}"
 
-        login_headers = {
+        headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "en-US,en;q=0.9",
-            "Content-Type": "application/json",
             "Origin": origin,
             "Referer": f"{api_base}/",
         }
 
         try:
+            # First try JSON payload
             async with session.post(
                 f"{api_base}/login",
                 json={"username": u_name, "password": u_pass},
-                headers=login_headers,
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False,
                 allow_redirects=True
@@ -79,16 +63,34 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
                 login_status = login_resp.status
                 login_text = await login_resp.text()
 
-            print(f"3x-ui login for {api_base}: HTTP {login_status} | response: {login_text[:100]}")
+            print(f"3x-ui login (json) for {api_base}: HTTP {login_status} | body: {login_text[:100]}")
+
+            # If json failed with 400 or non-200 (and not 403), try form-urlencoded
+            if login_status != 200 and login_status != 403:
+                async with session.post(
+                    f"{api_base}/login",
+                    data={"username": u_name, "password": u_pass},
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=5),
+                    ssl=False,
+                    allow_redirects=True
+                ) as login_resp2:
+                    login_status = login_resp2.status
+                    login_text = await login_resp2.text()
+                print(f"3x-ui login (form) for {api_base}: HTTP {login_status} | body: {login_text[:100]}")
+
+            if login_status == 403:
+                print(f"3x-ui: HTTP 403 Forbidden! IP is blocked by 3x-ui loginLimiter in memory. Please run 'systemctl restart x-ui' on server {server.name}.")
+                continue
 
             if login_status not in (200, 302):
-                print(f"3x-ui: Login returned {login_status}, skipping this base URL")
+                print(f"3x-ui: Login returned {login_status}, skipping")
                 continue
 
             # Verify session is authenticated
             async with session.get(
                 f"{api_base}/panel/api/inbounds/list",
-                headers={"User-Agent": login_headers["User-Agent"]},
+                headers={"User-Agent": headers["User-Agent"]},
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False
             ) as verify_resp:
