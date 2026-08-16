@@ -187,7 +187,7 @@
                 </div>
 
                 <div class="flex gap-3 pt-4">
-                    <button type="submit" class="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-colors">
+                    <button type="submit" id="saveServerBtn" class="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-wait text-white rounded-xl font-medium transition-colors">
                         Save Server
                     </button>
                     <button type="button" onclick="closeModal()" class="px-4 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium transition-colors border border-white/10">
@@ -350,9 +350,10 @@
         document.getElementById('serverForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const id = document.getElementById('serverId').value;
+            const type = document.getElementById('type').value;
             const data = {
                 name: document.getElementById('name').value,
-                type: document.getElementById('type').value,
+                type: type,
                 api_url: document.getElementById('api_url').value,
                 cert_sha256: document.getElementById('cert_sha256').value || null,
                 auth_username: document.getElementById('auth_username').value || null,
@@ -363,6 +364,15 @@
                 external_domain: document.getElementById('external_domain').value || null,
                 external_port: document.getElementById('external_port').value ? parseInt(document.getElementById('external_port').value) : null
             };
+
+            const saveBtn = document.getElementById('saveServerBtn');
+            const originalText = saveBtn.textContent;
+            saveBtn.disabled = true;
+            if (type === '3x-ui' && !id) {
+                saveBtn.textContent = '🔗 Connecting to 3x-ui Panel...';
+            } else {
+                saveBtn.textContent = 'Saving...';
+            }
 
             try {
                 const url = id ? `/api/servers/${id}` : '/api/servers/';
@@ -383,6 +393,9 @@
                 }
             } catch (err) {
                 showError('Failed to save server');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = originalText;
             }
         });
 
