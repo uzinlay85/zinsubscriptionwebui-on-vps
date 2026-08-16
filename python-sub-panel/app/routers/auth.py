@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Request, Response, HTTPException, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Setting
 from app.schemas import LoginRequest
+from typing import Dict, List
 import os
 import secrets
 import time
@@ -14,38 +15,87 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "securepassword123")
 AUTH_SECRET = os.getenv("AUTH_SECRET", "change_me")
 
+# In-memory rate limiting: IP -> list of failed attempt timestamps
+_FAILED_ATTEMPTS: Dict[str, List[float]] = {}
+RATE_LIMIT_WINDOW = 300  # 5 minutes
+MAX_FAILED_ATTEMPTS = 5
+
 def timing_safe_compare(a: str, b: str) -> bool:
-    return secrets.compare_digest(a.encode(), b.encode())
+    return secrets.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
+
+def get_admin_credentials(db: Session):
+    db_user = db.query(Setting).filter(Setting.key == "admin_username").first()
+    db_pass = db.query(Setting).filter(Setting.key == "admin_password").first()
+    
+    username = db_user.value if (db_user and db_user.value) else ADMIN_USERNAME
+    password = db_pass.value if (db_pass and db_pass.value) else ADMIN_PASSWORD
+    return username, password
+
+def check_rate_limit(ip: str):
+    now = time.time()
+    if ip in _FAILED_ATTEMPTS:
+        # Keep only timestamps within window
+        _FAILED_ATTEMPTS[ip] = [ts for ts in _FAILED_ATTEMPTS[ip] if now - ts < RATE_LIMIT_WINDOW]
+        if len(_FAILED_ATTEMPTS[ip]) >= MAX_FAILED_ATTEMPTS:
+            remaining = int(RATE_LIMIT_WINDOW - (now - _FAILED_ATTEMPTS[ip][0]))
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many failed login attempts. Account temporarily locked for {max(1, remaining)} seconds."
+            )
+
+def record_failed_attempt(ip: str):
+    now = time.time()
+    if ip not in _FAILED_ATTEMPTS:
+        _FAILED_ATTEMPTS[ip] = []
+    _FAILED_ATTEMPTS[ip].append(now)
+
+def clear_failed_attempts(ip: str):
+    _FAILED_ATTEMPTS.pop(ip, None)
 
 @router.post("/login")
 async def login(request: Request, response: Response, login_req: LoginRequest, db: Session = Depends(get_db)):
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
+    if "," in client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+        
+    check_rate_limit(client_ip)
     
-    rate_limit_key = f"login_attempts:{client_ip}"
-    now = int(time.time())
+    expected_user, expected_pass = get_admin_credentials(db)
     
-    # Simple in-memory rate limiting would require a global store
-    # For now, just check credentials
-    
-    username_valid = timing_safe_compare(login_req.username, ADMIN_USERNAME)
-    password_valid = timing_safe_compare(login_req.password, ADMIN_PASSWORD)
+    username_valid = timing_safe_compare(login_req.username, expected_user)
+    password_valid = timing_safe_compare(login_req.password, expected_pass)
     
     if not (username_valid and password_valid):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        record_failed_attempt(client_ip)
+        raise HTTPException(status_code=401, detail="Invalid username or password")
     
-    response = JSONResponse(content={"ok": True})
-    response.set_cookie(
+    clear_failed_attempts(client_ip)
+    
+    is_https = request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
+    
+    resp = JSONResponse(content={"ok": True, "message": "Login successful"})
+    resp.set_cookie(
         key="admin_auth",
         value=AUTH_SECRET,
         httponly=True,
-        secure=False,
-        samesite="strict",
+        secure=is_https,
+        samesite="lax",
+        path="/",
         max_age=7 * 24 * 60 * 60
     )
-    return response
+    return resp
 
 @router.post("/logout")
-async def logout(response: Response):
-    response = JSONResponse(content={"ok": True})
-    response.delete_cookie(key="admin_auth")
-    return response
+async def logout():
+    resp = JSONResponse(content={"ok": True, "message": "Logged out"})
+    resp.delete_cookie(key="admin_auth", path="/")
+    resp.delete_cookie(key="path_auth", path="/")
+    return resp
+
+@router.get("/logout")
+async def logout_get():
+    resp = RedirectResponse(url="/login", status_code=302)
+    resp.delete_cookie(key="admin_auth", path="/")
+    resp.delete_cookie(key="path_auth", path="/")
+    return resp
+

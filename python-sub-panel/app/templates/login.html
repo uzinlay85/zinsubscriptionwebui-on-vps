@@ -39,9 +39,15 @@
     <script>
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const username = document.getElementById('username').value;
+            const btn = e.target.querySelector('button[type="submit"]');
+            const originalText = btn.innerText;
+            btn.innerText = 'Signing in...';
+            btn.disabled = true;
+
+            const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
             const errorEl = document.getElementById('error');
+            errorEl.classList.add('hidden');
             
             try {
                 const resp = await fetch('/api/auth/login', {
@@ -56,10 +62,14 @@
                     const data = await resp.json();
                     errorEl.textContent = data.detail || 'Login failed';
                     errorEl.classList.remove('hidden');
+                    btn.innerText = originalText;
+                    btn.disabled = false;
                 }
             } catch (err) {
-                errorEl.textContent = 'Network error';
+                errorEl.textContent = 'Network error or server unavailable';
                 errorEl.classList.remove('hidden');
+                btn.innerText = originalText;
+                btn.disabled = false;
             }
         });
     </script>

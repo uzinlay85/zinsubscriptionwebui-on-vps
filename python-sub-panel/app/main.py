@@ -35,24 +35,31 @@ PANEL_NAME = os.getenv("PANEL_NAME", "VPN Panel")
 SYNC_INTERVAL = int(os.getenv("SYNC_INTERVAL_MINUTES", "10"))
 
 @app.middleware("http")
-async def auth_middleware(request: Request, call_next):
+async def security_and_auth_middleware(request: Request, call_next):
     path = request.url.path
     
     public_paths = [
         "/api/sub/", "/sub/", "/my/", "/api/cron/",
-        "/health", "/static/", "/favicon.ico", "/login",
+        "/health", "/static/", "/favicon.ico", "/login", "/logout",
         "/api/auth/login", "/api/auth/logout"
     ]
     is_public = any(path.startswith(p) for p in public_paths)
     
     if is_public:
-        return await call_next(request)
+        response = await call_next(request)
+        # Apply OWASP Security Headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
     
     if ADMIN_SECRET_PATH:
         path_auth = request.cookies.get("path_auth", "")
         if path_auth != "valid":
             if path == f"/{ADMIN_SECRET_PATH}":
-                return await call_next(request)
+                response = await call_next(request)
+                return response
             return RedirectResponse(url=f"/{ADMIN_SECRET_PATH}", status_code=302)
     
     admin_auth = request.cookies.get("admin_auth", "")
@@ -64,7 +71,12 @@ async def auth_middleware(request: Request, call_next):
     if path == "/login" and admin_auth == AUTH_SECRET:
         return RedirectResponse(url="/", status_code=302)
     
-    return await call_next(request)
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 @app.on_event("startup")
 async def startup_event():
@@ -73,6 +85,13 @@ async def startup_event():
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+
+@app.get("/logout")
+async def logout_redirect():
+    resp = RedirectResponse(url="/login", status_code=302)
+    resp.delete_cookie(key="admin_auth", path="/")
+    resp.delete_cookie(key="path_auth", path="/")
+    return resp
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
