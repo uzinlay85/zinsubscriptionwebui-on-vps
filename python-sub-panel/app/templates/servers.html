@@ -186,6 +186,8 @@
                     </div>
                 </div>
 
+                <div id="modalError" class="hidden mt-3 p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-red-300 text-sm"></div>
+
                 <div class="flex gap-3 pt-4">
                     <button type="submit" id="saveServerBtn" class="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-wait text-white rounded-xl font-medium transition-colors">
                         Save Server
@@ -301,6 +303,8 @@
             document.getElementById('serverId').value = '';
             document.getElementById('type').value = 'hysteria2';
             document.getElementById('modalTitle').textContent = 'Add Server';
+            const modalErr = document.getElementById('modalError');
+            if (modalErr) modalErr.classList.add('hidden');
             updateFormFields();
             document.getElementById('serverModal').classList.remove('hidden');
         }
@@ -388,16 +392,28 @@
                     closeModal();
                     loadServers();
                 } else {
-                    const err = await resp.json();
-                    showError(err.detail || 'Failed to save server');
+                    let errMsg = 'Failed to save server';
+                    try {
+                        const err = await resp.json();
+                        errMsg = err.detail || errMsg;
+                    } catch(e) {}
+                    showModalError(errMsg);
                 }
             } catch (err) {
-                showError('Failed to save server');
+                showModalError('Connection error. Please try again.');
             } finally {
                 saveBtn.disabled = false;
                 saveBtn.textContent = originalText;
             }
         });
+
+        function showModalError(msg) {
+            const el = document.getElementById('modalError');
+            if (el) {
+                el.textContent = msg;
+                el.classList.remove('hidden');
+            }
+        }
 
         function showError(msg) {
             const el = document.getElementById('error');
