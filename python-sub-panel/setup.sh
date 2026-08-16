@@ -254,11 +254,49 @@ fi
 
 # Step 7: Optional domain setup
 echo ""
-echo -e "${YELLOW}[7/7] Domain setup (optional)${NC}"
+echo -e "${YELLOW}[7/7] Domain & Reverse Proxy setup${NC}"
+
+# Check for existing VLESS Nginx configuration (Method A)
+VLESS_CONF="/etc/nginx/sites-available/vless"
+if [ -f "$VLESS_CONF" ]; then
+    echo -e "${GREEN}[!]${NC} Detected existing VLESS / 3x-ui Nginx config: $VLESS_CONF"
+    if ask_yes_no "Do you want to integrate Subscription Panel into existing VLESS config (Method A: Replaces camouflage site on Port 443 without touching VLESS)?"; then
+        cp "$VLESS_CONF" "${VLESS_CONF}.bak"
+        echo "Backed up original config to ${VLESS_CONF}.bak"
+        
+        # Replace proxy_pass https://html5up.net or other camouflage in location /
+        python3 -c "
+import re
+with open('$VLESS_CONF', 'r') as f:
+    content = f.read()
+
+# Replace location / block
+panel_proxy = '''    # Subscription Web Panel Proxy (FastAPI Port 8000)
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_connect_timeout 5s;
+    }'''
+
+new_content = re.sub(r'location\s+/\s*\{[^}]*\}', panel_proxy, content)
+with open('$VLESS_CONF', 'w') as f:
+    f.write(new_content)
+"
+        nginx -t && systemctl reload nginx
+        echo -e "${GREEN}[✓]${NC} Successfully integrated with VLESS on Port 443! Both VLESS and Sublink Panel are now active on Port 443."
+        DOMAIN=$(grep -m 1 "server_name" "$VLESS_CONF" | awk '{print $2}' | tr -d ';')
+    fi
+fi
 
 ask_domain_setup() {
+    if [ -n "$DOMAIN" ]; then
+        return 1
+    fi
     while true; do
-        read -p "Do you want to setup a domain with HTTPS? (y/n): " yn
+        read -p "Do you want to setup a new domain with HTTPS for this Panel? (y/n): " yn
         case $yn in
             [Yy]* ) return 0;;
             [Nn]* ) return 1;;

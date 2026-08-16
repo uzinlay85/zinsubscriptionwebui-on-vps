@@ -150,9 +150,87 @@ systemctl status vpn-panel
 
 ---
 
-## 🌐 Domain ချိတ်ဆက်ခြင်းနှင့် Free SSL (HTTPS) သတ်မှတ်နည်း
+---
 
-Sublink များကို Client App များက ချောမွေ့စွာ ဆွဲယူနိုင်ရန် Domain Name နှင့် HTTPS SSL ထည့်သွင်းထားရန် အရေးကြီးပါသည်။
+## 🌟 နည်းလမ်း (A) - VLESS + 3x-ui ရှိပြီးသား VPS ပေါ်တွင် အသွင်ဖျက်နေရာ၌ Panel တွဲဖက်တပ်ဆင်နည်း (All-in-One Port 443)
+
+> **💡 အဓိက အားသာချက်:**
+> * သင်၏ လက်ရှိ **VLESS-WS VPN (`/videos`)** နှင့် **3x-ui Panel (`/PANEL_PATH/`)** များကို **လုံးဝ (လုံးဝ) ထိခိုက်ပြင်ဆင်ရန် မလိုအပ်ပါ**။
+> * ယခင်က အသွင်ဖျက်ထားသော Dummy Website (`https://html5up.net`) နေရာတွင် ကျွန်တော်တို့၏ **Subscription Web Panel / Client Portal** ကို အစားထိုးလိုက်ခြင်း ဖြစ်သဖြင့် **Port 443 တစ်ခုတည်းပေါ်တွင် VLESS ရော Sublink Panel ရော အပြည့်အဝ တွဲဖက် အလုပ်လုပ်သွားပါမည်**။
+
+### အဆင့် (၁) - Panel ကို Run ပါ (Docker သို့မဟုတ် Python)
+```bash
+git clone https://github.com/uzinlay85/zinsubscriptionwebui-on-vps.git /opt/vpn-sub-panel
+cd /opt/vpn-sub-panel/python-sub-panel
+cp .env.example .env
+docker compose up -d --build
+```
+
+### အဆင့် (၂) - Nginx Config တွင် Camouflage နေရာ၌ Panel ထည့်သွင်းခြင်း
+သင့် VPS ပေါ်ရှိ VLESS Nginx Config ဖိုင် (`/etc/nginx/sites-available/vless`) ကို ဖွင့်ပါ:
+```bash
+nano /etc/nginx/sites-available/vless
+```
+
+အောက်ပါအတိုင်း `location /` နေရာတွင် Subscription Panel (`127.0.0.1:8000`) သို့ ညွှန်ပေးလိုက်ပါ:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name yourdomain.com;
+
+    # SSL Certificates (မူလအတိုင်း ထားပါ)
+    ssl_certificate /etc/nginx/ssl/yourdomain.com/fullchain.cer;
+    ssl_certificate_key /etc/nginx/ssl/yourdomain.com/private.key;
+
+    # ၁။ 3X-UI Panel Proxy (မူလအတိုင်း)
+    location /PANEL_PATH/ {
+        proxy_pass http://127.0.0.1:2053;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # ၂။ VLESS WebSocket Proxy (မူလအတိုင်း Port 443 ဖြင့် အလုပ်လုပ်မည်)
+    location /videos {
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:10000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # ၃။ Subscription Web Panel (Camouflage အစား Panel ကို ထည့်သွင်းခြင်း)
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+```bash
+# Nginx စစ်ဆေးပြီး Reload လုပ်ပါ
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+> **🎉 ရလဒ်များ:**
+> * `https://yourdomain.com/videos` -> **VLESS-WS VPN (Port 443)** ပုံမှန်အတိုင်း ချိတ်ဆက်အသုံးပြုနိုင်မည်။
+> * `https://yourdomain.com/PANEL_PATH/` -> **3x-ui Panel** သို့ ပုံမှန်အတိုင်း ဝင်ရောက်နိုင်မည်။
+> * `https://yourdomain.com` -> **Subscription Web Panel** သို့ HTTPS ဖြင့် ဝင်ရောက်နိုင်မည်။
+> * `https://yourdomain.com/my/{token}` -> **Client Self-Service Portal (HAPP, v2rayTun, v2rayNG, Hiddify)** One-Click Import ချက်ချင်း အလုပ်လုပ်မည်။
+
+---
+
+## 🌐 သီးသန့် VPS အသစ်များအတွက် Domain & Free SSL သတ်မှတ်နည်း
+
+အကယ်၍ VLESS မရှိသော သီးသန့် VPS အသစ်ပေါ်တွင် Panel တင်မည်ဆိုပါက:
 
 ### ၁။ Domain DNS Record သတ်မှတ်ခြင်း
 Cloudflare သို့မဟုတ် သင့် Domain Provider တွင် A-Record ထည့်ပါ:
