@@ -224,20 +224,20 @@ Web Panel သို့ ဝင်ရောက်ပြီး **Servers** -> **`+ 
 
 ### 🟣 ၂။ Hysteria2 Server ချိတ်ဆက်နည်း
 * **Server Type**: `Hysteria2`
-* **API URL**: သင့် Hysteria2 WebUI Domain (ဥပမာ- `https://bear-b.truehand.top/`)
+* **API URL**: သင့် Hysteria2 WebUI Domain (ဥပမာ- `https://hy2.yourdomain.com/` သို့မဟုတ် `https://sub.yourdomain.com/hy2/`)
 * **Panel Admin Password**: Hysteria2 WebUI Admin Password (ဥပမာ- `admin123`)
-* **External Domain**: ချိတ်ဆက်လိုသော Domain Name
+* **External Domain**: ချိတ်ဆက်လိုသော Domain Name (ဥပမာ- `sub.yourdomain.com`)
 * **External Port**: Hysteria2 Listen Port (ဥပမာ- `10443`)
 
 ---
 
 ### 🟢 ၃။ 3x-ui (VLESS-WS / Reality) ချိတ်ဆက်နည်း
 * **Server Type**: `3x-ui`
-* **API URL**: 3x-ui Panel ၏ URL နှင့် Port (ဥပမာ- `http://123.45.67.89:2053/` သို့မဟုတ် `https://panel.domain.com:2053/`)
+* **API URL**: 3x-ui Panel ၏ URL နှင့် Port (ဥပမာ- `http://123.45.67.89:2053/` သို့မဟုတ် `https://sub.yourdomain.com/<PANEL_PATH>/`)
 * **Username**: 3x-ui Login Username (Default: `admin`)
 * **Password**: 3x-ui Login Password
 * **Inbound ID**: 3x-ui Panel -> Inbounds ဇယားရှိ `#` ကော်လံနံပါတ် (ဥပမာ- `1`)
-* **External Domain**: VLESS SNI / Host Domain (ဥပမာ- `hostvds-vl.truehand.top`)
+* **External Domain**: VLESS SNI / Host Domain (ဥပမာ- `sub.yourdomain.com`)
 * **External Port**: TLS Port (ဥပမာ- `443`)
 
 > 💡 **Tip**: 3x-ui ဆာဗာ အသစ်ထည့်ပြီးပါက Servers ဇယားရှိ **`🔄 Sync Keys`** သို့မဟုတ် အပေါ်ရှိ **`⚡ Sync All Missing Keys`** ကို နှိပ်လိုက်ရုံဖြင့် ရှိပြီးသား Client များအားလုံးအတွက် VLESS Key များကို တစ်ခါတည်း Batch Sync ထုတ်ပေးပါမည်။

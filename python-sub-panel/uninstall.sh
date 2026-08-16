@@ -37,8 +37,8 @@ detect_install_dir() {
         return
     fi
     
-    if [ -d "/home/zinko/zinsubscriptionwebui-on-vps/python-sub-panel" ]; then
-        INSTALL_DIR="/home/zinko/zinsubscriptionwebui-on-vps/python-sub-panel"
+    if [ -n "$HOME" ] && [ -d "$HOME/zinsubscriptionwebui-on-vps/python-sub-panel" ]; then
+        INSTALL_DIR="$HOME/zinsubscriptionwebui-on-vps/python-sub-panel"
         return
     fi
     

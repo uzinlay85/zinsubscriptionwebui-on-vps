@@ -157,7 +157,7 @@
 
                 <div>
                     <label class="block text-sm font-medium text-zinc-400 mb-2">API URL</label>
-                    <input type="text" id="api_url" required placeholder="https://bear-b.truehand.top/" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                    <input type="text" id="api_url" required placeholder="https://hy2.yourdomain.com/" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
                     <p id="apiUrlHint" class="text-xs text-zinc-400 mt-1">Base domain or server API endpoint URL.</p>
                 </div>
 
@@ -197,7 +197,7 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-zinc-400 mb-2">External Domain (Optional)</label>
-                            <input type="text" id="external_domain" placeholder="bear-b.truehand.top" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                            <input type="text" id="external_domain" placeholder="hy2.yourdomain.com" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-zinc-400 mb-2">External Port</label>
@@ -327,7 +327,7 @@
             } else if (type === 'hysteria2' || type === 'hysteria2_python') {
                 document.getElementById('field-hysteria_pass').classList.remove('hidden');
                 document.getElementById('field-external').classList.remove('hidden');
-                document.getElementById('apiUrlHint').textContent = 'Base URL of your Hysteria2 WebUI (e.g. https://bear-b.truehand.top/)';
+                document.getElementById('apiUrlHint').textContent = 'Base URL of your Hysteria2 WebUI (e.g. https://hy2.yourdomain.com/)';
             } else if (type === '3x-ui') {
                 document.getElementById('field-3xui_auth').classList.remove('hidden');
                 document.getElementById('field-external').classList.remove('hidden');

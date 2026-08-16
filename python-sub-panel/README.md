@@ -73,7 +73,7 @@ Panel ရှိ **Servers** စာမျက်နှာ -> **`+ Add Server`** �
 | Field | ယူရမည့်နေရာ / ရှင်းလင်းချက် |
 |---|---|
 | **Server Name** | မိမိစိတ်ကြိုက် အမည် (ဥပမာ- `Bear Hysteria2`) |
-| **API URL** | သင့် Hysteria2 WebUI / Server ၏ Domain URL (ဥပမာ- `https://bear-b.truehand.top/`) |
+| **API URL** | သင့် Hysteria2 WebUI / Server ၏ Domain URL (ဥပမာ- `https://hy2.yourdomain.com/` သို့မဟုတ် `https://sub.yourdomain.com/hy2/`) |
 | **Panel Admin Password** | သင့် Hysteria2 Panel ၏ Admin Password (မပြောင်းရသေးပါက **`admin123`**) |
 | **External Domain** | မိမိ သုံးလိုသော Domain (မထည့်ပါက API URL Domain ကို သုံးပါမည်) |
 | **External Port** | Hysteria2 Listen Port (Default: `10443`) |

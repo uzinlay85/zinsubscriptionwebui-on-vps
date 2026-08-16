@@ -1,7 +1,7 @@
 # 🌐 All-in-One Single VPS Deployment Guide (4-in-1 System)
 > **Domain တစ်ခုတည်း၊ VPS တစ်ခုတည်းပေါ်တွင် VPN (၃) မျိုး + Unified Sublink Panel (၁) ခု တပ်ဆင်အသုံးပြုနည်း လမ်းညွှန်**
 
-ဤလမ်းညွှန်သည် Single VPS Server (Ubuntu 22.04 / 24.04) တစ်ခုတည်းပေါ်တွင် **Domain တစ်ခုတည်း (ဥပမာ- `bear-new.truehand.top`)** ဖြင့် အောက်ပါ စနစ် (၄) မျိုးလုံးကို တစ်ခုနှင့်တစ်ခု လုံးဝ မထိခိုက်စေဘဲ အတူတကွ တွဲဖက်တပ်ဆင် လည်ပတ်စေနိုင်သော အပြည့်စုံဆုံး လက်တွေ့စမ်းသပ်ပြီး လမ်းညွှန်ဖြစ်ပါသည်။
+ဤလမ်းညွှန်သည် Single VPS Server (Ubuntu 22.04 / 24.04) တစ်ခုတည်းပေါ်တွင် **Domain တစ်ခုတည်း (ဥပမာ- `yourdomain.com` သို့မဟုတ် `sub.yourdomain.com`)** ဖြင့် အောက်ပါ စနစ် (၄) မျိုးလုံးကို တစ်ခုနှင့်တစ်ခု လုံးဝ မထိခိုက်စေဘဲ အတူတကွ တွဲဖက်တပ်ဆင် လည်ပတ်စေနိုင်သော အပြည့်စုံဆုံး လက်တွေ့စမ်းသပ်ပြီး လမ်းညွှန်ဖြစ်ပါသည်။
 
 ---
 
@@ -11,7 +11,7 @@
 | :--- | :--- | :--- | :--- |
 | **Unified Sublink Panel** | Central Web UI & Subscription | `Port 443` (`location /`) | ဖောက်သည်များ စီမံခြင်း၊ All-in-One Sublink ထုတ်ပေးခြင်း |
 | **VLESS-WS** | Xray Core (3x-ui) | `Port 443` (`location /videos`) | Nginx Reverse Proxy မှတစ်ဆင့် CDN/TLS လုံခြုံစွာ သွယ်တန်းခြင်း |
-| **3x-ui Management WebUI** | VPN Core Web Panel | `Port 443` (`location /<PANEL_PATH>/`) | Xray Inbounds စီမံခန့်ခွဲသည့် လျှို့ဝှက် Web Panel |
+| **3x-ui Management WebUI** | VPN Core Web Panel | `Port 443` (`location /<YOUR_PANEL_PATH>/`) | Xray Inbounds စီမံခန့်ခွဲသည့် လျှို့ဝှက် Web Panel |
 | **Hysteria 2 Management WebUI** | Hy2 Flask Web Panel | `Port 443` (`location /hy2/`) | Hysteria 2 အသုံးပြုသူများ ကြည့်ရှုစီမံသည့် Web Panel |
 | **Hysteria 2 Server** | UDP Protocol | `Port 10443 (UDP)` | အင်တာနက် အမြန်နှုန်းမြင့် UDP Proxy Server |
 | **Outline Server** | Shadowsocks (Docker) | `Port 8443 (TCP/UDP)` | Shadowsocks Outline VPN Proxy Server |
@@ -21,7 +21,7 @@
 ## 📋 ကြိုတင် ပြင်ဆင်ရန် အချက်များ (Prerequisites)
 
 1. **Ubuntu 22.04 သို့မဟုတ် 24.04 VPS** (Root Access)
-2. **Domain Name တစ်ခု** (ဥပမာ- `bear-new.truehand.top`)
+2. **Domain Name တစ်ခု** (ဥပမာ- `sub.yourdomain.com`)
    * Cloudflare (သို့မဟုတ် DNS Provider) တွင် DNS **A Record** အား VPS Public IP သို့ ညွှန်ထားပါ (DNS Only / Proxy Disabled အနေအထား ဖြစ်ရပါမည်)။
 
 ---
@@ -45,9 +45,9 @@ sudo ufw reload
 wget -qO- https://raw.githubusercontent.com/Jigsaw-Code/outline-server/master/src/server_manager/install_scripts/install_server.sh | sudo bash -s -- --keys-port=8443
 ```
 
-3. တပ်ဆင်ပြီးပါက ထွက်လာသော **apiUrl** နှင့် **certSha256** ကို မှတ်သားထားပါ:
+3. တပ်ဆင်ပြီးပါက ထွက်လာသော **apiUrl** နှင့် **certSha256** JSON စာကြောင်းကို မှတ်သားထားပါ (နမူနာ):
 ```json
-{"apiUrl":"https://185.126.65.101:38790/ROYAt0gkWj0b_hyv1woGkg","certSha256":"376C7B20A846943967EA195E6E61C4AAB3FCD1E767B3CDB364A7586D7BF9924E"}
+{"apiUrl":"https://YOUR_VPS_IP:38790/RANDOM_SECRET_KEY","certSha256":"YOUR_CERT_SHA256_HEX_STRING"}
 ```
 
 ---
@@ -60,12 +60,12 @@ wget -O install.sh https://raw.githubusercontent.com/uzinlay85/Hy2_WebUI_ManusAi
 ```
 
 2. မေးခွန်းများ ဖြေဆိုပါ:
-   * **Domain Name**: သင့် Domain ထည့်ပါ (ဥပမာ- `bear-new.truehand.top`)
+   * **Domain Name**: သင့် Domain ထည့်ပါ (ဥပမာ- `sub.yourdomain.com`)
    * **Port**: `10443`
-   * **Admin Password**: `admin123` (သို့မဟုတ် မိမိကြိုက်နှစ်သက်ရာ)
+   * **Admin Password**: `admin123` (သို့မဟုတ် မိမိကြိုက်နှစ်သက်ရာ Password)
    * **Cloudflare Port Range**: `n` (No - Single Port သာ အသုံးပြုပါမည်)
 
-*(ဤအဆင့်တွင် Certbot က သင့် Domain အတွက် SSL Certificate `/etc/letsencrypt/live/<DOMAIN>/` ကို အလိုအလျောက် ရယူပြီးဖြစ်ပါသည်)*
+*(ဤအဆင့်တွင် Certbot က သင့် Domain အတွက် SSL Certificate `/etc/letsencrypt/live/<YOUR_DOMAIN>/` ကို အလိုအလျောက် ရယူပေးပြီးဖြစ်ပါသည်)*
 
 ---
 
@@ -78,19 +78,26 @@ bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.
 
 2. မေးခွန်းများ ဖြေဆိုပါ:
    * Customize settings? -> **`y`**
-   * **Username**: `zinko`
-   * **Password**: `Zinkoaung@159`
+   * **Username**: `admin` (သို့မဟုတ် မိမိစိတ်ကြိုက် Username)
+   * **Password**: `YourStrongPassword` (မိမိစိတ်ကြိုက် Password)
    * **Port**: **`2053`**
    * **SSL Certificate Setup**: **`4. Skip SSL`** (Nginx က SSL ကို ကိုင်တွယ်ပါမည်)
    * **Bind to 127.0.0.1**: **`n`**
 
-3. ထွက်လာသော **WebBasePath** (ဥပမာ- `UNUqiDuaa0rN3RmZYP`) ကို သေချာ မှတ်သားထားပါ။
+3. ထွက်လာသော **WebBasePath** (ဥပမာ- `UNUqiDuaa0rN3RmZYP` စသည့် လျှို့ဝှက် Path) ကို သေချာ မှတ်သားထားပါ။
 
 ---
 
 ### 🔹 အဆင့် (၄) - All-in-One Nginx Reverse Proxy ရေးဆွဲခြင်း
 
-Domain (`bear-new.truehand.top`) နှင့် WebBasePath (`UNUqiDuaa0rN3RmZYP`) တို့ကို အောက်ပါ Script ထဲတွင် မိမိ Domain/Path ဖြင့် အစားထိုးပြီး Run ပါ:
+ပထမဦးစွာ သင့် Domain နှင့် 3x-ui Base Path တို့ကို Environment Variable အနေဖြင့် သတ်မှတ်ပါ:
+
+```bash
+export DOMAIN="sub.yourdomain.com"
+export PANEL_PATH="YOUR_PANEL_PATH"
+```
+
+ထို့နောက် အောက်ပါ Command တစ်ခုလုံးကို Copy ကူးပြီး Terminal တွင် Run ပါ:
 
 ```bash
 # Nginx site အဟောင်းများကို ရှင်းထုတ်ခြင်း
@@ -99,22 +106,22 @@ sudo rm -f /etc/nginx/sites-enabled/*
 cat << 'EOF' > /etc/nginx/sites-available/vless
 server {
     listen 80;
-    server_name bear-new.truehand.top;
+    server_name DOMAIN_PLACEHOLDER;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name bear-new.truehand.top;
+    server_name DOMAIN_PLACEHOLDER;
 
-    # SSL Certificates (Hysteria 2 က ထုတ်ယူထားသော တရားဝင် Let's Encrypt SSL)
-    ssl_certificate /etc/letsencrypt/live/bear-new.truehand.top/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/bear-new.truehand.top/privkey.pem;
+    # SSL Certificates (Let's Encrypt SSL)
+    ssl_certificate /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
 
     # ၁။ 3X-UI Web Panel Proxy
-    location /UNUqiDuaa0rN3RmZYP/ {
+    location /PANEL_PATH_PLACEHOLDER/ {
         proxy_pass http://127.0.0.1:2053;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -155,6 +162,10 @@ server {
 }
 EOF
 
+# Placeholder များအား အစားထိုးခြင်း
+sed -i "s/DOMAIN_PLACEHOLDER/$DOMAIN/g" /etc/nginx/sites-available/vless
+sed -i "s/PANEL_PATH_PLACEHOLDER/$PANEL_PATH/g" /etc/nginx/sites-available/vless
+
 sudo ln -sf /etc/nginx/sites-available/vless /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
@@ -163,10 +174,10 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ### 🔹 အဆင့် (၅) - 3x-ui Panel တွင် VLESS Inbound ဖန်တီးခြင်း
 
-1. Browser တွင် **`https://bear-new.truehand.top/UNUqiDuaa0rN3RmZYP/`** သို့ ဝင်ပါ။
+1. Browser တွင် **`https://sub.yourdomain.com/<YOUR_PANEL_PATH>/`** သို့ ဝင်ပါ။
 2. **Inbounds** -> **`+ Add Inbound`** ကို နှိပ်ပါ။
 3. အောက်ပါအတိုင်း သတ်မှတ်ပါ:
-   * **Remark**: `Bear_Vless`
+   * **Remark**: `HK-VLESS`
    * **Protocol**: `vless`
    * **Listening IP**: `127.0.0.1`
    * **Port**: `10000`
@@ -174,10 +185,10 @@ sudo nginx -t && sudo systemctl reload nginx
    * **Path**: `/videos`
    * **TLS**: `none`
    * **External Proxy (အောက်ခြေ)**:
-     * Dest: `bear-new.truehand.top`
+     * Dest: `sub.yourdomain.com` (သင့် Domain)
      * Port: `443`
      * Force TLS: `tls`
-     * SNI: `bear-new.truehand.top`
+     * SNI: `sub.yourdomain.com` (သင့် Domain)
 4. **Save** ကို နှိပ်ပါ။
 
 ---
@@ -192,7 +203,7 @@ curl -fsSL https://raw.githubusercontent.com/uzinlay85/zinsubscriptionwebui-on-v
 2. `[!] Detected existing VLESS / 3x-ui Nginx config` ဟု မေးလာပါက **`y`** နှိပ်ပါ။
 
 3. တပ်ဆင်ပြီးပါက Panel လိပ်စာကို Browser တွင် ဖွင့်ပါ:
-👉 **`https://bear-new.truehand.top/<ADMIN_SECRET_PATH>`**
+👉 **`https://sub.yourdomain.com/<ADMIN_SECRET_PATH>`**
 
 *(Admin Username & Password စစ်ဆေးရန်: `cat /opt/vpn-sub-panel/python-sub-panel/.env | grep ADMIN`)*
 
@@ -204,24 +215,24 @@ Panel ပွင့်လာပါက **Servers Tab** -> **`+ Add Server`** ဖ�
 
 ### 1️⃣ Outline Server:
 * **Server Type**: `Outline`
-* **Server Name**: `Bear_Outline`
-* **API URL**: `https://185.126.65.101:38790/ROYAt0gkWj0b_hyv1woGkg`
-* **Cert SHA-256**: `376C7B20A846943967EA195E6E61C4AAB3FCD1E767B3CDB364A7586D7BF9924E`
+* **Server Name**: `Outline HK`
+* **API URL**: `https://YOUR_VPS_IP:38790/RANDOM_SECRET_KEY`
+* **Cert SHA-256**: `YOUR_CERT_SHA256_HEX_STRING`
 
 ### 2️⃣ Hysteria 2 Server:
 * **Server Type**: `Hysteria2`
-* **Server Name**: `Bear_Hy2`
-* **API URL**: `https://bear-new.truehand.top/hy2/` (သို့မဟုတ် `http://host.docker.internal:5000`)
-* **Panel Admin Password**: `admin123`
-* **External Domain**: `bear-new.truehand.top`
+* **Server Name**: `Hy2 HK`
+* **API URL**: `https://sub.yourdomain.com/hy2/` (သို့မဟုတ် `http://host.docker.internal:5000`)
+* **Panel Admin Password**: `admin123` (သင့် Hy2 Admin Pass)
+* **External Domain**: `sub.yourdomain.com`
 * **External Port**: `10443`
 
 ### 3️⃣ 3x-ui (VLESS) Server:
 * **Server Type**: `3x-ui`
-* **Server Name**: `Bear_Vless`
-* **API URL**: `https://bear-new.truehand.top/UNUqiDuaa0rN3RmZYP/` (သို့မဟုတ် `http://127.0.0.1:2053/`)
-* **Username**: `zinko`
-* **Password**: `Zinkoaung@159`
+* **Server Name**: `VLESS HK`
+* **API URL**: `https://sub.yourdomain.com/<YOUR_PANEL_PATH>/` (သို့မဟုတ် `http://127.0.0.1:2053/`)
+* **Username**: `admin`
+* **Password**: `YourStrongPassword`
 * **Inbound ID**: `1`
 
 ---
