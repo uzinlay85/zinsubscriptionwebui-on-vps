@@ -291,6 +291,16 @@ cd /opt/vpn-sub-panel/python-sub-panel && git pull origin main && ./venv/bin/pip
 
 ---
 
+## 🧹 စနစ်အား အပြီးတိုင် ဖျက်ထုတ်ခြင်း (Clean Uninstall)
+
+ဆာဗာမှ Panel ကို အကြွင်းအကျန်မရှိ သန့်ရှင်းစွာ ဖျက်ထုတ်လိုပါက အောက်ပါ **1-Line Command** ဖြင့် Database Backup ယူခြင်း၊ VLESS Nginx Config မူလအတိုင်း ပြန်လည်ထားရှိခြင်းနှင့် Container ဖျက်ခြင်းတို့ကို အလိုအလျောက် ဆောင်ရွက်နိုင်ပါသည်:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/uzinlay85/zinsubscriptionwebui-on-vps/main/python-sub-panel/uninstall.sh -o uninstall.sh && bash uninstall.sh
+```
+
+---
+
 ## 📂 Project Directory Structure
 
 ```

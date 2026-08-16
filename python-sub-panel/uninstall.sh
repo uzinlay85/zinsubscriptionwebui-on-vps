@@ -132,9 +132,20 @@ if command -v lsof &> /dev/null; then
     fi
 fi
 
-# Step 4: Remove Nginx config and SSL certificates
+# Step 4: Remove Nginx config and restore VLESS config if needed
 echo ""
-echo -e "${YELLOW}[4/5] Removing Nginx configuration...${NC}"
+echo -e "${YELLOW}[4/5] Cleaning up Web & Nginx configuration...${NC}"
+
+# Check for VLESS backup config
+if [ -f "/etc/nginx/sites-available/vless.bak" ]; then
+    echo -e "${GREEN}[!]${NC} Detected original VLESS backup config: /etc/nginx/sites-available/vless.bak"
+    if ask_yes_no "Do you want to restore original VLESS Nginx configuration?"; then
+        cp "/etc/nginx/sites-available/vless.bak" "/etc/nginx/sites-available/vless"
+        rm -f "/etc/nginx/sites-available/vless.bak"
+        echo -e "${GREEN}[✓]${NC} Original VLESS Nginx configuration restored"
+    fi
+fi
+
 if [ -f /etc/nginx/sites-available/vpn-panel ]; then
     rm -f /etc/nginx/sites-available/vpn-panel
     echo -e "${GREEN}[✓]${NC} Nginx config removed"
@@ -145,14 +156,13 @@ if [ -L /etc/nginx/sites-enabled/vpn-panel ]; then
     echo -e "${GREEN}[✓]${NC} Nginx symlink removed"
 fi
 
-# Ask about SSL certificates
-if [ -d /etc/letsencrypt/live ]; then
+# Ask about SSL certificates (only for dedicated panel domain)
+if [ -d /etc/letsencrypt/live ] && [ ! -f "/etc/nginx/sites-available/vless" ]; then
     echo ""
     if ask_yes_no "Do you want to remove SSL certificates from Let's Encrypt?"; then
-        # Find and remove certificates related to the panel
         for cert_dir in /etc/letsencrypt/live/*; do
             cert_name=$(basename "$cert_dir")
-            if grep -r "vpn-panel\|$INSTALL_DIR" /etc/nginx/sites-available/ 2>/dev/null | grep -q "$cert_name"; then
+            if grep -r "vpn-panel" /etc/nginx/sites-available/ 2>/dev/null | grep -q "$cert_name"; then
                 echo "Removing certificate: $cert_name"
                 certbot delete --cert-name "$cert_name" --non-interactive 2>/dev/null || true
             fi
@@ -170,6 +180,22 @@ fi
 # Step 5: Remove installation directory
 echo ""
 echo -e "${YELLOW}[5/5] Removing installation files...${NC}"
+
+# Offer database backup before removing
+DB_PATH=""
+if [ -f "$INSTALL_DIR/data/vpn_panel.db" ]; then
+    DB_PATH="$INSTALL_DIR/data/vpn_panel.db"
+elif [ -f "$INSTALL_DIR/python-sub-panel/data/vpn_panel.db" ]; then
+    DB_PATH="$INSTALL_DIR/python-sub-panel/data/vpn_panel.db"
+fi
+
+if [ -n "$DB_PATH" ]; then
+    if ask_yes_no "Do you want to backup the SQLite database before deleting?"; then
+        BACKUP_DEST="/root/vpn_panel_backup_$(date +%Y%m%d_%H%M%S).db"
+        cp "$DB_PATH" "$BACKUP_DEST"
+        echo -e "${GREEN}[✓]${NC} Database saved safely to: $BACKUP_DEST"
+    fi
+fi
 if [ -d "$INSTALL_DIR" ]; then
     if ask_yes_no "Do you want to completely remove $INSTALL_DIR? This will delete all data including database and configuration."; then
         rm -rf "$INSTALL_DIR"
