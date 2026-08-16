@@ -264,13 +264,12 @@ if [ -f "$VLESS_CONF" ]; then
         cp "$VLESS_CONF" "${VLESS_CONF}.bak"
         echo "Backed up original config to ${VLESS_CONF}.bak"
         
-        # Replace proxy_pass https://html5up.net or other camouflage in location /
+        # Safe replacement of location / block
         python3 -c "
 import re
 with open('$VLESS_CONF', 'r') as f:
     content = f.read()
 
-# Replace location / block
 panel_proxy = '''    # Subscription Web Panel Proxy (FastAPI Port 8000)
     location / {
         proxy_pass http://127.0.0.1:8000;
@@ -281,13 +280,25 @@ panel_proxy = '''    # Subscription Web Panel Proxy (FastAPI Port 8000)
         proxy_connect_timeout 5s;
     }'''
 
-new_content = re.sub(r'location\s+/\s*\{[^}]*\}', panel_proxy, content)
+# If location / already exists, replace it; else insert before last closing brace
+if re.search(r'location\s+/\s*\{', content):
+    new_content = re.sub(r'location\s+/\s*\{[^}]*\}', panel_proxy, content)
+else:
+    new_content = re.sub(r'(\}\s*)$', panel_proxy + '\n\\1', content)
+
 with open('$VLESS_CONF', 'w') as f:
     f.write(new_content)
 "
-        nginx -t && systemctl reload nginx
-        echo -e "${GREEN}[✓]${NC} Successfully integrated with VLESS on Port 443! Both VLESS and Sublink Panel are now active on Port 443."
-        DOMAIN=$(grep -m 1 "server_name" "$VLESS_CONF" | awk '{print $2}' | tr -d ';')
+        if nginx -t &> /dev/null; then
+            systemctl reload nginx
+            echo -e "${GREEN}[✓]${NC} Successfully integrated with VLESS on Port 443! Both VLESS and Sublink Panel are now active on Port 443."
+            DOMAIN=$(grep -m 1 "server_name" "$VLESS_CONF" | awk '{print $2}' | tr -d ';')
+        else
+            echo -e "${RED}[✗]${NC} Nginx syntax test failed. Rolling back to original configuration..."
+            cp "${VLESS_CONF}.bak" "$VLESS_CONF"
+            systemctl reload nginx
+            echo -e "${YELLOW}[!]${NC} Rolled back to previous working Nginx config."
+        fi
     fi
 fi
 

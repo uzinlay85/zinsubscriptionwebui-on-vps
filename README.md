@@ -67,112 +67,45 @@
 
 ---
 
-## 🚀 VPS အသစ်ပေါ်တွင် စတင် တပ်ဆင်နည်း (Installation Guide)
+## 🚀 တပ်ဆင်နည်း (Installation) - အလွယ်ဆုံး ၁ ချက်နှိပ် စနစ် (Recommended)
 
-### နည်းလမ်း (၁) - 1-Click Automated Setup Script (အလွယ်ဆုံးနှင့် အကြံပြုထားသော နည်းလမ်း)
-
-သင့် VPS ရဲ့ Terminal / SSH ထဲသို့ ဝင်ရောက်ပြီး အောက်ပါ Command ကို Copy ကူး၍ Run လိုက်ပါ-
+သင့် VPS ရဲ့ Terminal / SSH ထဲတွင် အောက်ပါ **1-Line Command** ကို Run လိုက်ရုံဖြင့် စနစ်အားလုံးကို အလိုအလျောက် တပ်ဆင်စစ်ဆေးပေးပါမည်:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/uzinlay85/zinsubscriptionwebui-on-vps/main/python-sub-panel/setup.sh -o setup.sh && bash setup.sh
 ```
 
-> **Script က အောက်ပါတို့ကို အလိုအလျောက် ဆောင်ရွက်ပေးပါမည်:**
-> 1. Docker & Docker Compose တပ်ဆင်ခြင်း။
-> 2. Project ဖိုင်များကို `/opt/vpn-sub-panel` သို့ Clone ဆွဲယူခြင်း။
-> 3. Random Security Token များဖြင့် `.env` Config ဖိုင် တည်ဆောက်ပေးခြင်း။
-> 4. Docker Container ကို စတင် Run ပေးခြင်း။
+### 🤖 Script က အလိုအလျောက် စစ်ဆေးပြီး အမှားအယွင်းကင်းစွာ လုပ်ဆောင်ပေးမည့် အချက်များ (Zero-Error Automation):
+1. **🔍 VLESS / 3x-ui ရှိပြီးသား VPS ကို အလိုအလျောက် သိရှိခြင်း (Auto-Detection)**:
+   * Script က သင့် VPS ပေါ်တွင် VLESS ရှိ/မရှိ စစ်ဆေးပြီး `Detected existing VLESS / 3x-ui Nginx config` ဟု ပေါ်လာပါက **`y`** နှိပ်လိုက်ရုံဖြင့်:
+     * မူလ VLESS Config ကို `.bak` အဖြစ် အလိုအလျောက် Backup ယူပေးခြင်း။
+     * VLESS VPN (`/videos`) နှင့် 3x-ui (`/PANEL_PATH/`) ကို **လုံးဝ မထိခိုက်စေဘဲ** အသွင်ဖျက်နေရာ၌ Panel (`127.0.0.1:8000`) ကို **အလိုအလျောက် ထည့်သွင်းပေးခြင်း**။
+     * `nginx -t` ဖြင့် Syntax အမှားအယွင်း ကင်းမကင်း အလိုအလျောက် စစ်ဆေးပြီးမှ Reload လုပ်ပေးခြင်း (Manual File Edit လုပ်စရာ မလိုပါ)။
+2. **🐳 Docker & Dependencies Auto-Install**:
+   * Docker, Docker Compose နှင့် လိုအပ်သော Packages များကို အလိုအလျောက် စစ်ဆေးတပ်ဆင်ပေးခြင်း။
+3. **🌐 သီးသန့် VPS အသစ်ဖြစ်ပါက**:
+   * Domain Name မေးမြန်းပြီး Nginx Reverse Proxy နှင့် Let's Encrypt Free SSL ကို အလိုအလျောက် ရယူပေးခြင်း။
 
 ---
 
-### နည်းလမ်း (၂) - Docker Compose ဖြင့် Manual တပ်ဆင်နည်း
+## 🛠️ ကိုယ်တိုင် Manual ဖြင့် တစ်ဆင့်ချင်း တပ်ဆင်လိုသူများအတွက် (Manual Setup Guide)
+
+အကယ်၍ Script မသုံးဘဲ မိမိကိုယ်တိုင် လက်ဖြင့် တစ်ဆင့်ချင်း စိတ်ကြိုက် တပ်ဆင်လိုပါက အောက်ပါ နည်းလမ်းများကို အသုံးပြုနိုင်ပါသည်:
+
+### နည်းလမ်း (A) - VLESS + 3x-ui ရှိပြီးသား VPS ပေါ်တွင် Manual တပ်ဆင်နည်း (All-in-One Port 443)
 
 ```bash
-# ၁။ VPS ထဲသို့ ဝင်ပါ
-ssh root@<YOUR_VPS_IP>
-
-# ၂။ Project ကို Clone ဆွဲပါ
-git clone https://github.com/uzinlay85/zinsubscriptionwebui-on-vps.git /opt/vpn-sub-panel
-cd /opt/vpn-sub-panel/python-sub-panel
-
-# ၃။ Environment ဖိုင် ပြင်ဆင်ပါ
-cp .env.example .env
-nano .env   # (Admin Username / Password သတ်မှတ်ပါ)
-
-# ၄။ Docker Container စတင် Run ပါ
-docker compose up -d --build
-
-# ၅။ Status စစ်ဆေးပါ
-docker compose ps
-```
-
----
-
-### နည်းလမ်း (၃) - Direct Python (Virtualenv + Systemd Service)
-
-Docker မသုံးလိုဘဲ VPS ပေါ်တွင် တိုက်ရိုက် Run လိုပါက:
-
-```bash
-# ၁။ လိုအပ်သော Packages များ တပ်ဆင်ပါ
-apt update && apt install -y python3-venv python3-pip git build-essential
-
-# ၂။ Clone ဆွဲပြီး venv တည်ဆောက်ပါ
-git clone https://github.com/uzinlay85/zinsubscriptionwebui-on-vps.git /opt/vpn-sub-panel
-cd /opt/vpn-sub-panel/python-sub-panel
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-
-# ၃။ Systemd Background Service အဖြစ် သတ်မှတ်ပါ
-cat << 'EOF' > /etc/systemd/system/vpn-panel.service
-[Unit]
-Description=Unified VPN Subscription Panel
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/vpn-sub-panel/python-sub-panel
-ExecStart=/opt/vpn-sub-panel/python-sub-panel/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# ၄။ Service စတင်ပါ
-systemctl daemon-reload
-systemctl enable --now vpn-panel
-systemctl status vpn-panel
-```
-
----
-
----
-
-## 🌟 နည်းလမ်း (A) - VLESS + 3x-ui ရှိပြီးသား VPS ပေါ်တွင် အသွင်ဖျက်နေရာ၌ Panel တွဲဖက်တပ်ဆင်နည်း (All-in-One Port 443)
-
-> **💡 အဓိက အားသာချက်:**
-> * သင်၏ လက်ရှိ **VLESS-WS VPN (`/videos`)** နှင့် **3x-ui Panel (`/PANEL_PATH/`)** များကို **လုံးဝ (လုံးဝ) ထိခိုက်ပြင်ဆင်ရန် မလိုအပ်ပါ**။
-> * ယခင်က အသွင်ဖျက်ထားသော Dummy Website (`https://html5up.net`) နေရာတွင် ကျွန်တော်တို့၏ **Subscription Web Panel / Client Portal** ကို အစားထိုးလိုက်ခြင်း ဖြစ်သဖြင့် **Port 443 တစ်ခုတည်းပေါ်တွင် VLESS ရော Sublink Panel ရော အပြည့်အဝ တွဲဖက် အလုပ်လုပ်သွားပါမည်**။
-
-### အဆင့် (၁) - Panel ကို Run ပါ (Docker သို့မဟုတ် Python)
-```bash
+# ၁။ Panel ကို Clone ဆွဲပြီး စတင်ပါ
 git clone https://github.com/uzinlay85/zinsubscriptionwebui-on-vps.git /opt/vpn-sub-panel
 cd /opt/vpn-sub-panel/python-sub-panel
 cp .env.example .env
 docker compose up -d --build
-```
 
-### အဆင့် (၂) - Nginx Config တွင် Camouflage နေရာ၌ Panel ထည့်သွင်းခြင်း
-သင့် VPS ပေါ်ရှိ VLESS Nginx Config ဖိုင် (`/etc/nginx/sites-available/vless`) ကို ဖွင့်ပါ:
-```bash
+# ၂။ VLESS Nginx Config ဖွင့်ပါ
 nano /etc/nginx/sites-available/vless
 ```
 
-အောက်ပါအတိုင်း `location /` နေရာတွင် Subscription Panel (`127.0.0.1:8000`) သို့ ညွှန်ပေးလိုက်ပါ:
+`location /` နေရာတွင် Subscription Panel (`127.0.0.1:8000`) ထည့်သွင်းပါ:
 
 ```nginx
 server {
