@@ -8,8 +8,18 @@ from app.models import Server, Client
 
 logger = logging.getLogger(__name__)
 
-# Default API request timeout (10 seconds)
-DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=10)
+# Production-ready API request timeouts (15s total, 5s connect)
+DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=15, connect=5)
+
+
+def build_url(base_url: str, endpoint: str) -> str:
+    """
+    Safely join base URL and API endpoint handling custom web root paths 
+    (e.g., http://ip:port/custom_path/) without double or missing slashes.
+    """
+    base = base_url.rstrip("/")
+    ep = endpoint.lstrip("/")
+    return f"{base}/{ep}"
 
 
 def get_base_urls(server: Server) -> List[str]:
@@ -18,6 +28,22 @@ def get_base_urls(server: Server) -> List[str]:
         return []
     raw = server.api_url.rstrip('/')
     return [raw]
+
+
+def get_ssl_setting(server: Server) -> bool:
+    """
+    Determine SSL verification setting.
+    Returns True for domain HTTPS URLs, False for raw IP addresses or HTTP URLs.
+    """
+    if not server.api_url:
+        return False
+    # If using HTTPS and host is a domain name (not raw IPv4)
+    if server.api_url.startswith("https://"):
+        host_part = server.api_url.replace("https://", "").split("/")[0].split(":")[0]
+        # Check if host_part is not purely numbers and dots (IP)
+        if not host_part.replace(".", "").isdigit():
+            return True
+    return False
 
 
 def parse_server_host_port(server: Server):
@@ -36,10 +62,12 @@ def parse_server_host_port(server: Server):
     return ext_host, ext_port
 
 
-async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional[str]:
+async def login_3xui(session: aiohttp.ClientSession, server: Server, timeout: Optional[aiohttp.ClientTimeout] = None) -> Optional[str]:
     """Login to 3x-ui panel and return the working api_base URL, or None on failure."""
     u_name = server.username or server.auth_username or "admin"
     u_pass = server.password or server.auth_password or "admin"
+    req_timeout = timeout or DEFAULT_TIMEOUT
+    ssl_verify = get_ssl_setting(server)
 
     base_urls = get_base_urls(server)
 
@@ -58,23 +86,25 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
             "Referer": f"{api_base}/",
         }
 
+        login_url = build_url(api_base, "login")
+
         try:
             # Try form-urlencoded first (matching standard 3x-ui browser form submission)
             form_headers = dict(headers)
             form_headers["Content-Type"] = "application/x-www-form-urlencoded"
 
             async with session.post(
-                f"{api_base}/login",
+                login_url,
                 data={"username": u_name, "password": u_pass},
                 headers=form_headers,
-                timeout=DEFAULT_TIMEOUT,
-                ssl=False,
+                timeout=req_timeout,
+                ssl=ssl_verify,
                 allow_redirects=True
             ) as login_resp:
                 login_status = login_resp.status
                 login_text = await login_resp.text()
 
-            logger.info(f"3x-ui login (form) for {api_base}: HTTP {login_status} | body: {login_text[:120]}")
+            logger.info(f"3x-ui login (form) for {login_url}: HTTP {login_status} | body: {login_text[:120]}")
 
             # Check if form login succeeded
             login_success = False
@@ -91,16 +121,16 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
                 json_headers = dict(headers)
                 json_headers["Content-Type"] = "application/json"
                 async with session.post(
-                    f"{api_base}/login",
+                    login_url,
                     json={"username": u_name, "password": u_pass},
                     headers=json_headers,
-                    timeout=DEFAULT_TIMEOUT,
-                    ssl=False,
+                    timeout=req_timeout,
+                    ssl=ssl_verify,
                     allow_redirects=True
                 ) as login_resp2:
                     login_status = login_resp2.status
                     login_text = await login_resp2.text()
-                logger.info(f"3x-ui login (json) for {api_base}: HTTP {login_status} | body: {login_text[:120]}")
+                logger.info(f"3x-ui login (json) for {login_url}: HTTP {login_status} | body: {login_text[:120]}")
 
             if login_status == 403:
                 logger.warning(f"3x-ui: HTTP 403 Forbidden! IP is blocked by 3x-ui loginLimiter in memory. Please run 'systemctl restart x-ui' on server {server.name}.")
@@ -111,11 +141,12 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
                 continue
 
             # Verify session is authenticated
+            verify_url = build_url(api_base, "panel/api/inbounds/list")
             async with session.get(
-                f"{api_base}/panel/api/inbounds/list",
+                verify_url,
                 headers={"User-Agent": headers["User-Agent"]},
-                timeout=DEFAULT_TIMEOUT,
-                ssl=False
+                timeout=req_timeout,
+                ssl=ssl_verify
             ) as verify_resp:
                 verify_text = await verify_resp.text()
                 logger.info(f"3x-ui verify inbounds/list: HTTP {verify_resp.status} body={verify_text[:150]}")
@@ -126,10 +157,19 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
                         vdata = {}
                     if vdata.get("success") is True:
                         return api_base
-        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-            logger.error(f"3x-ui network error logging into {api_base}: {type(e).__name__}: {e}")
+
+        except asyncio.TimeoutError:
+            logger.error(f"3x-ui login timeout ({req_timeout.total}s) for {login_url}")
+        except aiohttp.ClientConnectorError as e:
+            logger.error(f"3x-ui connection error for {login_url}: {e}")
+        except aiohttp.ClientResponseError as e:
+            logger.error(f"3x-ui HTTP response error {e.status} for {login_url}")
+        except aiohttp.ClientError as e:
+            logger.error(f"3x-ui network error logging into {login_url}: {type(e).__name__}: {e}")
+        except json.JSONDecodeError as e:
+            logger.error(f"3x-ui returned non-JSON response from {login_url}: {e}")
         except Exception as e:
-            logger.error(f"3x-ui unexpected login error for {api_base}: {type(e).__name__}: {e}")
+            logger.error(f"3x-ui unexpected login error for {login_url}: {type(e).__name__}: {e}")
 
     logger.error(f"3x-ui login failed for server {server.name} ({server.api_url})")
     return None
@@ -137,6 +177,7 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
 
 async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_id: str) -> Optional[str]:
     ext_host, ext_port = parse_server_host_port(server)
+    ssl_verify = get_ssl_setting(server)
 
     # Default stream settings
     protocol = "vless"
@@ -161,11 +202,12 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
             target_inbound = None
 
             # Step 1: Fetch all inbounds list
+            list_url = build_url(api_base, "panel/api/inbounds/list")
             try:
                 async with session.get(
-                    f"{api_base}/panel/api/inbounds/list",
+                    list_url,
                     timeout=DEFAULT_TIMEOUT,
-                    ssl=False
+                    ssl=ssl_verify
                 ) as list_resp:
                     if list_resp.status == 200:
                         ldata = await list_resp.json()
@@ -180,18 +222,23 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
                                 if not target_inbound:
                                     target_inbound = inbound_list[0]
                                     inbound_id = target_inbound.get("id")
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            except asyncio.TimeoutError:
+                logger.error(f"3x-ui timeout fetching inbounds list for {server.name}")
+            except aiohttp.ClientError as e:
                 logger.error(f"3x-ui network error fetching inbounds list for {server.name}: {e}")
+            except json.JSONDecodeError as e:
+                logger.error(f"3x-ui invalid JSON fetching inbounds list for {server.name}: {e}")
             except Exception as e:
                 logger.error(f"3x-ui unexpected error fetching inbounds list: {e}")
 
             # Step 2: Single get fallback
             if not target_inbound and inbound_id:
+                get_inbound_url = build_url(api_base, f"panel/api/inbounds/get/{inbound_id}")
                 try:
                     async with session.get(
-                        f"{api_base}/panel/api/inbounds/get/{inbound_id}",
+                        get_inbound_url,
                         timeout=DEFAULT_TIMEOUT,
-                        ssl=False
+                        ssl=ssl_verify
                     ) as get_resp:
                         if get_resp.status == 200:
                             gdata = await get_resp.json()
@@ -259,6 +306,7 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
             added = False
 
             # Method 1: POST /panel/api/inbounds/addClient
+            add_client_url = build_url(api_base, "panel/api/inbounds/addClient")
             for payload in [
                 {"id": ib_id_int, "settings": json.dumps({"clients": [c_data]})},
                 {"id": ib_id_int, "settings": {"clients": [c_data]}},
@@ -267,10 +315,10 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
                     break
                 try:
                     async with session.post(
-                        f"{api_base}/panel/api/inbounds/addClient",
+                        add_client_url,
                         json=payload,
                         timeout=DEFAULT_TIMEOUT,
-                        ssl=False
+                        ssl=ssl_verify
                     ) as add_resp:
                         resp_text = await add_resp.text()
                         if add_resp.status == 200:
@@ -284,18 +332,21 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
                                 break
                             else:
                                 logger.warning(f"3x-ui: addClient returned: {resp_text[:200]}")
+                except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                    logger.error(f"3x-ui: addClient network error: {type(e).__name__}: {e}")
                 except Exception as e:
                     logger.error(f"3x-ui: addClient exception: {e}")
 
             # Method 2: POST /panel/api/inbounds/{id}/addClient
             if not added:
+                add_client_path_url = build_url(api_base, f"panel/api/inbounds/{ib_id_int}/addClient")
                 for payload in [{"clients": [c_data]}, {"settings": json.dumps({"clients": [c_data]})}]:
                     try:
                         async with session.post(
-                            f"{api_base}/panel/api/inbounds/{ib_id_int}/addClient",
+                            add_client_path_url,
                             json=payload,
                             timeout=DEFAULT_TIMEOUT,
-                            ssl=False
+                            ssl=ssl_verify
                         ) as add_resp2:
                             resp_text2 = await add_resp2.text()
                             if add_resp2.status == 200:
@@ -309,6 +360,8 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
                                     break
                                 else:
                                     logger.warning(f"3x-ui: /{ib_id_int}/addClient returned: {resp_text2[:200]}")
+                    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                        logger.error(f"3x-ui: /{ib_id_int}/addClient network error: {type(e).__name__}: {e}")
                     except Exception as e:
                         logger.error(f"3x-ui: /{ib_id_int}/addClient exception: {e}")
                     if added:
@@ -316,11 +369,13 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
 
             # Method 3: Inbound update fallback
             if not added:
+                get_inb_url = build_url(api_base, f"panel/api/inbounds/get/{ib_id_int}")
+                update_inb_url = build_url(api_base, f"panel/api/inbounds/update/{ib_id_int}")
                 try:
                     async with session.get(
-                        f"{api_base}/panel/api/inbounds/get/{ib_id_int}",
+                        get_inb_url,
                         timeout=DEFAULT_TIMEOUT,
-                        ssl=False
+                        ssl=ssl_verify
                     ) as get_resp2:
                         if get_resp2.status == 200:
                             gdata2 = await get_resp2.json()
@@ -339,10 +394,10 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
                                 inb_obj["settings"] = json.dumps(inb_settings)
 
                                 async with session.post(
-                                    f"{api_base}/panel/api/inbounds/update/{ib_id_int}",
+                                    update_inb_url,
                                     json=inb_obj,
                                     timeout=DEFAULT_TIMEOUT,
-                                    ssl=False
+                                    ssl=ssl_verify
                                 ) as update_resp:
                                     if update_resp.status == 200:
                                         ures = await update_resp.json()
@@ -393,6 +448,7 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
 
 
 async def delete_3xui_client(server: Server, client_uuid: str) -> bool:
+    ssl_verify = get_ssl_setting(server)
     try:
         jar = aiohttp.CookieJar(unsafe=True)
         async with aiohttp.ClientSession(cookie_jar=jar) as session:
@@ -409,26 +465,31 @@ async def delete_3xui_client(server: Server, client_uuid: str) -> bool:
             deleted = False
 
             # Method 1: direct delete endpoint
+            del_url = build_url(api_base, f"panel/api/inbounds/{inbound_id}/delClient/{client_uuid}")
             try:
                 async with session.post(
-                    f"{api_base}/panel/api/inbounds/{inbound_id}/delClient/{client_uuid}",
+                    del_url,
                     timeout=DEFAULT_TIMEOUT,
-                    ssl=False
+                    ssl=ssl_verify
                 ) as del_resp:
                     if del_resp.status == 200:
                         res = await del_resp.json()
                         if res.get("success"):
                             deleted = True
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                logger.debug(f"3x-ui direct delClient network error for {client_uuid}: {e}")
             except Exception as e:
                 logger.debug(f"3x-ui direct delClient failed for {client_uuid}: {e}")
 
             # Method 2: update inbound settings fallback
             if not deleted:
+                get_inb_url = build_url(api_base, f"panel/api/inbounds/get/{inbound_id}")
+                update_inb_url = build_url(api_base, f"panel/api/inbounds/update/{inbound_id}")
                 try:
                     async with session.get(
-                        f"{api_base}/panel/api/inbounds/get/{inbound_id}",
+                        get_inb_url,
                         timeout=DEFAULT_TIMEOUT,
-                        ssl=False
+                        ssl=ssl_verify
                     ) as get_resp:
                         if get_resp.status == 200:
                             gdata = await get_resp.json()
@@ -446,10 +507,10 @@ async def delete_3xui_client(server: Server, client_uuid: str) -> bool:
                                 inb_obj["settings"] = json.dumps(inb_settings)
 
                                 async with session.post(
-                                    f"{api_base}/panel/api/inbounds/update/{inbound_id}",
+                                    update_inb_url,
                                     json=inb_obj,
                                     timeout=DEFAULT_TIMEOUT,
-                                    ssl=False
+                                    ssl=ssl_verify
                                 ) as update_resp:
                                     if update_resp.status == 200:
                                         ures = await update_resp.json()
@@ -466,6 +527,7 @@ async def delete_3xui_client(server: Server, client_uuid: str) -> bool:
 
 async def set_3xui_client_enabled(server: Server, client_uuid: str, enabled: bool) -> bool:
     """Enable or disable a client on 3x-ui panel."""
+    ssl_verify = get_ssl_setting(server)
     try:
         jar = aiohttp.CookieJar(unsafe=True)
         async with aiohttp.ClientSession(cookie_jar=jar) as session:
@@ -479,11 +541,14 @@ async def set_3xui_client_enabled(server: Server, client_uuid: str, enabled: boo
             except (ValueError, TypeError):
                 inbound_id = 1
 
+            get_inb_url = build_url(api_base, f"panel/api/inbounds/get/{inbound_id}")
+            update_inb_url = build_url(api_base, f"panel/api/inbounds/update/{inbound_id}")
+
             try:
                 async with session.get(
-                    f"{api_base}/panel/api/inbounds/get/{inbound_id}",
+                    get_inb_url,
                     timeout=DEFAULT_TIMEOUT,
-                    ssl=False
+                    ssl=ssl_verify
                 ) as get_resp:
                     if get_resp.status == 200:
                         gdata = await get_resp.json()
@@ -504,17 +569,20 @@ async def set_3xui_client_enabled(server: Server, client_uuid: str, enabled: boo
                             inb_obj["settings"] = json.dumps(inb_settings)
 
                             async with session.post(
-                                f"{api_base}/panel/api/inbounds/update/{inbound_id}",
+                                update_inb_url,
                                 json=inb_obj,
                                 timeout=DEFAULT_TIMEOUT,
-                                ssl=False
+                                ssl=ssl_verify
                             ) as update_resp:
                                 if update_resp.status == 200:
                                     ures = await update_resp.json()
                                     return bool(ures.get("success"))
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                logger.error(f"3x-ui set_enabled network error for {client_uuid}: {e}")
             except Exception as e:
                 logger.error(f"3x-ui set_enabled error: {e}")
 
     except Exception as e:
         logger.error(f"3x-ui set_enabled root error: {e}")
     return False
+

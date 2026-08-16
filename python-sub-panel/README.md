@@ -82,13 +82,48 @@ Panel ရှိ **Servers** စာမျက်နှာ -> **`+ Add Server`** �
 
 ### 🟢 3. 3x-ui Server ထည့်သွင်းနည်း
 
-| Field | ယူရမည့်နေရာ / ရှင်းလင်းချက် |
-|---|---|
-| **Server Name** | မိမိစိတ်ကြိုက် အမည် (ဥပမာ- `HK 3x-ui`) |
-| **3x-ui Panel URL** | 3x-ui Panel ၏ URL နှင့် Port (ဥပမာ- `http://123.45.67.89:2053/`) |
-| **3x-ui Username** | 3x-ui Admin Username (Default: `admin`) |
-| **3x-ui Password** | 3x-ui Admin Password |
-| **Inbound ID** | 3x-ui Panel -> Inbounds ဇယားရှိ **#** ကော်လံ၏ ဂဏန်း (ဥပမာ- `1`) |
+| Field | ယူရမည့်နေရာ / ရှင်းလင်းချက် | မှတ်ချက် |
+|---|---|---|
+| **Server Name** | မိမိစိတ်ကြိုက် အမည် (ဥပမာ- `HK 3x-ui`) | - |
+| **3x-ui Panel URL** (`api_url`) | 3x-ui Panel ၏ URL နှင့် Port (ဥပမာ- `http://123.45.67.89:2053/`) | **နောက်ဆုံး `/` ရှိရမည်** |
+| **3x-ui Username** | 3x-ui Admin Username (Default: `admin`) | - |
+| **3x-ui Password** | 3x-ui Admin Password | - |
+| **Inbound ID** | 3x-ui Panel -> Inbounds ဇယားရှိ **#** ကော်လံ၏ ဂဏန်း (ဥပမာ- `1`) | အရေးကြီး |
+| **External Domain** | VLESS/VMess အတွက် SNI domain | Optional |
+| **External Port** | Inbound port | Optional |
+
+---
+
+## 🛠️ 3x-ui Server Add မရပါက ဖြေရှင်းနည်းများ (Troubleshooting)
+
+### အဖြစ်များသော အကြောင်းရင်းများ + ဖြေရှင်းနည်း
+
+1. **Login မအောင်မြင်ခြင်း (HTTP 403 / Forbidden - အဖြစ်အများဆုံး)**
+   - Username / Password မှားနေခြင်း။
+   - Panel URL မှားခြင်း (Port, http/https, trailing slash မရှိခြင်း)။
+   - 3x-ui ၏ **loginLimiter** ကြောင့် IP ကို In-memory block လုပ်ထားခြင်း → HTTP 403 ထွက်သည်။
+   - **ဖြေရှင်းနည်း:** 3x-ui ဆာဗာပေါ်တွင် အောက်ပါ command ကို ရိုက်ပါ:
+     ```bash
+     systemctl restart x-ui
+     ```
+     ပြီးမှ Panel ရှိ **Add Server** ကို ပြန်လည် စမ်းသပ်ပါ။
+
+2. **Inbound ID မှားခြင်း**
+   - 3x-ui Panel -> **Inbounds** သို့သွားပြီး **#** ကော်လံ (id) ကို တိတိကျကျ ကြည့်ပါ။ Inbound မရှိရင် သို့မဟုတ် ID မကိုက်ရင် client add မရပါ။
+
+3. **Network / Firewall / Timeout**
+   - Subscription Panel VPS မှ 3x-ui Panel သို့ Port ဖွင့်ထားရမည် (`ufw allow <port>/tcp`)။
+   - External timeout က 5 စက္ကန့်ဖြစ်သဖြင့် network နှေးပါက fail ဖြစ်နိုင်သည်။
+
+4. **ချက်ချင်း စစ်ဆေးရန် အဆင့်များ**
+   ```bash
+   # ၁။ Panel logs ကြည့်ပါ
+   cd /opt/vpn-sub-panel/python-sub-panel
+   docker compose logs -f
+   
+   # ၂။ 3x-ui ဆာဗာပေါ်တွင် service restart လုပ်ပါ
+   systemctl restart x-ui
+   ```
 
 ---
 
@@ -96,8 +131,9 @@ Panel ရှိ **Servers** စာမျက်နှာ -> **`+ Add Server`** �
 
 ```bash
 # ၁။ Panel ကို အဆင့်မြှင့်တင်ရန် (Git Pull & Rebuild)
-cd /opt/vpn-sub-panel/python-sub-panel
+cd /opt/vpn-sub-panel
 git pull origin main
+cd python-sub-panel
 docker compose down
 docker compose up -d --build
 

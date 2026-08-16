@@ -241,15 +241,17 @@ async def delete_orphan_keys(server: Server, orphan_ids: List[str], db: Session)
 async def fetch_3xui_metrics(server: Server, keys: list) -> Dict[str, int]:
     try:
         async with aiohttp.ClientSession() as session:
-            from app.services.three_xui import login_3xui
+            from app.services.three_xui import login_3xui, build_url, get_ssl_setting, DEFAULT_TIMEOUT
             api_base = await login_3xui(session, server)
             if not api_base:
                 return {}
             
+            traffics_url = build_url(api_base, "panel/api/inbounds/clientTraffics")
+            ssl_verify = get_ssl_setting(server)
             async with session.get(
-                f"{api_base}/panel/api/inbounds/clientTraffics",
-                timeout=aiohttp.ClientTimeout(total=5),
-                ssl=False
+                traffics_url,
+                timeout=DEFAULT_TIMEOUT,
+                ssl=ssl_verify
             ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
