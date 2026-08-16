@@ -96,32 +96,32 @@
                 
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     <!-- 1. HAPP -->
-                    <button onclick="openApp('happ', 'HAPP')" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-emerald-500/5 cursor-pointer">
+                    <a href="happ://add/{{ sub_url }}#{{ name_encoded }}" onclick="handleAppClick(event, 'HAPP', '{{ sub_url }}')" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-emerald-500/5">
                         <span class="text-xl mb-1">⚡</span>
                         <span class="text-xs font-bold tracking-wide">HAPP</span>
                         <span class="text-[10px] text-emerald-400/70 mt-0.5">iOS / Android</span>
-                    </button>
+                    </a>
 
                     <!-- 2. v2rayTun -->
-                    <button onclick="openApp('v2raytun', 'v2rayTun')" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-sky-500/5 cursor-pointer">
+                    <a href="v2raytun://import/{{ sub_url }}#{{ name_encoded }}" onclick="handleAppClick(event, 'v2rayTun', '{{ sub_url }}')" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-sky-500/5">
                         <span class="text-xl mb-1">🌐</span>
                         <span class="text-xs font-bold tracking-wide">v2rayTun</span>
                         <span class="text-[10px] text-sky-400/70 mt-0.5">iOS / Android</span>
-                    </button>
+                    </a>
 
                     <!-- 3. v2rayNG -->
-                    <button onclick="openApp('v2rayng', 'v2rayNG')" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-blue-500/5 cursor-pointer">
+                    <a href="v2rayng://install-sub?url={{ sub_url_encoded }}" onclick="handleAppClick(event, 'v2rayNG', '{{ sub_url }}')" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-blue-500/5">
                         <span class="text-xl mb-1">🚀</span>
                         <span class="text-xs font-bold tracking-wide">v2rayNG</span>
                         <span class="text-[10px] text-blue-400/70 mt-0.5">Android</span>
-                    </button>
+                    </a>
 
                     <!-- 4. Hiddify -->
-                    <button onclick="openApp('hiddify', 'Hiddify')" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-purple-500/5 cursor-pointer">
+                    <a href="hiddify://install-sub?url={{ sub_url_encoded }}#{{ name_encoded }}" onclick="handleAppClick(event, 'Hiddify', '{{ sub_url }}')" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-purple-500/5">
                         <span class="text-xl mb-1">🪂</span>
                         <span class="text-xs font-bold tracking-wide">Hiddify</span>
                         <span class="text-[10px] text-purple-400/70 mt-0.5">All Platforms</span>
-                    </button>
+                    </a>
                 </div>
             </div>
 
@@ -231,38 +231,17 @@
             qr.classList.toggle('hidden');
         }
 
-        function openApp(appType, appName) {
-            const subUrl = "{{ sub_url }}";
-            const subUrlEncoded = encodeURIComponent(subUrl);
-            const subUrlB64 = "{{ sub_url_b64 }}";
-            const remark = encodeURIComponent("{{ client.name }} - {{ brand_name }}");
-            
-            // 1. Copy subscription link to clipboard automatically
+        function handleAppClick(e, appName, subUrl) {
             try {
                 navigator.clipboard.writeText(subUrl);
-            } catch (e) {}
-
-            let deepLink = "";
-            if (appType === 'happ') {
-                // HAPP app scheme
-                deepLink = `happ://add/sub://${subUrlB64}#${remark}`;
-            } else if (appType === 'v2raytun') {
-                // v2rayTun app scheme
-                deepLink = `v2raytun://install-sub?url=${subUrlEncoded}`;
-            } else if (appType === 'v2rayng') {
-                // v2rayNG app scheme
-                deepLink = `v2rayng://install-sub?url=${subUrlEncoded}`;
-            } else if (appType === 'hiddify') {
-                // Hiddify app scheme
-                deepLink = `hiddify://install-sub?url=${subUrlEncoded}#${remark}`;
+            } catch(err) {
+                const inp = document.getElementById('subUrlInput');
+                if (inp) {
+                    inp.select();
+                    document.execCommand('copy');
+                }
             }
-
-            showToast(`Opening ${appName}... Sublink copied to clipboard! If not auto-imported, tap "Import from clipboard".`);
-
-            // 2. Launch App Scheme
-            setTimeout(() => {
-                window.location.href = deepLink;
-            }, 250);
+            showToast(`Launching ${appName}... Sublink copied to clipboard! If not auto-imported, tap "Import from clipboard".`);
         }
     </script>
 </body>
