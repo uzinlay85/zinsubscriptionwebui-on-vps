@@ -51,12 +51,27 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
     }
 
     for api_base in base_urls:
+        # Build Origin from the base URL (e.g. https://hostvds-vl.truehand.top)
+        origin = api_base
+        if "://" in api_base:
+            parts = api_base.split("://")
+            host_part = parts[1].split("/")[0]
+            origin = f"{parts[0]}://{host_part}"
+
+        login_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Content-Type": "application/json",
+            "Origin": origin,
+            "Referer": f"{api_base}/",
+        }
+
         try:
-            # 3x-ui login uses JSON POST
             async with session.post(
                 f"{api_base}/login",
                 json={"username": u_name, "password": u_pass},
-                headers=browser_headers,
+                headers=login_headers,
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False,
                 allow_redirects=True
@@ -64,16 +79,16 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
                 login_status = login_resp.status
                 login_text = await login_resp.text()
 
-            print(f"3x-ui login for {api_base}: HTTP {login_status}")
+            print(f"3x-ui login for {api_base}: HTTP {login_status} | response: {login_text[:100]}")
 
-            if login_status == 403:
-                print(f"3x-ui: 403 Forbidden - IP may be rate-limited by 3x-ui panel")
+            if login_status not in (200, 302):
+                print(f"3x-ui: Login returned {login_status}, skipping this base URL")
                 continue
 
             # Verify session is authenticated
             async with session.get(
                 f"{api_base}/panel/api/inbounds/list",
-                headers={"User-Agent": browser_headers["User-Agent"]},
+                headers={"User-Agent": login_headers["User-Agent"]},
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False
             ) as verify_resp:
@@ -89,6 +104,7 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
         except Exception as e:
             print(f"3x-ui login error for {api_base}: {type(e).__name__}: {e}")
             continue
+
 
     print(f"3x-ui login failed for server {server.name} ({server.api_url})")
     return None
