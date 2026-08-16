@@ -101,9 +101,34 @@ async def get_server(server_id: str, db: Session = Depends(get_db)):
 @router.post("", response_model=ServerResponse)
 @router.post("/", response_model=ServerResponse)
 async def create_server(server_req: ServerCreate, db: Session = Depends(get_db)):
+
+    # --- Pre-validate 3x-ui credentials BEFORE saving ---
+    if server_req.type == "3x-ui":
+        from app.services.three_xui import login_3xui
+        import aiohttp
+
+        # Build a temporary Server-like object for validation
+        class _TempServer:
+            api_url = server_req.api_url or ""
+            username = server_req.username or ""
+            auth_username = server_req.auth_username or ""
+            password = server_req.password or ""
+            auth_password = server_req.auth_password or ""
+            name = server_req.name or ""
+
+        jar = aiohttp.CookieJar(unsafe=True)
+        async with aiohttp.ClientSession(cookie_jar=jar) as session:
+            api_base = await login_3xui(session, _TempServer())
+
+        if not api_base:
+            raise HTTPException(
+                status_code=400,
+                detail="3x-ui Panel login failed. Please check the Panel URL, Username, and Password."
+            )
+
     server_id = generate_id()
     now = datetime.utcnow().isoformat()
-    
+
     server = Server(
         id=server_id,
         name=server_req.name,
@@ -122,12 +147,12 @@ async def create_server(server_req: ServerCreate, db: Session = Depends(get_db))
     db.add(server)
     db.commit()
     db.refresh(server)
-    
+
     active_clients = db.query(Client).filter(Client.status == "active").all()
     from app.services.vpn_manager import generate_keys_for_client
     for client in active_clients:
         await generate_keys_for_client(client, [server_id], db)
-    
+
     return {
         "id": server.id,
         "name": server.name,
