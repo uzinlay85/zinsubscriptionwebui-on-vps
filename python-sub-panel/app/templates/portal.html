@@ -89,31 +89,38 @@
 
             <!-- Quick Import Buttons -->
             <div class="space-y-3 pt-2">
-                <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">One-Click Client App Import</span>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">One-Click Client App Import</span>
+                    <span class="text-[11px] text-zinc-500">Auto-configure VPN</span>
+                </div>
                 
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    <!-- v2rayNG / Android -->
-                    <a href="v2rayng://install-sub?url={{ sub_url_encoded }}" class="flex flex-col items-center justify-center p-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-all hover:scale-[1.02] text-center">
-                        <span class="text-lg mb-1">🚀</span>
-                        <span class="text-xs font-semibold">v2rayNG</span>
+                    <!-- 1. HAPP -->
+                    <a href="happ://add/{{ sub_url_encoded }}" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-emerald-500/5">
+                        <span class="text-xl mb-1">⚡</span>
+                        <span class="text-xs font-bold tracking-wide">HAPP</span>
+                        <span class="text-[10px] text-emerald-400/70 mt-0.5">iOS / Android</span>
                     </a>
 
-                    <!-- Sing-box -->
-                    <a href="sing-box://import-remote-profile?url={{ sub_url_encoded }}#{{ brand_name }}" class="flex flex-col items-center justify-center p-3 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 transition-all hover:scale-[1.02] text-center">
-                        <span class="text-lg mb-1">📦</span>
-                        <span class="text-xs font-semibold">Sing-box</span>
+                    <!-- 2. v2rayTun -->
+                    <a href="v2raytun://install-sub?url={{ sub_url_encoded }}" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-sky-500/5">
+                        <span class="text-xl mb-1">🌐</span>
+                        <span class="text-xs font-bold tracking-wide">v2rayTun</span>
+                        <span class="text-[10px] text-sky-400/70 mt-0.5">iOS / Android</span>
                     </a>
 
-                    <!-- Shadowrocket / iOS -->
-                    <a href="shadowrocket://add/sub://{{ sub_url_b64 }}?remarks={{ brand_name }}" class="flex flex-col items-center justify-center p-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition-all hover:scale-[1.02] text-center">
-                        <span class="text-lg mb-1">🚀</span>
-                        <span class="text-xs font-semibold">Shadowrocket</span>
+                    <!-- 3. v2rayNG -->
+                    <a href="v2rayng://install-sub?url={{ sub_url_encoded }}" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-blue-500/5">
+                        <span class="text-xl mb-1">🚀</span>
+                        <span class="text-xs font-bold tracking-wide">v2rayNG</span>
+                        <span class="text-[10px] text-blue-400/70 mt-0.5">Android</span>
                     </a>
 
-                    <!-- Clash Meta -->
-                    <a href="clash://install-config?url={{ sub_url_encoded }}&name={{ brand_name }}" class="flex flex-col items-center justify-center p-3 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 transition-all hover:scale-[1.02] text-center">
-                        <span class="text-lg mb-1">🐱</span>
-                        <span class="text-xs font-semibold">Clash Meta</span>
+                    <!-- 4. Hiddify -->
+                    <a href="hiddify://install-sub?url={{ sub_url_encoded }}#{{ brand_name }}" class="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 transition-all hover:scale-[1.02] text-center shadow-lg shadow-purple-500/5">
+                        <span class="text-xl mb-1">🪂</span>
+                        <span class="text-xs font-bold tracking-wide">Hiddify</span>
+                        <span class="text-[10px] text-purple-400/70 mt-0.5">All Platforms</span>
                     </a>
                 </div>
             </div>
