@@ -3,6 +3,7 @@ import logging
 import json
 import base64
 import re
+import urllib.parse
 from typing import Optional, Dict, Any, List, Tuple
 import aiohttp
 from app.models import Server, Client
@@ -225,6 +226,8 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
     pbk = ""
     fp = "chrome"
     sid = ""
+    alpn = "http/1.1"
+    host_header = ext_host
 
     try:
         jar = aiohttp.CookieJar(unsafe=True)
@@ -301,7 +304,10 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
                 security = stream.get("security", "none")
 
                 if net == "ws":
-                    path = stream.get("wsSettings", {}).get("path", "/")
+                    ws_settings = stream.get("wsSettings", {})
+                    path = ws_settings.get("path", "/")
+                    ws_headers = ws_settings.get("headers", {})
+                    host_header = ws_headers.get("Host") or ext_host
                 elif net == "grpc":
                     path = stream.get("grpcSettings", {}).get("serviceName", "")
 
@@ -315,6 +321,23 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
                     sni = snis[0] if snis else ext_host
                     sids = real.get("shortIds", [])
                     sid = sids[0] if sids else ""
+
+                # Parse externalProxy for Nginx / reverse proxy TLS settings
+                ext_proxy_list = stream.get("externalProxy", [])
+                if ext_proxy_list and isinstance(ext_proxy_list, list):
+                    eproxy = ext_proxy_list[0]
+                    if eproxy.get("forceTls"):
+                        security = eproxy.get("forceTls")
+                    if eproxy.get("port") and not server.external_port:
+                        ext_port = eproxy.get("port")
+                    if eproxy.get("dest") and not server.external_domain:
+                        ext_host = eproxy.get("dest")
+                    if eproxy.get("sni"):
+                        sni = eproxy.get("sni")
+                    if eproxy.get("fingerprint"):
+                        fp = eproxy.get("fingerprint")
+                    if eproxy.get("alpn") and isinstance(eproxy.get("alpn"), list) and eproxy.get("alpn"):
+                        alpn = eproxy.get("alpn")[0]
             else:
                 logger.warning(f"3x-ui: No inbound found for server {server.name}, will still try to add client")
 
@@ -455,14 +478,17 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
                 logger.error(f"3x-ui: All methods failed to add client {client.name} on {server.name}")
                 return None
 
-            # Build access URL
+            path_enc = urllib.parse.quote(path)
+            alpn_enc = urllib.parse.quote(alpn)
+
+            # Build access URL matching 3x-ui standard format
             if protocol == "vless":
                 if security == "reality":
                     access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?type={net}&security=reality&pbk={pbk}&fp={fp}&sni={sni}&sid={sid}&flow=xtls-rprx-vision#{server.name} - {client.name}"
                 elif security == "tls":
-                    access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?type={net}&security=tls&sni={sni}&path={path}#{server.name} - {client.name}"
+                    access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?alpn={alpn_enc}&encryption=none&fp={fp}&host={host_header}&path={path_enc}&security=tls&sni={sni}&type={net}#{server.name} - {client.name}"
                 else:
-                    access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?type={net}&security=none&path={path}#{server.name} - {client.name}"
+                    access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?type={net}&security=none&path={path_enc}#{server.name} - {client.name}"
             elif protocol == "vmess":
                 vmess_dic = {
                     "v": "2",
@@ -474,13 +500,13 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
                     "scy": "auto",
                     "net": net,
                     "type": "none",
-                    "host": sni,
+                    "host": host_header,
                     "path": path,
                     "tls": security if security != "none" else ""
                 }
                 access_url = "vmess://" + base64.b64encode(json.dumps(vmess_dic).encode()).decode()
             elif protocol == "trojan":
-                access_url = f"trojan://{client_uuid}@{ext_host}:{ext_port}?type={net}&security={security}&sni={sni}&path={path}#{server.name} - {client.name}"
+                access_url = f"trojan://{client_uuid}@{ext_host}:{ext_port}?type={net}&security={security}&sni={sni}&path={path_enc}#{server.name} - {client.name}"
             else:
                 access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?type={net}&security={security}#{server.name} - {client.name}"
 
