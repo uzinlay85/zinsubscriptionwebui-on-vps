@@ -270,21 +270,51 @@ async def delete_orphans(server_id: str, request: Request, db: Session = Depends
     
     return {"ok": True}
 
+@router.post("/sync-all-keys")
+async def sync_all_servers_keys(db: Session = Depends(get_db)):
+    all_servers = db.query(Server).all()
+    active_clients = db.query(Client).filter(Client.status == "active").all()
+    
+    from app.services.vpn_manager import generate_keys_for_client
+    
+    total_synced_keys = 0
+    clients_synced = 0
+    
+    for client in active_clients:
+        existing_key_server_ids = {k.server_id for k in db.query(ClientKey).filter(ClientKey.client_id == client.id).all()}
+        missing_server_ids = [s.id for s in all_servers if s.id not in existing_key_server_ids]
+        if missing_server_ids:
+            await generate_keys_for_client(client, missing_server_ids, db)
+            total_synced_keys += len(missing_server_ids)
+            clients_synced += 1
+            
+    return {"ok": True, "synced_keys": total_synced_keys, "clients_count": clients_synced}
+
 @router.post("/{server_id}/sync-keys")
 async def sync_server_keys(server_id: str, request: Request, db: Session = Depends(get_db)):
     server = db.query(Server).filter(Server.id == server_id).first()
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
     
-    body = await request.json()
-    client_ids = body.get("client_ids", [])
+    client_ids = []
+    try:
+        body = await request.json()
+        client_ids = body.get("client_ids", [])
+    except Exception:
+        client_ids = []
     
     from app.services.vpn_manager import generate_keys_for_client
-    synced = 0
-    for client_id in client_ids:
-        client = db.query(Client).filter(Client.id == client_id).first()
-        if client and client.status == "active":
-            await generate_keys_for_client(client, [server_id], db)
-            synced += 1
     
-    return {"ok": True, "synced": synced}
+    if not client_ids:
+        existing_key_client_ids = {k.client_id for k in db.query(ClientKey).filter(ClientKey.server_id == server_id).all()}
+        active_clients = db.query(Client).filter(Client.status == "active").all()
+        target_clients = [c for c in active_clients if c.id not in existing_key_client_ids]
+    else:
+        target_clients = db.query(Client).filter(Client.id.in_(client_ids), Client.status == "active").all()
+
+    synced = 0
+    for client in target_clients:
+        await generate_keys_for_client(client, [server_id], db)
+        synced += 1
+    
+    return {"ok": True, "server_name": server.name, "synced": synced, "total_missing": len(target_clients)}

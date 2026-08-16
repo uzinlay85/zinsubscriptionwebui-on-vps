@@ -14,9 +14,16 @@ async def create_key(server: Server, client_name: str) -> Optional[Dict[str, Any
             ) as resp:
                 if resp.status == 201:
                     data = await resp.json()
+                    raw_url = data.get("accessUrl", "")
+                    if raw_url:
+                        if "#" in raw_url:
+                            raw_url = raw_url.split("#")[0]
+                        access_url = f"{raw_url}#{server.name} - {client_name}"
+                    else:
+                        access_url = ""
                     return {
                         "key_id": data.get("id", ""),
-                        "access_url": data.get("accessUrl", ""),
+                        "access_url": access_url,
                         "uuid": None
                     }
     except Exception:

@@ -75,9 +75,15 @@
                         <h1 class="text-2xl sm:text-3xl font-bold text-white">Servers</h1>
                         <p class="text-zinc-400 text-sm mt-1">Manage your VPN servers</p>
                     </div>
-                    <button onclick="openModal()" class="w-full sm:w-auto px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
-                        <span>+ Add Server</span>
-                    </button>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button onclick="syncAllMissingKeys()" id="btnSyncAll" class="w-full sm:w-auto px-4 py-3 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            <span>⚡ Sync All Missing Keys</span>
+                        </button>
+                        <button onclick="openModal()" class="w-full sm:w-auto px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
+                            <span>+ Add Server</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div id="error" class="hidden text-red-400 text-sm"></div>
@@ -257,8 +263,9 @@
                         <span id="status-${s.id}" class="text-zinc-400 text-sm">Unknown</span>
                     </td>
                     <td class="p-4 text-right">
-                        <button onclick="editServer('${s.id}')" class="text-blue-400 hover:text-blue-300 mr-3">Edit</button>
-                        <button onclick="deleteServer('${s.id}')" class="text-red-400 hover:text-red-300">Delete</button>
+                        <button onclick="syncServerKeys('${s.id}', '${escapeHtml(s.name)}', this)" class="text-emerald-400 hover:text-emerald-300 mr-3 text-sm font-medium">🔄 Sync Keys</button>
+                        <button onclick="editServer('${s.id}')" class="text-blue-400 hover:text-blue-300 mr-3 text-sm">Edit</button>
+                        <button onclick="deleteServer('${s.id}')" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
                     </td>
                 </tr>
             `).join('');
@@ -348,6 +355,56 @@
                 }
             } catch (err) {
                 showError('Failed to delete server');
+            }
+        }
+
+        async function syncServerKeys(serverId, serverName, btnElement) {
+            const originalText = btnElement ? btnElement.innerHTML : '🔄 Sync Keys';
+            if (btnElement) {
+                btnElement.innerText = 'Syncing...';
+                btnElement.disabled = true;
+            }
+            try {
+                const resp = await fetch(`/api/servers/${serverId}/sync-keys`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ client_ids: [] })
+                });
+                const data = await resp.json();
+                if (resp.ok && data.ok) {
+                    showSuccess(`Successfully synced keys for ${data.synced} client(s) on server "${serverName}"!`);
+                } else {
+                    showError(`Failed to sync keys: ${data.detail || 'Unknown error'}`);
+                }
+            } catch (e) {
+                showError(`Sync error: ${e.message}`);
+            } finally {
+                if (btnElement) {
+                    btnElement.innerHTML = originalText;
+                    btnElement.disabled = false;
+                }
+            }
+        }
+
+        async function syncAllMissingKeys() {
+            const btn = document.getElementById('btnSyncAll');
+            if (!confirm('Scan all active clients and generate missing keys across all VPN servers?')) return;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳ Syncing All Keys...</span>';
+            try {
+                const resp = await fetch('/api/servers/sync-all-keys', { method: 'POST' });
+                const data = await resp.json();
+                if (resp.ok && data.ok) {
+                    showSuccess(`Completed! Generated ${data.synced_keys} missing keys across ${data.clients_count} client(s).`);
+                } else {
+                    showError(`Failed: ${data.detail || 'Unknown error'}`);
+                }
+            } catch (e) {
+                showError(`Error: ${e.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg><span>⚡ Sync All Missing Keys</span>`;
             }
         }
 

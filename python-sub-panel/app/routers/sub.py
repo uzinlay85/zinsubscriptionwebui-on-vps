@@ -129,7 +129,11 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
             continue
         
         if server.type == "outline":
-            nodes.append(k.access_url)
+            url = k.access_url
+            if url and url.strip():
+                if "#" not in url:
+                    url = f"{url.strip()}#{server.name} - {client.name}"
+                nodes.append(url)
         elif server.type in ["hysteria2", "hysteria2_python"]:
             if k.access_url and k.access_url.strip():
                 nodes.append(k.access_url.strip())
