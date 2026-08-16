@@ -66,9 +66,42 @@ async def auto_backup_job():
     finally:
         db.close()
 
+async def auto_heal_missing_keys_job():
+    """Background self-healing job that periodically checks active clients for missing server keys and generates them."""
+    db = SessionLocal()
+    try:
+        from app.models import Client, Server, ClientKey
+        from app.services.vpn_manager import generate_keys_for_client
+        
+        all_servers = db.query(Server).all()
+        if not all_servers:
+            return
+            
+        active_clients = db.query(Client).filter(Client.status == "active").all()
+        synced_total = 0
+        
+        for client in active_clients:
+            existing_key_server_ids = {k.server_id for k in db.query(ClientKey).filter(ClientKey.client_id == client.id).all()}
+            missing_server_ids = [s.id for s in all_servers if s.id not in existing_key_server_ids]
+            
+            if missing_server_ids:
+                try:
+                    await generate_keys_for_client(client, missing_server_ids, db)
+                    synced_total += len(missing_server_ids)
+                except Exception as e:
+                    print(f"Auto-heal error generating keys for {client.name}: {e}")
+                    
+        if synced_total > 0:
+            print(f"[Auto-Heal Cron] Successfully auto-generated {synced_total} missing keys for active clients.")
+    except Exception as e:
+        print(f"Auto-heal missing keys job error: {e}")
+    finally:
+        db.close()
+
 def start_scheduler(interval_minutes: int = 10):
     scheduler.add_job(sync_usage_job, 'interval', minutes=interval_minutes, id="sync_usage")
     scheduler.add_job(check_expiry_job, 'interval', hours=24, id="check_expiry")
     scheduler.add_job(auto_backup_job, 'cron', hour=3, minute=0, id="auto_backup")
+    scheduler.add_job(auto_heal_missing_keys_job, 'interval', minutes=30, id="auto_heal_missing_keys")
     scheduler.start()
-    print(f"Scheduler started: sync every {interval_minutes}min, expiry check daily, backup at 3AM")
+    print(f"Scheduler started: sync every {interval_minutes}min, expiry check daily, backup at 3AM, auto-heal missing keys every 30min")
