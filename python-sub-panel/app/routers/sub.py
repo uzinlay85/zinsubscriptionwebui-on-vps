@@ -2,13 +2,36 @@ from fastapi import APIRouter, Request, Response, HTTPException, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Client, ClientKey, Server, Setting
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 import base64
 import re
+import time
 from datetime import datetime
 import aiohttp
 
 router = APIRouter()
+
+# In-memory RAM cache for subscription strings (TTL: 30s)
+_SUB_CACHE: Dict[str, Tuple[float, str, dict]] = {}
+CACHE_TTL = 30
+
+def get_cached_sub(token: str) -> Optional[Tuple[str, dict]]:
+    item = _SUB_CACHE.get(token)
+    if item:
+        ts, content, headers = item
+        if time.time() - ts < CACHE_TTL:
+            return content, headers
+        _SUB_CACHE.pop(token, None)
+    return None
+
+def set_cached_sub(token: str, content: str, headers: dict):
+    _SUB_CACHE[token] = (time.time(), content, headers)
+
+def invalidate_sub_cache(token: Optional[str] = None):
+    if token:
+        _SUB_CACHE.pop(token, None)
+    else:
+        _SUB_CACHE.clear()
 
 def get_brand_name(db: Session) -> str:
     app_name_setting = db.query(Setting).filter(Setting.key == "app_name").first()
@@ -30,6 +53,11 @@ def safe_parse_iso(date_str: Optional[str]) -> Optional[datetime]:
 
 @router.get("/{token}")
 async def get_subscription(request: Request, token: str, db: Session = Depends(get_db)):
+    cached = get_cached_sub(token)
+    if cached:
+        content, headers = cached
+        return Response(content=content, media_type="text/plain", headers=headers)
+
     client = db.query(Client).filter(Client.sub_token == token).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
@@ -76,17 +104,15 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
         dummy_node = f"❌ Account {status_label}: {expiry_str}\n"
         content = dummy_node + f"ss://YWVzLTI1Ni1nY2064p2k77iP566h44GX44KL44CC@dummy.invalid:8388#{status_label}"
         encoded = base64.b64encode(content.encode()).decode()
-        return Response(
-            content=encoded,
-            media_type="text/plain",
-            headers={
-                "profile-title": profile_title,
-                "Subscription-Userinfo": f"upload=0; download={client.total_usage_bytes}; total={int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0}; expire={int(expiry_dt.timestamp()) if expiry_dt else 0}",
-                "Cache-Control": "no-store"
-            }
-        )
+        resp_headers = {
+            "profile-title": profile_title,
+            "Subscription-Userinfo": f"upload=0; download={client.total_usage_bytes}; total={int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0}; expire={int(expiry_dt.timestamp()) if expiry_dt else 0}",
+            "Cache-Control": "no-store"
+        }
+        set_cached_sub(token, encoded, resp_headers)
+        return Response(content=encoded, media_type="text/plain", headers=resp_headers)
     
-    all_servers = db.query(Server).all()
+    all_servers = db.query(Server).filter(Server.is_active != False).all()
     existing_key_server_ids = {k.server_id for k in db.query(ClientKey).filter(ClientKey.client_id == client.id).all()}
     missing_server_ids = [s.id for s in all_servers if s.id not in existing_key_server_ids]
     
@@ -125,7 +151,7 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
     
     for k in keys:
         server = servers.get(k.server_id)
-        if not server:
+        if not server or server.is_active is False:
             continue
         
         if server.type == "outline":
@@ -200,12 +226,15 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
         )
     
     encoded = base64.b64encode(content.encode()).decode()
+    resp_headers = {
+        "profile-title": profile_title,
+        "Subscription-Userinfo": "; ".join(userinfo_parts),
+        "Cache-Control": "no-store"
+    }
+    if not format_type:
+        set_cached_sub(token, encoded, resp_headers)
     return Response(
         content=encoded,
         media_type="text/plain",
-        headers={
-            "profile-title": profile_title,
-            "Subscription-Userinfo": "; ".join(userinfo_parts),
-            "Cache-Control": "no-store"
-        }
+        headers=resp_headers
     )

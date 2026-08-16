@@ -15,28 +15,29 @@ router = APIRouter()
 def generate_id():
     return str(uuid.uuid4())
 
+def format_server_response(s: Server) -> dict:
+    return {
+        "id": s.id,
+        "name": s.name,
+        "api_url": s.api_url,
+        "cert_sha256": s.cert_sha256,
+        "created_at": s.created_at,
+        "type": s.type,
+        "auth_username": s.auth_username,
+        "auth_password": s.auth_password,
+        "username": s.username,
+        "password": s.password,
+        "inbound_id": s.inbound_id,
+        "external_domain": s.external_domain,
+        "external_port": s.external_port,
+        "is_active": s.is_active if s.is_active is not None else True
+    }
+
 @router.get("", response_model=List[ServerResponse])
 @router.get("/", response_model=List[ServerResponse])
 async def list_servers(db: Session = Depends(get_db)):
     servers = db.query(Server).order_by(Server.created_at.desc()).all()
-    return [
-        {
-            "id": s.id,
-            "name": s.name,
-            "api_url": s.api_url,
-            "cert_sha256": s.cert_sha256,
-            "created_at": s.created_at,
-            "type": s.type,
-            "auth_username": s.auth_username,
-            "auth_password": s.auth_password,
-            "username": s.username,
-            "password": s.password,
-            "inbound_id": s.inbound_id,
-            "external_domain": s.external_domain,
-            "external_port": s.external_port
-        }
-        for s in servers
-    ]
+    return [format_server_response(s) for s in servers]
 
 @router.get("/status", response_model=List[ServerStatusResponse])
 @router.get("/status/", response_model=List[ServerStatusResponse])
@@ -82,21 +83,7 @@ async def get_server(server_id: str, db: Session = Depends(get_db)):
     server = db.query(Server).filter(Server.id == server_id).first()
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
-    return {
-        "id": server.id,
-        "name": server.name,
-        "api_url": server.api_url,
-        "cert_sha256": server.cert_sha256,
-        "created_at": server.created_at,
-        "type": server.type,
-        "auth_username": server.auth_username,
-        "auth_password": server.auth_password,
-        "username": server.username,
-        "password": server.password,
-        "inbound_id": server.inbound_id,
-        "external_domain": server.external_domain,
-        "external_port": server.external_port
-    }
+    return format_server_response(server)
 
 @router.post("", response_model=ServerResponse)
 @router.post("/", response_model=ServerResponse)
@@ -142,7 +129,8 @@ async def create_server(server_req: ServerCreate, db: Session = Depends(get_db))
         password=server_req.password,
         inbound_id=server_req.inbound_id,
         external_domain=server_req.external_domain,
-        external_port=server_req.external_port
+        external_port=server_req.external_port,
+        is_active=server_req.is_active if server_req.is_active is not None else True
     )
     db.add(server)
     db.commit()
@@ -153,21 +141,7 @@ async def create_server(server_req: ServerCreate, db: Session = Depends(get_db))
     for client in active_clients:
         await generate_keys_for_client(client, [server_id], db)
 
-    return {
-        "id": server.id,
-        "name": server.name,
-        "api_url": server.api_url,
-        "cert_sha256": server.cert_sha256,
-        "created_at": server.created_at,
-        "type": server.type,
-        "auth_username": server.auth_username,
-        "auth_password": server.auth_password,
-        "username": server.username,
-        "password": server.password,
-        "inbound_id": server.inbound_id,
-        "external_domain": server.external_domain,
-        "external_port": server.external_port
-    }
+    return format_server_response(server)
 
 @router.put("/{server_id}", response_model=ServerResponse)
 async def update_server(server_id: str, server_req: ServerUpdate, db: Session = Depends(get_db)):
@@ -197,6 +171,8 @@ async def update_server(server_id: str, server_req: ServerUpdate, db: Session = 
         server.external_domain = server_req.external_domain
     if server_req.external_port is not None:
         server.external_port = server_req.external_port
+    if server_req.is_active is not None:
+        server.is_active = server_req.is_active
     
     db.commit()
     db.refresh(server)
@@ -217,21 +193,19 @@ async def update_server(server_id: str, server_req: ServerUpdate, db: Session = 
                 k.access_url = f"hy2://{k.outline_key_id}@{host}:{port}/?security=tls&sni={host}#{server.name} - {client.name}"
         db.commit()
     
-    return {
-        "id": server.id,
-        "name": server.name,
-        "api_url": server.api_url,
-        "cert_sha256": server.cert_sha256,
-        "created_at": server.created_at,
-        "type": server.type,
-        "auth_username": server.auth_username,
-        "auth_password": server.auth_password,
-        "username": server.username,
-        "password": server.password,
-        "inbound_id": server.inbound_id,
-        "external_domain": server.external_domain,
-        "external_port": server.external_port
-    }
+    return format_server_response(server)
+
+@router.post("/{server_id}/toggle-active")
+async def toggle_server_active(server_id: str, db: Session = Depends(get_db)):
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+    
+    curr = server.is_active if server.is_active is not None else True
+    server.is_active = not curr
+    db.commit()
+    db.refresh(server)
+    return {"ok": True, "id": server.id, "name": server.name, "is_active": server.is_active}
 
 @router.delete("/{server_id}")
 async def delete_server(server_id: str, db: Session = Depends(get_db)):

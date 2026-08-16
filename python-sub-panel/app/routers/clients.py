@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, HTTPException, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Client, ClientKey, Server, Setting
-from app.schemas import ClientCreate, ClientUpdate, ClientResponse, ClientDetailResponse, UsageMetricsResponse
+from app.schemas import ClientCreate, ClientUpdate, ClientResponse, ClientDetailResponse, UsageMetricsResponse, QuickRenewRequest
 from typing import List, Optional
 import uuid
 import random
@@ -200,7 +200,10 @@ def format_client_response(c: Client) -> dict:
         "total_usage_bytes": c.total_usage_bytes or 0,
         "last_seen": last_seen_val,
         "is_online": is_online,
-        "remaining_time": remaining_time
+        "remaining_time": remaining_time,
+        "notes": getattr(c, 'notes', None),
+        "contact": getattr(c, 'contact', None),
+        "plan_price": getattr(c, 'plan_price', None)
     }
 
 @router.get("", response_model=List[ClientResponse])
@@ -255,7 +258,10 @@ async def create_client(client_req: ClientCreate, db: Session = Depends(get_db))
         created_at=now,
         expiry_date=client_req.expiry_date,
         data_limit_gb=client_req.data_limit_gb,
-        total_usage_bytes=0
+        total_usage_bytes=0,
+        notes=client_req.notes,
+        contact=client_req.contact,
+        plan_price=client_req.plan_price
     )
     db.add(client)
     db.commit()
@@ -283,6 +289,12 @@ async def update_client(client_id: str, client_req: ClientUpdate, db: Session = 
         client.expiry_date = client_req.expiry_date
     if client_req.data_limit_gb is not None:
         client.data_limit_gb = client_req.data_limit_gb
+    if client_req.notes is not None:
+        client.notes = client_req.notes
+    if client_req.contact is not None:
+        client.contact = client_req.contact
+    if client_req.plan_price is not None:
+        client.plan_price = client_req.plan_price
     if client_req.status is not None:
         old_status = client.status
         client.status = client_req.status
@@ -295,6 +307,52 @@ async def update_client(client_id: str, client_req: ClientUpdate, db: Session = 
     
     db.commit()
     db.refresh(client)
+    
+    return format_client_response(client)
+
+@router.post("/{client_id}/quick-renew", response_model=ClientResponse)
+async def quick_renew_client(client_id: str, renew_req: Optional[QuickRenewRequest] = None, db: Session = Depends(get_db)):
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+        
+    now = datetime.utcnow()
+    req = renew_req or QuickRenewRequest()
+    days = req.days if req.days is not None else 30
+    
+    base_dt = now
+    if client.expiry_date:
+        try:
+            exp_str = str(client.expiry_date)
+            if "T" in exp_str:
+                exp_dt = datetime.fromisoformat(exp_str.replace("Z", "+00:00")).replace(tzinfo=None)
+            else:
+                exp_dt = datetime.strptime(exp_str.split()[0], "%Y-%m-%d")
+            if exp_dt > now:
+                base_dt = exp_dt
+        except Exception:
+            base_dt = now
+            
+    from datetime import timedelta
+    new_expiry = (base_dt + timedelta(days=days)).strftime("%Y-%m-%d")
+    client.expiry_date = new_expiry
+    
+    if req.add_gb and req.add_gb > 0:
+        current_gb = client.data_limit_gb or 0
+        client.data_limit_gb = current_gb + req.add_gb
+        
+    if req.reset_usage:
+        client.total_usage_bytes = 0
+        keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
+        for k in keys:
+            k.last_seen_bytes = 0
+            
+    client.status = "active"
+    db.commit()
+    db.refresh(client)
+    
+    from app.services.vpn_manager import unblock_client_keys
+    await unblock_client_keys(client, db)
     
     return format_client_response(client)
 

@@ -253,14 +253,22 @@
             tbody.innerHTML = servers.map(s => `
                 <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
                     <td class="p-4">
-                        <div class="font-medium text-white">${escapeHtml(s.name)}</div>
+                        <div class="font-medium text-white flex items-center gap-2">
+                            <span>${escapeHtml(s.name)}</span>
+                            ${s.is_active === false ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] uppercase font-bold">Maintenance</span>' : ''}
+                        </div>
                     </td>
                     <td class="p-4">
                         <span class="px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(s.type)}">${s.type}</span>
                     </td>
                     <td class="p-4 text-zinc-400 text-sm">${escapeHtml(s.api_url)}</td>
                     <td class="p-4">
-                        <span id="status-${s.id}" class="text-zinc-400 text-sm">Unknown</span>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span id="status-${s.id}" class="text-zinc-400 text-sm">Unknown</span>
+                            <button onclick="toggleServerActive('${s.id}')" title="Click to toggle Active / Maintenance mode" class="px-2 py-0.5 rounded-full text-xs font-semibold cursor-pointer transition-colors ${s.is_active !== false ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30' : 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/30 border border-amber-500/30'}">
+                                ${s.is_active !== false ? '✓ Enabled' : '⏸ Maint'}
+                            </button>
+                        </div>
                     </td>
                     <td class="p-4 text-right">
                         <button onclick="syncServerKeys('${s.id}', '${escapeHtml(s.name)}', this)" class="text-emerald-400 hover:text-emerald-300 mr-3 text-sm font-medium">🔄 Sync Keys</button>
@@ -355,6 +363,21 @@
                 }
             } catch (err) {
                 showError('Failed to delete server');
+            }
+        }
+
+        async function toggleServerActive(id) {
+            try {
+                const resp = await fetch(`/api/servers/${id}/toggle-active`, { method: 'POST' });
+                const data = await resp.json();
+                if (resp.ok && data.ok) {
+                    showSuccess(`Server "${data.name}" is now ${data.is_active ? 'Active' : 'in Maintenance mode'}`);
+                    loadServers();
+                } else {
+                    showError('Failed to update server mode');
+                }
+            } catch (err) {
+                showError('Error updating server mode');
             }
         }
 

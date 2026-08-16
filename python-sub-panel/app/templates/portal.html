@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ client.name }} - {{ brand_name }} Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-start p-4 sm:p-6 md:p-10 selection:bg-blue-600 selection:text-white">
+
+    <div class="w-full max-w-xl mx-auto space-y-6">
+        
+        <!-- Header & Brand -->
+        <header class="text-center space-y-2">
+            <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/30 mb-2 shadow-lg shadow-blue-500/10">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                </svg>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">{{ brand_name }}</h1>
+            <p class="text-sm text-zinc-400">Client Subscription & Self-Service Portal</p>
+        </header>
+
+        <!-- Main Status Card -->
+        <div class="glass-card rounded-3xl p-6 sm:p-8 border border-white/10 shadow-2xl space-y-6 relative overflow-hidden bg-slate-900/80 backdrop-blur-xl">
+            
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-6">
+                <div>
+                    <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Account Name</span>
+                    <h2 class="text-2xl font-bold text-white mt-0.5">{{ client.name }}</h2>
+                    {% if client.contact %}
+                    <p class="text-xs text-blue-400 mt-1 flex items-center gap-1">
+                        <span>💬 {{ client.contact }}</span>
+                    </p>
+                    {% endif %}
+                </div>
+                <div class="flex items-center gap-2">
+                    {% if client.status == 'active' %}
+                    <span class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Active
+                    </span>
+                    {% elif client.status == 'expired' %}
+                    <span class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30">
+                        Expired
+                    </span>
+                    {% else %}
+                    <span class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-zinc-500/20 text-zinc-400 border border-zinc-500/30">
+                        {{ client.status|title }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Stats Matrix -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Expiry Date -->
+                <div class="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-1">
+                    <span class="text-xs text-zinc-400 font-medium">Valid Until / Expiry</span>
+                    <div class="text-lg font-bold text-white">
+                        {{ client.expiry_date or 'Unlimited' }}
+                    </div>
+                    <div class="text-xs {% if days_left and days_left < 3 %}text-amber-400 font-semibold{% else %}text-zinc-400{% endif %}">
+                        {% if days_left is not none %}
+                            {% if days_left >= 0 %}
+                                ⏳ {{ days_left }} Days Remaining
+                            {% else %}
+                                ❌ Expired {{ days_left|abs }} Days Ago
+                            {% endif %}
+                        {% else %}
+                            ⏳ Lifetime Access
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Traffic Usage -->
+                <div class="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-1">
+                    <span class="text-xs text-zinc-400 font-medium">Traffic / Data Limit</span>
+                    <div class="text-lg font-bold text-white">
+                        {{ used_gb_str }} / {{ total_gb_str }}
+                    </div>
+                    <div class="w-full bg-white/10 rounded-full h-2 mt-2 overflow-hidden">
+                        <div class="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-500" style="width: {{ usage_percent }}%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Import Buttons -->
+            <div class="space-y-3 pt-2">
+                <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">One-Click Client App Import</span>
+                
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <!-- v2rayNG / Android -->
+                    <a href="v2rayng://install-sub?url={{ sub_url_encoded }}" class="flex flex-col items-center justify-center p-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-all hover:scale-[1.02] text-center">
+                        <span class="text-lg mb-1">🚀</span>
+                        <span class="text-xs font-semibold">v2rayNG</span>
+                    </a>
+
+                    <!-- Sing-box -->
+                    <a href="sing-box://import-remote-profile?url={{ sub_url_encoded }}#{{ brand_name }}" class="flex flex-col items-center justify-center p-3 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 transition-all hover:scale-[1.02] text-center">
+                        <span class="text-lg mb-1">📦</span>
+                        <span class="text-xs font-semibold">Sing-box</span>
+                    </a>
+
+                    <!-- Shadowrocket / iOS -->
+                    <a href="shadowrocket://add/sub://{{ sub_url_b64 }}?remarks={{ brand_name }}" class="flex flex-col items-center justify-center p-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition-all hover:scale-[1.02] text-center">
+                        <span class="text-lg mb-1">🚀</span>
+                        <span class="text-xs font-semibold">Shadowrocket</span>
+                    </a>
+
+                    <!-- Clash Meta -->
+                    <a href="clash://install-config?url={{ sub_url_encoded }}&name={{ brand_name }}" class="flex flex-col items-center justify-center p-3 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 transition-all hover:scale-[1.02] text-center">
+                        <span class="text-lg mb-1">🐱</span>
+                        <span class="text-xs font-semibold">Clash Meta</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Copy Link Box -->
+            <div class="space-y-2 pt-2">
+                <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">Subscription Link</span>
+                <div class="flex items-center gap-2 p-2 rounded-xl bg-black/40 border border-white/10">
+                    <input type="text" id="subUrlInput" readonly value="{{ sub_url }}" class="w-full bg-transparent px-3 py-1.5 text-xs sm:text-sm text-zinc-300 focus:outline-none select-all font-mono">
+                    <button onclick="copySubUrl()" id="btnCopy" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium transition-colors whitespace-nowrap flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        <span>Copy Link</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- QR Code Section -->
+            <div class="pt-2 flex flex-col items-center justify-center border-t border-white/5 space-y-3">
+                <button onclick="toggleQR()" class="text-xs font-medium text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                    <span>📷 Show / Hide QR Code</span>
+                </button>
+                <div id="qrBox" class="hidden p-4 bg-white rounded-2xl shadow-xl transition-all">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data={{ sub_url_encoded }}" alt="QR Code" class="w-44 h-44 rounded-lg">
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Node List Card -->
+        <div class="glass-card rounded-3xl p-6 border border-white/10 bg-slate-900/60 shadow-xl space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <span>🌐 Available Server Nodes</span>
+                    <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-white/10 text-zinc-300">{{ nodes|length }}</span>
+                </h3>
+            </div>
+
+            <div class="space-y-2.5">
+                {% for node in nodes %}
+                <div class="p-3.5 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between gap-3 hover:bg-white/10 transition-colors">
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <span class="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">
+                            {% if 'hy2://' in node.url %}HY2
+                            {% elif 'vless://' in node.url %}VL
+                            {% elif 'ss://' in node.url %}SS
+                            {% else %}VPN{% endif %}
+                        </span>
+                        <div class="truncate">
+                            <div class="text-sm font-semibold text-white truncate">{{ node.name }}</div>
+                            <div class="text-xs text-zinc-400 truncate font-mono">{{ node.type|upper }}</div>
+                        </div>
+                    </div>
+                    <button onclick="copyRawKey('{{ node.url }}', this)" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/15 text-zinc-300 text-xs font-medium transition-colors shrink-0">
+                        Copy
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center text-xs text-zinc-500 pb-8 space-y-1">
+            <p>{{ brand_name }} &copy; {{ current_year }}. All rights reserved.</p>
+            <p>Fast & Stable Self-Hosted VPN Subscription System</p>
+        </footer>
+
+    </div>
+
+    <script>
+        function copySubUrl() {
+            const input = document.getElementById('subUrlInput');
+            input.select();
+            navigator.clipboard.writeText(input.value);
+            const btn = document.getElementById('btnCopy');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<span>✅ Copied!</span>';
+            setTimeout(() => { btn.innerHTML = originalHtml; }, 2000);
+        }
+
+        function copyRawKey(keyText, btn) {
+            navigator.clipboard.writeText(keyText);
+            const orig = btn.innerText;
+            btn.innerText = 'Copied!';
+            setTimeout(() => { btn.innerText = orig; }, 1500);
+        }
+
+        function toggleQR() {
+            const qr = document.getElementById('qrBox');
+            qr.classList.toggle('hidden');
+        }
+    </script>
+</body>
+</html>

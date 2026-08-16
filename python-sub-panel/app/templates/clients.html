@@ -144,6 +144,21 @@
                     <input type="number" id="data_limit_gb" step="0.1" placeholder="Leave empty for unlimited" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
                 </div>
 
+                <div>
+                    <label class="block text-sm font-medium text-zinc-400 mb-2">Contact / Social (Telegram / Phone)</label>
+                    <input type="text" id="contact" placeholder="e.g. @username or 0979123456" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-zinc-400 mb-2">Plan / Price</label>
+                    <input type="text" id="plan_price" placeholder="e.g. 5,000 MMK / Month (VIP)" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-zinc-400 mb-2">Customer Notes / Payment Info</label>
+                    <textarea id="notes" rows="2" placeholder="e.g. Paid KBZPay on 16/08, single user" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500 text-sm"></textarea>
+                </div>
+
                 <div class="flex gap-3 pt-4">
                     <button type="submit" class="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-colors">
                         Save Client
@@ -252,8 +267,14 @@
                 return `
                     <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
                         <td class="p-4">
-                            <div class="font-bold text-white text-base">${escapeHtml(c.name)}</div>
-                            <div class="text-xs font-mono text-zinc-500 mt-0.5">ID: ${c.id.substring(0, 8)}...</div>
+                            <div class="font-bold text-white text-base flex items-center gap-2 flex-wrap">
+                                <span>${escapeHtml(c.name)}</span>
+                                ${c.plan_price ? `<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">${escapeHtml(c.plan_price)}</span>` : ''}
+                            </div>
+                            <div class="flex items-center gap-2 text-xs text-zinc-400 mt-1 flex-wrap">
+                                ${c.contact ? `<span class="text-blue-400 font-medium">💬 ${escapeHtml(c.contact)}</span>` : ''}
+                                ${c.notes ? `<span class="text-zinc-400 bg-white/5 px-1.5 py-0.5 rounded text-[11px]" title="${escapeHtml(c.notes)}">📝 ${escapeHtml(c.notes.length > 25 ? c.notes.substring(0, 25) + '...' : c.notes)}</span>` : ''}
+                            </div>
                         </td>
                         <td class="p-4">
                             ${statusBadge}
@@ -270,11 +291,13 @@
                             <div class="text-[10px] text-zinc-400 mt-0.5">${usagePercent}% used</div>
                             ` : ''}
                         </td>
-                        <td class="p-4 text-right space-x-1">
-                            <button onclick="viewKeys('${c.id}')" class="px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg text-xs font-semibold transition-colors border border-purple-500/20">🔑 View Keys</button>
-                            <button onclick="copySubLink('${c.sub_token}')" class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-xs font-semibold transition-colors border border-blue-500/20">📋 Copy Sub</button>
-                            <button onclick="editClient('${c.id}')" class="px-2.5 py-1.5 text-zinc-400 hover:text-white text-xs font-medium">Edit</button>
-                            <button onclick="deleteClient('${c.id}')" class="px-2.5 py-1.5 text-red-400 hover:text-red-300 text-xs font-medium">Delete</button>
+                        <td class="p-4 text-right space-x-1 whitespace-nowrap">
+                            <button onclick="quickRenewClient('${c.id}', '${escapeHtml(c.name)}', 30)" title="Extend +30 Days & Reset Quota" class="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded-lg text-xs font-semibold transition-colors border border-emerald-500/30">⚡ +30d</button>
+                            <a href="/my/${c.sub_token}" target="_blank" class="inline-block px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-white/10">🌐 Portal</a>
+                            <button onclick="copySubLink('${c.sub_token}')" class="px-2.5 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-xs font-semibold transition-colors border border-blue-500/20">📋 Sub</button>
+                            <button onclick="viewKeys('${c.id}')" class="px-2.5 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg text-xs font-semibold transition-colors border border-purple-500/20">🔑 Keys</button>
+                            <button onclick="editClient('${c.id}')" class="px-2 py-1.5 text-zinc-400 hover:text-white text-xs font-medium">Edit</button>
+                            <button onclick="deleteClient('${c.id}')" class="px-2 py-1.5 text-red-400 hover:text-red-300 text-xs font-medium">Delete</button>
                         </td>
                     </tr>
                 `;
@@ -282,6 +305,7 @@
         }
 
         function escapeHtml(text) {
+            if (!text) return '';
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
@@ -290,6 +314,9 @@
         function openModal() {
             document.getElementById('clientForm').reset();
             document.getElementById('clientId').value = '';
+            document.getElementById('contact').value = '';
+            document.getElementById('plan_price').value = '';
+            document.getElementById('notes').value = '';
             document.getElementById('modalTitle').textContent = 'Add Client';
             document.getElementById('clientModal').classList.remove('hidden');
         }
@@ -307,9 +334,32 @@
             document.getElementById('status').value = client.status;
             document.getElementById('expiry_date').value = client.expiry_date || '';
             document.getElementById('data_limit_gb').value = client.data_limit_gb || '';
+            document.getElementById('contact').value = client.contact || '';
+            document.getElementById('plan_price').value = client.plan_price || '';
+            document.getElementById('notes').value = client.notes || '';
 
             document.getElementById('modalTitle').textContent = 'Edit Client';
             document.getElementById('clientModal').classList.remove('hidden');
+        }
+
+        async function quickRenewClient(id, name, days) {
+            if (!confirm(`Extend account "${name}" by +${days} days and reset traffic usage?`)) return;
+            try {
+                const resp = await fetch(`/api/clients/${id}/quick-renew`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ days: days, reset_usage: true })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    showSuccess(`Successfully renewed "${name}" until ${data.expiry_date}!`);
+                    loadClients();
+                } else {
+                    showError(data.detail || 'Failed to renew client');
+                }
+            } catch (err) {
+                showError('Error renewing client');
+            }
         }
 
         async function deleteClient(id) {
@@ -345,7 +395,10 @@
                 name: document.getElementById('name').value,
                 status: document.getElementById('status').value,
                 expiry_date: document.getElementById('expiry_date').value || null,
-                data_limit_gb: document.getElementById('data_limit_gb').value ? parseInt(document.getElementById('data_limit_gb').value) : null
+                data_limit_gb: document.getElementById('data_limit_gb').value ? parseFloat(document.getElementById('data_limit_gb').value) : null,
+                contact: document.getElementById('contact').value || null,
+                plan_price: document.getElementById('plan_price').value || null,
+                notes: document.getElementById('notes').value || null
             };
 
             try {

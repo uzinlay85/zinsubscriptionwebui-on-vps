@@ -18,6 +18,7 @@ class Server(Base):
     inbound_id = Column(Integer, nullable=True)
     external_domain = Column(String, nullable=True)
     external_port = Column(Integer, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
 
 class Client(Base):
     __tablename__ = "clients"
@@ -31,6 +32,9 @@ class Client(Base):
     data_limit_gb = Column(Integer, nullable=True)
     total_usage_bytes = Column(BigInteger, nullable=False, default=0)
     last_seen = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    contact = Column(String, nullable=True)
+    plan_price = Column(String, nullable=True)
 
 class ClientKey(Base):
     __tablename__ = "client_keys"

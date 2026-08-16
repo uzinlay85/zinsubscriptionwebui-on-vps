@@ -13,14 +13,24 @@ class ServerBase(BaseModel):
     inbound_id: Optional[int] = None
     external_domain: Optional[str] = None
     external_port: Optional[int] = None
+    is_active: Optional[bool] = True
 
 class ServerCreate(ServerBase):
     pass
 
-class ServerUpdate(ServerBase):
+class ServerUpdate(BaseModel):
     name: Optional[str] = None
     api_url: Optional[str] = None
     type: Optional[str] = None
+    cert_sha256: Optional[str] = None
+    auth_username: Optional[str] = None
+    auth_password: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    inbound_id: Optional[int] = None
+    external_domain: Optional[str] = None
+    external_port: Optional[int] = None
+    is_active: Optional[bool] = None
 
 class ServerResponse(ServerBase):
     id: str
@@ -31,6 +41,9 @@ class ClientBase(BaseModel):
     status: str = "active"
     expiry_date: Optional[str] = None
     data_limit_gb: Optional[int] = None
+    notes: Optional[str] = None
+    contact: Optional[str] = None
+    plan_price: Optional[str] = None
 
 class ClientCreate(ClientBase):
     server_ids: Optional[List[str]] = None
@@ -40,6 +53,14 @@ class ClientUpdate(BaseModel):
     expiry_date: Optional[str] = None
     data_limit_gb: Optional[int] = None
     status: Optional[str] = None
+    notes: Optional[str] = None
+    contact: Optional[str] = None
+    plan_price: Optional[str] = None
+
+class QuickRenewRequest(BaseModel):
+    days: Optional[int] = 30
+    add_gb: Optional[int] = None
+    reset_usage: Optional[bool] = True
 
 class ClientResponse(ClientBase):
     id: str

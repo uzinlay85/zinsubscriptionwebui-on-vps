@@ -38,7 +38,11 @@ SYNC_INTERVAL = int(os.getenv("SYNC_INTERVAL_MINUTES", "10"))
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
     
-    public_paths = ["/api/sub/", "/api/cron/", "/health", "/static/", "/favicon.ico", "/login", "/api/auth/login", "/api/auth/logout"]
+    public_paths = [
+        "/api/sub/", "/sub/", "/my/", "/api/cron/",
+        "/health", "/static/", "/favicon.ico", "/login",
+        "/api/auth/login", "/api/auth/logout"
+    ]
     is_public = any(path.startswith(p) for p in public_paths)
     
     if is_public:
@@ -103,6 +107,80 @@ async def clients_page(request: Request):
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     return templates.TemplateResponse("settings.html", {"request": request, "app_name": APP_NAME})
+
+@app.get("/my/{token}", response_class=HTMLResponse)
+@app.get("/sub/view/{token}", response_class=HTMLResponse)
+async def client_portal_page(request: Request, token: str, db: Session = Depends(get_db)):
+    import urllib.parse
+    import base64
+    from app.routers import sub as sub_router
+    
+    client = db.query(Client).filter(Client.sub_token == token).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Subscription token not found")
+
+    brand_name = sub_router.get_brand_name(db)
+    
+    # Calculate days left
+    days_left = None
+    exp_dt = sub_router.safe_parse_iso(client.expiry_date)
+    if exp_dt:
+        now = datetime.utcnow()
+        if exp_dt.tzinfo is not None:
+            from datetime import timezone
+            now = datetime.now(timezone.utc)
+        days_left = (exp_dt - now).days
+
+    # Usage calculation
+    used_bytes = client.total_usage_bytes or 0
+    used_gb = used_bytes / (1024 * 1024 * 1024)
+    used_gb_str = f"{used_gb:.2f} GB"
+    
+    if client.data_limit_gb and client.data_limit_gb > 0:
+        total_gb_str = f"{client.data_limit_gb} GB"
+        usage_percent = min(100, int((used_gb / client.data_limit_gb) * 100))
+    else:
+        total_gb_str = "Unlimited"
+        usage_percent = min(100, int((used_gb / 100) * 100)) if used_gb > 0 else 0
+
+    # Build Sub URL
+    base_url = str(request.base_url).rstrip("/")
+    sub_url = f"{base_url}/api/sub/{token}"
+    sub_url_encoded = urllib.parse.quote(sub_url, safe="")
+    sub_url_b64 = base64.b64encode(sub_url.encode()).decode()
+
+    # Get active nodes
+    keys = db.query(ClientKey).filter(ClientKey.client_id == client.id).all()
+    server_map = {s.id: s for s in db.query(Server).filter(Server.is_active != False).all()}
+    
+    node_list = []
+    for k in keys:
+        s = server_map.get(k.server_id)
+        if s:
+            node_list.append({
+                "name": f"{s.name} - {client.name}",
+                "type": s.type,
+                "url": k.access_url
+            })
+
+    return templates.TemplateResponse("portal.html", {
+        "request": request,
+        "client": client,
+        "brand_name": brand_name,
+        "days_left": days_left,
+        "used_gb_str": used_gb_str,
+        "total_gb_str": total_gb_str,
+        "usage_percent": usage_percent,
+        "sub_url": sub_url,
+        "sub_url_encoded": sub_url_encoded,
+        "sub_url_b64": sub_url_b64,
+        "nodes": node_list,
+        "current_year": datetime.utcnow().year
+    })
+
+@app.get("/sub/{token}")
+async def short_sub_redirect(token: str):
+    return RedirectResponse(url=f"/api/sub/{token}", status_code=307)
 
 if ADMIN_SECRET_PATH:
     @app.get(f"/{ADMIN_SECRET_PATH}")
