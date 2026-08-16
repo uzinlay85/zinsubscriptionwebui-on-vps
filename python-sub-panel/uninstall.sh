@@ -196,8 +196,9 @@ if [ -n "$DB_PATH" ]; then
         echo -e "${GREEN}[✓]${NC} Database saved safely to: $BACKUP_DEST"
     fi
 fi
+
 if [ -d "$INSTALL_DIR" ]; then
-    if ask_yes_no "Do you want to completely remove $INSTALL_DIR? This will delete all data including database and configuration."; then
+    if ask_yes_no "Do you want to completely remove $INSTALL_DIR? This will delete panel files only."; then
         rm -rf "$INSTALL_DIR"
         echo -e "${GREEN}[✓]${NC} Installation directory removed"
     else
@@ -208,20 +209,8 @@ else
     echo -e "${YELLOW}[!]${NC} Installation directory not found"
 fi
 
-# Optional: Remove Docker
-echo ""
-if ask_yes_no "Do you want to remove Docker and Docker Compose? (Not recommended if you use Docker for other services)"; then
-    if command -v docker &> /dev/null; then
-        echo "Removing Docker..."
-        apt remove -y docker.io docker-compose 2>/dev/null || true
-        apt autoremove -y 2>/dev/null || true
-        echo -e "${GREEN}[✓]${NC} Docker removed"
-    else
-        echo -e "${YELLOW}[!]${NC} Docker not found"
-    fi
-else
-    echo "Keeping Docker installed"
-fi
+# Note: Docker is intentionally preserved so Outline and other VPN containers remain active!
+echo -e "${GREEN}[✓]${NC} Other VPN services (Outline, Hysteria2, 3x-ui / VLESS) and Docker are preserved safely."
 
 # Final summary
 echo ""
@@ -229,7 +218,8 @@ echo "=========================================="
 echo "  Uninstall Complete!"
 echo "=========================================="
 echo ""
-echo "The VPN Subscription Panel has been removed from your system."
+echo "The VPN Subscription Panel has been removed cleanly."
+echo "Your VPN servers (Outline, Hysteria2, VLESS) remain 100% active and untouched."
 echo ""
 echo "If you kept the installation directory, you can manually remove it with:"
 echo "  rm -rf $INSTALL_DIR"
