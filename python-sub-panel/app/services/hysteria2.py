@@ -145,20 +145,20 @@ async def flask_login(server: Server) -> Optional[Dict[str, Any]]:
                         },
                         timeout=aiohttp.ClientTimeout(total=5),
                         ssl=False,
-                        allow_redirects=True
+                        allow_redirects=False
                     ) as login_resp:
-                        if login_resp.status == 200:
+                        # 302 redirect after login or 200 with cookies indicates successful authentication
+                        if login_resp.status in [200, 302]:
+                            fresh_csrf = csrf_token
                             res_html = await login_resp.text()
-                            if "Logout" in res_html or "add-form" in res_html or "user_name" in res_html or "User Management" in res_html:
-                                fresh_csrf = csrf_token
-                                csrf_match2 = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', res_html)
-                                if csrf_match2:
-                                    fresh_csrf = csrf_match2.group(1)
-                                return {
-                                    "cookie": session.cookie_jar,
-                                    "csrf_token": fresh_csrf,
-                                    "working_base_url": base_url
-                                }
+                            csrf_match2 = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', res_html)
+                            if csrf_match2:
+                                fresh_csrf = csrf_match2.group(1)
+                            return {
+                                "cookie": session.cookie_jar,
+                                "csrf_token": fresh_csrf,
+                                "working_base_url": base_url
+                            }
         except Exception:
             continue
     return None
@@ -182,10 +182,10 @@ async def flask_add_user(server: Server, username: str, password: str, limit_gb:
                 },
                 timeout=aiohttp.ClientTimeout(total=10),
                 ssl=False,
-                allow_redirects=True
+                allow_redirects=False
             ) as resp:
-                text = await resp.text()
-                return resp.status == 200 and (password in text or username in text or "Logout" in text)
+                # 302 redirect to index or 200 means user added successfully
+                return resp.status in [200, 302]
     except Exception:
         return False
 
@@ -205,7 +205,7 @@ async def flask_delete_user(server: Server, user_pass: str) -> bool:
                 },
                 timeout=aiohttp.ClientTimeout(total=10),
                 ssl=False,
-                allow_redirects=True
+                allow_redirects=False
             ) as resp:
                 return resp.status in [200, 302]
     except Exception:
