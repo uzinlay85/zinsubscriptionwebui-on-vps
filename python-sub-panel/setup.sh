@@ -454,8 +454,13 @@ echo "  Setup Complete!"
 echo "=========================================="
 echo ""
 echo "Access your panel at:"
-IP_ADDRESS=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || curl -s -4 ipinfo.io/ip 2>/dev/null || hostname -I | awk '{print $1}')
-echo -e "  ${GREEN}http://$IP_ADDRESS:8000/$ADMIN_SECRET_PATH${NC}"
+if [ -n "$DOMAIN" ]; then
+    echo -e "  ${GREEN}https://$DOMAIN/$ADMIN_SECRET_PATH${NC} (Recommended Domain HTTPS)"
+    echo -e "  http://$IP_ADDRESS:8000/$ADMIN_SECRET_PATH (Direct Port Fallback)"
+else
+    IP_ADDRESS=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || curl -s -4 ipinfo.io/ip 2>/dev/null || hostname -I | awk '{print $1}')
+    echo -e "  ${GREEN}http://$IP_ADDRESS:8000/$ADMIN_SECRET_PATH${NC}"
+fi
 echo ""
 echo "To view logs:"
 if command -v docker &> /dev/null && [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
