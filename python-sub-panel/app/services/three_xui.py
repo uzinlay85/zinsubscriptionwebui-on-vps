@@ -51,11 +51,14 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
         }
 
         try:
-            # First try JSON payload
+            # Try form-urlencoded first (matching standard 3x-ui browser form submission)
+            form_headers = dict(headers)
+            form_headers["Content-Type"] = "application/x-www-form-urlencoded"
+
             async with session.post(
                 f"{api_base}/login",
-                json={"username": u_name, "password": u_pass},
-                headers=headers,
+                data={"username": u_name, "password": u_pass},
+                headers=form_headers,
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False,
                 allow_redirects=True
@@ -63,21 +66,33 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server) -> Optional
                 login_status = login_resp.status
                 login_text = await login_resp.text()
 
-            print(f"3x-ui login (json) for {api_base}: HTTP {login_status} | body: {login_text[:100]}")
+            print(f"3x-ui login (form) for {api_base}: HTTP {login_status} | body: {login_text[:120]}")
 
-            # If json failed with 400 or non-200 (and not 403), try form-urlencoded
-            if login_status != 200 and login_status != 403:
+            # Check if form login succeeded
+            login_success = False
+            if login_status == 200:
+                try:
+                    ldata = json.loads(login_text)
+                    if ldata.get("success") is True:
+                        login_success = True
+                except Exception:
+                    pass
+
+            # If form login did not return success=true (and not 403), try JSON payload fallback
+            if not login_success and login_status != 403:
+                json_headers = dict(headers)
+                json_headers["Content-Type"] = "application/json"
                 async with session.post(
                     f"{api_base}/login",
-                    data={"username": u_name, "password": u_pass},
-                    headers=headers,
+                    json={"username": u_name, "password": u_pass},
+                    headers=json_headers,
                     timeout=aiohttp.ClientTimeout(total=5),
                     ssl=False,
                     allow_redirects=True
                 ) as login_resp2:
                     login_status = login_resp2.status
                     login_text = await login_resp2.text()
-                print(f"3x-ui login (form) for {api_base}: HTTP {login_status} | body: {login_text[:100]}")
+                print(f"3x-ui login (json) for {api_base}: HTTP {login_status} | body: {login_text[:120]}")
 
             if login_status == 403:
                 print(f"3x-ui: HTTP 403 Forbidden! IP is blocked by 3x-ui loginLimiter in memory. Please run 'systemctl restart x-ui' on server {server.name}.")
