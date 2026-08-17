@@ -224,8 +224,10 @@ async def get_client(client_id: str, db: Session = Depends(get_db)):
     server_map = {s.id: s for s in db.query(Server).all()}
     
     key_responses = []
+    from app.services.geo import get_flag_emoji
     for k in keys:
         server = server_map.get(k.server_id)
+        flg = get_flag_emoji(getattr(server, "country_code", None)) if server else "🌐"
         key_responses.append({
             "id": k.id,
             "server_id": k.server_id,
@@ -235,7 +237,9 @@ async def get_client(client_id: str, db: Session = Depends(get_db)):
             "uuid": k.uuid,
             "last_seen_bytes": k.last_seen_bytes,
             "server_name": server.name if server else None,
-            "server_type": server.type if server else None
+            "server_type": server.type if server else None,
+            "flag_emoji": flg,
+            "country_name": getattr(server, "country_name", None) if server else None
         })
     
     res = format_client_response(client)

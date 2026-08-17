@@ -184,14 +184,18 @@ async def client_portal_page(request: Request, token: str, db: Session = Depends
     keys = db.query(ClientKey).filter(ClientKey.client_id == client.id).all()
     server_map = {s.id: s for s in db.query(Server).filter(Server.is_active != False).all()}
     
+    from app.services.geo import get_flag_emoji
     node_list = []
     for k in keys:
         s = server_map.get(k.server_id)
         if s:
+            flg = get_flag_emoji(s.country_code)
             node_list.append({
-                "name": f"{s.name} - {client.name}",
+                "name": f"{flg} {s.name} - {client.name}",
                 "type": s.type,
-                "url": k.access_url
+                "url": k.access_url,
+                "flag_emoji": flg,
+                "country_name": s.country_name or "Global"
             })
 
     return templates.TemplateResponse("portal.html", {

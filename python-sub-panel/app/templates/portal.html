@@ -167,15 +167,16 @@
                 {% for node in nodes %}
                 <div class="p-3.5 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between gap-3 hover:bg-white/10 transition-colors">
                     <div class="flex items-center gap-3 overflow-hidden">
-                        <span class="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">
-                            {% if 'hy2://' in node.url %}HY2
-                            {% elif 'vless://' in node.url %}VL
-                            {% elif 'ss://' in node.url %}SS
-                            {% else %}VPN{% endif %}
+                        <span class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-xl shrink-0 select-none shadow-sm" title="{{ node.country_name or 'Global Node' }}">
+                            {{ node.flag_emoji or '🌐' }}
                         </span>
                         <div class="truncate">
                             <div class="text-sm font-semibold text-white truncate">{{ node.name }}</div>
-                            <div class="text-xs text-zinc-400 truncate font-mono">{{ node.type|upper }}</div>
+                            <div class="text-xs text-zinc-400 truncate flex items-center gap-2">
+                                <span class="font-mono uppercase font-bold text-blue-400 text-[11px]">{{ node.type }}</span>
+                                <span>&bull;</span>
+                                <span>{{ node.country_name or 'Global' }}</span>
+                            </div>
                         </div>
                     </div>
                     <button onclick="copyRawKey('{{ node.url }}', this)" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/15 text-zinc-300 text-xs font-medium transition-colors shrink-0">

@@ -136,6 +136,22 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
     else:
         userinfo_parts.append("expire=0")
     
+    from app.services.geo import get_flag_emoji
+
+    def format_node_with_flag(node_url: str, srv: Server, cl_name: str) -> str:
+        if not node_url:
+            return node_url
+        flg = get_flag_emoji(getattr(srv, "country_code", None))
+        if "#" in node_url:
+            base_u, rem = node_url.split("#", 1)
+            if flg not in rem:
+                if srv.name in rem:
+                    rem = rem.replace(srv.name, f"{flg} {srv.name}", 1)
+                else:
+                    rem = f"{flg} {rem}"
+            return f"{base_u}#{rem}"
+        return f"{node_url}#{flg} {srv.name} - {cl_name}"
+
     for k in keys:
         server = servers.get(k.server_id)
         if not server or server.is_active is False:
@@ -144,12 +160,10 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
         if server.type == "outline":
             url = k.access_url
             if url and url.strip():
-                if "#" not in url:
-                    url = f"{url.strip()}#{server.name} - {client.name}"
-                nodes.append(url)
+                nodes.append(format_node_with_flag(url.strip(), server, client.name))
         elif server.type in ["hysteria2", "hysteria2_python"]:
             if k.access_url and k.access_url.strip():
-                nodes.append(k.access_url.strip())
+                nodes.append(format_node_with_flag(k.access_url.strip(), server, client.name))
             else:
                 raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
                 if ':' in raw_host_port:
@@ -159,7 +173,8 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
                 host = server.external_domain or parsed_host
                 port = server.external_port or int(parsed_port)
                 pwd = k.outline_key_id or f"{client.name}_key"
-                fallback_url = f"hy2://{pwd}@{host}:{port}/?security=tls&sni={host}#{server.name} - {client.name}"
+                flg = get_flag_emoji(getattr(server, "country_code", None))
+                fallback_url = f"hy2://{pwd}@{host}:{port}/?security=tls&sni={host}#{flg} {server.name} - {client.name}"
                 nodes.append(fallback_url)
         elif server.type == "3x-ui":
             if k.access_url.startswith("3x-ui-sub:"):
@@ -180,9 +195,9 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
                                         if server.external_domain and server.external_port:
                                             modified = re.sub(r'@([^:]+):\d+', f'@{server.external_domain}:{server.external_port}', link)
                                             modified = re.sub(r'sni=[^&]+', f'sni={server.external_domain}', modified)
-                                            nodes.append(modified)
+                                            nodes.append(format_node_with_flag(modified, server, client.name))
                                         else:
-                                            nodes.append(link)
+                                            nodes.append(format_node_with_flag(link, server, client.name))
                                 continue
                 except Exception:
                     pass
@@ -191,11 +206,12 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
                 host = server.external_domain
                 port = server.external_port
                 sni = server.external_domain
+                flg = get_flag_emoji(getattr(server, "country_code", None))
                 params = f"encryption=none&security=tls&sni={sni}&fp=chrome&type=tcp&headerType=none"
-                custom_link = f"vless://{k.uuid}@{host}:{port}?{params}#{server.name} - {client.name}"
+                custom_link = f"vless://{k.uuid}@{host}:{port}?{params}#{flg} {server.name} - {client.name}"
                 nodes.append(custom_link)
             elif k.access_url:
-                nodes.append(k.access_url)
+                nodes.append(format_node_with_flag(k.access_url, server, client.name))
     
     valid_prefixes = ("vless://", "hy2://", "hysteria2://", "ss://", "vmess://", "trojan://", "tuic://", "wireguard://", "shadowsocks://")
     clean_nodes = [n.strip() for n in nodes if n and n.strip().startswith(valid_prefixes)]

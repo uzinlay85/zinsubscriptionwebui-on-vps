@@ -12,10 +12,13 @@ from datetime import datetime
 
 router = APIRouter()
 
+from app.services.geo import detect_server_country, get_flag_emoji
+
 def generate_id():
     return str(uuid.uuid4())
 
 def format_server_response(s: Server) -> dict:
+    flag = get_flag_emoji(s.country_code)
     return {
         "id": s.id,
         "name": s.name,
@@ -30,13 +33,26 @@ def format_server_response(s: Server) -> dict:
         "inbound_id": s.inbound_id,
         "external_domain": s.external_domain,
         "external_port": s.external_port,
-        "is_active": s.is_active if s.is_active is not None else True
+        "is_active": s.is_active if s.is_active is not None else True,
+        "country_code": s.country_code,
+        "country_name": s.country_name,
+        "flag_emoji": flag
     }
 
 @router.get("", response_model=List[ServerResponse])
 @router.get("/", response_model=List[ServerResponse])
 async def list_servers(db: Session = Depends(get_db)):
     servers = db.query(Server).order_by(Server.created_at.desc()).all()
+    # Auto-resolve country for any servers that don't have it yet
+    for s in servers:
+        if not s.country_code:
+            try:
+                cc, cname, _ = await detect_server_country(s)
+                s.country_code = cc
+                s.country_name = cname
+            except Exception:
+                pass
+    db.commit()
     return [format_server_response(s) for s in servers]
 
 @router.get("/status", response_model=List[ServerStatusResponse])
@@ -130,8 +146,19 @@ async def create_server(server_req: ServerCreate, db: Session = Depends(get_db))
         inbound_id=server_req.inbound_id,
         external_domain=server_req.external_domain,
         external_port=server_req.external_port,
-        is_active=server_req.is_active if server_req.is_active is not None else True
+        is_active=server_req.is_active if server_req.is_active is not None else True,
+        country_code=server_req.country_code,
+        country_name=server_req.country_name
     )
+    
+    if not server.country_code:
+        try:
+            cc, cname, _ = await detect_server_country(server)
+            server.country_code = cc
+            server.country_name = cname
+        except Exception:
+            pass
+            
     db.add(server)
     db.commit()
     db.refresh(server)
@@ -173,10 +200,23 @@ async def update_server(server_id: str, server_req: ServerUpdate, db: Session = 
         server.external_port = server_req.external_port
     if server_req.is_active is not None:
         server.is_active = server_req.is_active
+    if server_req.country_code is not None:
+        server.country_code = server_req.country_code
+    if server_req.country_name is not None:
+        server.country_name = server_req.country_name
+        
+    if not server.country_code:
+        try:
+            cc, cname, _ = await detect_server_country(server)
+            server.country_code = cc
+            server.country_name = cname
+        except Exception:
+            pass
     
     db.commit()
     db.refresh(server)
     
+    flag = get_flag_emoji(server.country_code)
     # Refresh existing client keys access_url for this server
     existing_keys = db.query(ClientKey).filter(ClientKey.server_id == server_id).all()
     if existing_keys:
@@ -190,7 +230,7 @@ async def update_server(server_id: str, server_req: ServerUpdate, db: Session = 
                     parsed_host, parsed_port = raw_host_port, "10443"
                 host = server.external_domain or parsed_host
                 port = server.external_port or int(parsed_port)
-                k.access_url = f"hy2://{k.outline_key_id}@{host}:{port}/?security=tls&sni={host}#{server.name} - {client.name}"
+                k.access_url = f"hy2://{k.outline_key_id}@{host}:{port}/?security=tls&sni={host}#{flag} {server.name} - {client.name}"
         db.commit()
     
     return format_server_response(server)

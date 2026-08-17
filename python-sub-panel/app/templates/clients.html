@@ -474,7 +474,8 @@
                         <div class="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2">
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-2">
-                                    <span class="font-medium text-white">${escapeHtml(k.server_name || 'Server')}</span>
+                                    <span class="text-xl select-none" title="${escapeHtml(k.country_name || 'Global')}">${k.flag_emoji || '🌐'}</span>
+                                    <span class="font-semibold text-white">${escapeHtml(k.server_name || 'Server')}</span>
                                     <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">${k.server_type || 'vpn'}</span>
                                 </div>
                                 <div class="flex items-center gap-2">

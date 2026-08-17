@@ -46,15 +46,31 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
         key_id = generate_id()
         now = datetime.utcnow().isoformat()
         
+        from app.services.geo import detect_server_country, get_flag_emoji
+        if not server.country_code:
+            try:
+                cc, cname, _ = await detect_server_country(server)
+                server.country_code = cc
+                server.country_name = cname
+            except Exception:
+                pass
+        flag = get_flag_emoji(server.country_code)
+        
         if server.type == "outline":
             result = await outline.create_key(server, client.name)
             if result:
+                raw_url = result.get("access_url", "")
+                if raw_url:
+                    base_acc = raw_url.split('#')[0]
+                    access_url = f"{base_acc}#{flag} {server.name} - {client.name}"
+                else:
+                    access_url = ""
                 client_key = ClientKey(
                     id=key_id,
                     client_id=client.id,
                     server_id=server.id,
                     outline_key_id=result.get("key_id", ""),
-                    access_url=result.get("access_url", ""),
+                    access_url=access_url,
                     created_at=now,
                     uuid=None,
                     last_seen_bytes=0
@@ -83,7 +99,7 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
             host = server.external_domain or parsed_host
             port = server.external_port or int(parsed_port)
             
-            access_url = f"hy2://{password}@{host}:{port}/?security=tls&sni={host}#{server.name} - {client.name}"
+            access_url = f"hy2://{password}@{host}:{port}/?security=tls&sni={host}#{flag} {server.name} - {client.name}"
             
             client_key = ClientKey(
                 id=key_id,
@@ -104,6 +120,9 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
             from app.services.three_xui import add_3xui_client
             access_url = await add_3xui_client(server, client, client_uuid, sub_id)
             if access_url:
+                if "#" in access_url:
+                    base_acc = access_url.split('#')[0]
+                    access_url = f"{base_acc}#{flag} {server.name} - {client.name}"
                 client_key = ClientKey(
                     id=key_id,
                     client_id=client.id,

@@ -14,6 +14,8 @@ class ServerBase(BaseModel):
     external_domain: Optional[str] = None
     external_port: Optional[int] = None
     is_active: Optional[bool] = True
+    country_code: Optional[str] = None
+    country_name: Optional[str] = None
 
 class ServerCreate(ServerBase):
     pass
@@ -31,10 +33,13 @@ class ServerUpdate(BaseModel):
     external_domain: Optional[str] = None
     external_port: Optional[int] = None
     is_active: Optional[bool] = None
+    country_code: Optional[str] = None
+    country_name: Optional[str] = None
 
 class ServerResponse(ServerBase):
     id: str
     created_at: str
+    flag_emoji: Optional[str] = "🌐"
 
 class ClientBase(BaseModel):
     name: str

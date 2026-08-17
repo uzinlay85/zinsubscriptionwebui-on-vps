@@ -28,6 +28,8 @@ def init_db():
         "ALTER TABLE clients ADD COLUMN contact TEXT;",
         "ALTER TABLE clients ADD COLUMN plan_price TEXT;",
         "ALTER TABLE servers ADD COLUMN is_active BOOLEAN DEFAULT 1;",
+        "ALTER TABLE servers ADD COLUMN country_code TEXT;",
+        "ALTER TABLE servers ADD COLUMN country_name TEXT;",
     ]
     with engine.connect() as conn:
         for stmt in migrations:

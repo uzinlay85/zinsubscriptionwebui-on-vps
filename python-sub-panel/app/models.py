@@ -19,6 +19,8 @@ class Server(Base):
     external_domain = Column(String, nullable=True)
     external_port = Column(Integer, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    country_code = Column(String, nullable=True)
+    country_name = Column(String, nullable=True)
 
 class Client(Base):
     __tablename__ = "clients"
