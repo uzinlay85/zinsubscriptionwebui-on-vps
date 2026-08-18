@@ -30,15 +30,25 @@
 
 ## 🚀 အဆင့်ဆင့် တပ်ဆင်နည်း (Step-by-Step Installation)
 
-### 🔹 အဆင့် (၁) - NAT Module ဖွင့်ခြင်းနှင့် Firewall Ports များ ပြင်ဆင်ခြင်း
+### 🔹 အဆင့် (၁) - အခြေခံ Packages များ၊ Docker သွင်းခြင်းနှင့် Firewall Ports များ ပြင်ဆင်ခြင်း
 
-1. Docker legacy NAT module ဖွင့်ပါ (AmneziaWG & Outline အတွက် လိုအပ်ပါသည်):
+1. အခြေခံ လိုအပ်သော Tools (git, curl, wget, ufw) များ သွင်းပါ:
 ```bash
+sudo apt update && sudo apt install -y git curl wget ufw
+```
+
+2. Docker နှင့် Legacy NAT Module ဖွင့်ခြင်း (AmneziaWG & Outline အတွက် လိုအပ်ပါသည်):
+```bash
+# Docker သွင်းခြင်း
+curl -fsSL https://get.docker.com | sudo bash
+sudo systemctl enable --now docker
+
+# NAT module ဖွင့်ခြင်း
 sudo modprobe iptable_nat
 echo "iptable_nat" | sudo tee /etc/modules-load.d/iptable_nat.conf
 ```
 
-2. Firewall Port များကို ဖွင့်ပါ:
+3. Firewall Port များကို ဖွင့်ပါ:
 ```bash
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
