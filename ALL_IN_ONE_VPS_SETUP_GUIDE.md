@@ -62,17 +62,20 @@ sudo ufw reload
 
 ---
 
-### 🔹 အဆင့် (၂) - Outline Server တပ်ဆင်ခြင်း
+### 🔹 အဆင့် (၂) - Outline Server တပ်ဆင်ခြင်း (Domain ဖြင့် တိုက်ရိုက် သတ်မှတ်ခြင်း)
 
-1. Outline Server Install Script ကို Port 8443 သတ်မှတ်၍ Run ပါ:
+1. သင့် Domain အား Variable သတ်မှတ်၍ Outline Server Install Script ကို Run ပါ (Port 8443 + Hostname):
 ```bash
-wget -qO- https://raw.githubusercontent.com/Jigsaw-Code/outline-server/master/src/server_manager/install_scripts/install_server.sh | sudo bash -s -- --keys-port=8443
+export DOMAIN="sub.yourdomain.com"
+
+wget -qO- https://raw.githubusercontent.com/Jigsaw-Code/outline-server/master/src/server_manager/install_scripts/install_server.sh | sudo bash -s -- --keys-port=8443 --hostname="$DOMAIN"
 ```
 
-2. တပ်ဆင်ပြီးပါက ထွက်လာသော **apiUrl** နှင့် **certSha256** JSON စာကြောင်းကို မှတ်သားထားပါ (နမူနာ):
+2. တပ်ဆင်ပြီးပါက ထွက်လာသော **apiUrl** နှင့် **certSha256** JSON စာကြောင်းသည် Domain Name ဖြင့် အလိုအလျောက် ထွက်လာပါမည် (နမူနာ):
 ```json
-{"apiUrl":"https://YOUR_VPS_IP:38790/RANDOM_SECRET_KEY","certSha256":"YOUR_CERT_SHA256_HEX_STRING"}
+{"apiUrl":"https://sub.yourdomain.com:38790/RANDOM_SECRET_KEY","certSha256":"YOUR_CERT_SHA256_HEX_STRING"}
 ```
+*(ဤသို့ `--hostname` ထည့်သွင်းခြင်းကြောင့် Outline Management API URL သာမက ထွက်ရှိလာမည့် Shadowsocks Client Access Keys များအားလုံးတွင်ပါ IP အစား Domain Name ဖြင့် အလိုအလျောက် ထွက်ပေါ်လာမည် ဖြစ်ပါသည်)*
 
 ---
 
@@ -298,7 +301,7 @@ Panel ပွင့်လာပါက **Servers Tab** -> **`+ Add Server`** ဖ�
 ### 1️⃣ Outline Server:
 * **Server Type**: `Outline`
 * **Server Name**: `Outline HK`
-* **API URL**: `https://YOUR_VPS_IP:38790/RANDOM_SECRET_KEY`
+* **API URL**: `https://sub.yourdomain.com:38790/RANDOM_SECRET_KEY`
 * **Cert SHA-256**: `YOUR_CERT_SHA256_HEX_STRING`
 
 ### 2️⃣ Hysteria 2 Server:
