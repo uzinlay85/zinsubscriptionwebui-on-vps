@@ -354,8 +354,8 @@
             document.getElementById('clientId').value = client.id;
             document.getElementById('name').value = client.name;
             document.getElementById('status').value = client.status;
-            document.getElementById('expiry_date').value = client.expiry_date || '';
-            document.getElementById('data_limit_gb').value = client.data_limit_gb || '';
+            document.getElementById('expiry_date').value = client.expiry_date ? String(client.expiry_date).split('T')[0].split(' ')[0] : '';
+            document.getElementById('data_limit_gb').value = client.data_limit_gb !== null && client.data_limit_gb !== undefined ? client.data_limit_gb : '';
             document.getElementById('contact').value = client.contact || '';
             document.getElementById('plan_price').value = client.plan_price || '';
             document.getElementById('notes').value = client.notes || '';
@@ -413,14 +413,15 @@
         document.getElementById('clientForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const id = document.getElementById('clientId').value;
+            const dataLimitVal = document.getElementById('data_limit_gb').value;
             const data = {
-                name: document.getElementById('name').value,
+                name: document.getElementById('name').value.trim(),
                 status: document.getElementById('status').value,
                 expiry_date: document.getElementById('expiry_date').value || null,
-                data_limit_gb: document.getElementById('data_limit_gb').value ? parseFloat(document.getElementById('data_limit_gb').value) : null,
-                contact: document.getElementById('contact').value || null,
-                plan_price: document.getElementById('plan_price').value || null,
-                notes: document.getElementById('notes').value || null
+                data_limit_gb: dataLimitVal ? parseInt(dataLimitVal, 10) : null,
+                contact: document.getElementById('contact').value.trim() || null,
+                plan_price: document.getElementById('plan_price').value.trim() || null,
+                notes: document.getElementById('notes').value.trim() || null
             };
 
             try {
@@ -437,8 +438,12 @@
                     closeModal();
                     loadClients();
                 } else {
-                    const err = await resp.json();
-                    showError(err.detail || 'Failed to save client');
+                    let errMsg = 'Failed to save client';
+                    try {
+                        const err = await resp.json();
+                        errMsg = err.detail || errMsg;
+                    } catch(e){}
+                    showError(errMsg);
                 }
             } catch (err) {
                 showError('Failed to save client');

@@ -287,30 +287,47 @@ async def update_client(client_id: str, client_req: ClientUpdate, db: Session = 
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
-    if client_req.name is not None:
-        client.name = client_req.name
-    if client_req.expiry_date is not None:
-        client.expiry_date = client_req.expiry_date
+    old_name = client.name
+    
+    if client_req.name is not None and client_req.name.strip():
+        client.name = client_req.name.strip()
+        
+    client.expiry_date = client_req.expiry_date
     if client_req.data_limit_gb is not None:
-        client.data_limit_gb = client_req.data_limit_gb
-    if client_req.notes is not None:
-        client.notes = client_req.notes
-    if client_req.contact is not None:
-        client.contact = client_req.contact
-    if client_req.plan_price is not None:
-        client.plan_price = client_req.plan_price
+        try:
+            client.data_limit_gb = int(client_req.data_limit_gb)
+        except Exception:
+            client.data_limit_gb = None
+    else:
+        client.data_limit_gb = None
+        
+    client.notes = client_req.notes
+    client.contact = client_req.contact
+    client.plan_price = client_req.plan_price
+    
     if client_req.status is not None:
         old_status = client.status
         client.status = client_req.status
-        if old_status == "active" and client_req.status in ["inactive", "expired", "limit_reached"]:
+        if old_status == "active" and client_req.status in ["inactive", "disabled", "expired", "limit_reached"]:
             from app.services.vpn_manager import block_client_keys
             await block_client_keys(client, db)
         elif old_status != "active" and client_req.status == "active":
             from app.services.vpn_manager import unblock_client_keys
             await unblock_client_keys(client, db)
+            
+    # Update remark in all client keys if name changed
+    if old_name and client.name and old_name != client.name:
+        keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
+        for k in keys:
+            if k.access_url and f" - {old_name}" in k.access_url:
+                k.access_url = k.access_url.replace(f" - {old_name}", f" - {client.name}")
     
     db.commit()
     db.refresh(client)
+    
+    # Invalidate sub cache so changes reflect instantly
+    from app.routers.sub import invalidate_sub_cache
+    invalidate_sub_cache(client.sub_token)
     
     return format_client_response(client)
 
