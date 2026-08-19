@@ -8,11 +8,13 @@ import json
 
 router = APIRouter()
 
+@router.get("", response_model=List[SettingsResponse])
 @router.get("/", response_model=List[SettingsResponse])
 async def get_settings(db: Session = Depends(get_db)):
     settings = db.query(Setting).all()
     return [{"key": s.key, "value": s.value} for s in settings]
 
+@router.post("")
 @router.post("/")
 async def update_settings(settings_req: SettingsUpdate, db: Session = Depends(get_db)):
     for key, value in settings_req.settings.items():

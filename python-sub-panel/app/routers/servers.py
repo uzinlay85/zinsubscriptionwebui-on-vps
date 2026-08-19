@@ -231,7 +231,9 @@ async def update_server(server_id: str, server_req: ServerUpdate, db: Session = 
                 host = server.external_domain or parsed_host
                 port = server.external_port or int(parsed_port)
                 k.access_url = f"hy2://{k.outline_key_id}@{host}:{port}/?security=tls&sni={host}#{flag} {server.name} - {client.name}"
-        db.commit()
+    # Invalidate sub cache so changes reflect instantly
+    from app.routers.sub import invalidate_sub_cache
+    invalidate_sub_cache()
     
     return format_server_response(server)
 
@@ -245,6 +247,10 @@ async def toggle_server_active(server_id: str, db: Session = Depends(get_db)):
     server.is_active = not curr
     db.commit()
     db.refresh(server)
+    
+    from app.routers.sub import invalidate_sub_cache
+    invalidate_sub_cache()
+    
     return {"ok": True, "id": server.id, "name": server.name, "is_active": server.is_active}
 
 @router.delete("/{server_id}")
@@ -258,6 +264,10 @@ async def delete_server(server_id: str, db: Session = Depends(get_db)):
     
     db.delete(server)
     db.commit()
+    
+    from app.routers.sub import invalidate_sub_cache
+    invalidate_sub_cache()
+    
     return {"ok": True}
 
 @router.get("/{server_id}/orphans")
