@@ -347,6 +347,11 @@ Panel ပွင့်လာပါက **Servers Tab** -> **`+ Add Server`** ဖ�
 
 ## 🧪 အသုံးဝင်သော စစ်ဆေးရေး Commands များ (Useful Commands)
 
+* **🛡️ စနစ်တစ်ခုလုံး (5-in-1) အလုပ်လုပ်မှု အခြေအနေကို ၁ ချက်နှိပ် စစ်ဆေးရန် (1-Click Health Checker)**:
+```bash
+curl -fsSL https://raw.githubusercontent.com/uzinlay85/zinsubscriptionwebui-on-vps/main/check-system.sh | bash
+```
+
 * **AmneziaWG Container Status စစ်ဆေးရန်**:
 ```bash
 sudo docker ps | grep amnezia-wg-easy
