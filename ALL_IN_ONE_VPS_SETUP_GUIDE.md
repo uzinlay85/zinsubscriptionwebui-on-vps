@@ -13,7 +13,7 @@
 | **VLESS-WS** | Xray Core (3x-ui) | `Port 443` (`location /videos`) | Nginx Reverse Proxy မှတစ်ဆင့် CDN/TLS လုံခြုံစွာ သွယ်တန်းခြင်း |
 | **3x-ui Management WebUI** | VPN Core Web Panel | `Port 443` (`location /<YOUR_PANEL_PATH>/`) | Xray Inbounds စီမံခန့်ခွဲသည့် လျှို့ဝှက် Web Panel |
 | **Hysteria 2 Management WebUI** | Hy2 Flask Web Panel | `Port 443` (`location /hy2/`) | Hysteria 2 အသုံးပြုသူများ ကြည့်ရှုစီမံသည့် Web Panel |
-| **AmneziaWG 2.0 Management WebUI** | AWG Web Panel | `Port 443` (`location /awg/`) | AmneziaWG Client များ စီမံထုတ်ပေးသည့် Web Panel |
+| **AmneziaWG 2.0 Management WebUI** | AWG Web Panel | `Port 9443 (HTTPS)` | AmneziaWG Client များ စီမံထုတ်ပေးသည့် Web Panel |
 | **Hysteria 2 Server** | UDP Protocol | `Port 10443 (UDP)` | အင်တာနက် အမြန်နှုန်းမြင့် UDP Proxy Server |
 | **Outline Server** | Shadowsocks (Docker) | `Port 8443 (TCP/UDP)` | Shadowsocks Outline VPN Proxy Server |
 | **AmneziaWG 2.0 Server** | QUIC-mimicry Obfuscated UDP | `Port 58210 (UDP)` | အဆင့်မြင့်ဆုံး ပုံဖျက်ထားသော WireGuard VPN Server |
@@ -55,6 +55,7 @@ sudo ufw allow 443/tcp
 sudo ufw allow 443/udp
 sudo ufw allow 8443/tcp
 sudo ufw allow 8443/udp
+sudo ufw allow 9443/tcp
 sudo ufw allow 10443/udp
 sudo ufw allow 58210/udp
 sudo ufw reload
@@ -224,21 +225,32 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # ၄။ AmneziaWG 2.0 Web Management Panel
-    location /awg/ {
-        proxy_pass http://127.0.0.1:51831/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+    # ၄။ Unified Subscription Web Panel (Root)
+    location / {
+        proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+}
 
-    # ၅။ Unified Subscription Web Panel (Root)
+# ၅။ AmneziaWG 2.0 Web Management Panel (Port 9443 Dedicated SSL)
+server {
+    listen 9443 ssl;
+    listen [::]:9443 ssl;
+    server_name DOMAIN_PLACEHOLDER;
+
+    ssl_certificate /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
     location / {
-        proxy_pass http://127.0.0.1:8000;
+        proxy_pass http://127.0.0.1:51831;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -329,7 +341,7 @@ Panel ပွင့်လာပါက **Servers Tab** -> **`+ Add Server`** ဖ�
 | **Unified Sublink Panel** | `https://sub.yourdomain.com/<ADMIN_SECRET_PATH>` | `.env` ထဲရှိ ADMIN Credentials |
 | **3x-ui (VLESS) Panel** | `https://sub.yourdomain.com/<YOUR_PANEL_PATH>/` | သင်သတ်မှတ်ခဲ့သော 3x-ui Username/Pass |
 | **Hysteria 2 Panel** | `https://sub.yourdomain.com/hy2/` | `admin123` (သို့မဟုတ် သင်သတ်မှတ်ထားသော Pass) |
-| **AmneziaWG 2.0 Panel** | `https://sub.yourdomain.com/awg/` | သင်သတ်မှတ်ခဲ့သော `AWG_PASSWORD` |
+| **AmneziaWG 2.0 Panel** | `https://sub.yourdomain.com:9443` | သင်သတ်မှတ်ခဲ့သော `AWG_PASSWORD` |
 
 ---
 
