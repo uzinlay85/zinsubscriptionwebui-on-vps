@@ -6,12 +6,36 @@ import re
 import urllib.parse
 from typing import Optional, Dict, Any, List, Tuple
 import aiohttp
+from cryptography.hazmat.primitives.asymmetric import x25519
 from app.models import Server, Client
 
 logger = logging.getLogger(__name__)
 
 # Production-ready API request timeouts (15s total, 5s connect)
 DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=15, connect=5)
+
+
+def derive_x25519_public_key(priv_key_str: str) -> str:
+    """
+    Derive base64-urlsafe X25519 public key (pbk) from privateKey string.
+    This guarantees Reality pbk is never missing even if not stored explicitly in inbound settings.
+    """
+    if not priv_key_str:
+        return ""
+    try:
+        padded = priv_key_str + "=" * (-len(priv_key_str) % 4)
+        try:
+            priv_bytes = base64.urlsafe_b64decode(padded)
+        except Exception:
+            priv_bytes = base64.b64decode(padded)
+        if len(priv_bytes) != 32:
+            return ""
+        priv_obj = x25519.X25519PrivateKey.from_private_bytes(priv_bytes)
+        pub_bytes = priv_obj.public_key().public_bytes_raw()
+        return base64.urlsafe_b64encode(pub_bytes).decode().rstrip("=")
+    except Exception as e:
+        logger.warning(f"3x-ui: Failed to derive x25519 public key: {e}")
+        return ""
 
 
 def build_url(base_url: str, endpoint: str) -> str:
@@ -315,12 +339,36 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
                     sni = stream.get("tlsSettings", {}).get("serverName") or ext_host
                 elif security == "reality":
                     real = stream.get("realitySettings", {})
-                    pbk = real.get("publicKey", "")
-                    fp = real.get("fingerprint", "chrome")
+                    real_settings = real.get("settings", {}) if isinstance(real.get("settings"), dict) else {}
+                    
+                    # 1. Public Key (pbk)
+                    pbk = real_settings.get("publicKey") or real.get("publicKey") or ""
+                    if not pbk and real.get("privateKey"):
+                        pbk = derive_x25519_public_key(real.get("privateKey"))
+                    
+                    # 2. Fingerprint (fp)
+                    fp = real_settings.get("fingerprint") or real.get("fingerprint") or "chrome"
+                    
+                    # 3. Server Names / SNI
                     snis = real.get("serverNames", [])
-                    sni = snis[0] if snis else ext_host
+                    if isinstance(snis, list) and snis:
+                        sni = snis[0]
+                    elif isinstance(snis, str) and snis:
+                        sni = snis.split(",")[0].strip()
+                    else:
+                        sni = real_settings.get("serverName") or (real.get("dest", "").split(":")[0] if ":" in real.get("dest", "") else real.get("dest", "")) or ext_host
+                        
+                    # 4. Short IDs (sid)
                     sids = real.get("shortIds", [])
-                    sid = sids[0] if sids else ""
+                    if isinstance(sids, list) and sids:
+                        sid = sids[0]
+                    elif isinstance(sids, str) and sids:
+                        sid = sids.split(",")[0].strip()
+                    else:
+                        sid = ""
+                        
+                    # 5. SpiderX (spx)
+                    spx = real_settings.get("spiderX") or real.get("spiderX") or real.get("spx") or ""
 
                 # Parse externalProxy for Nginx / reverse proxy TLS settings
                 ext_proxy_list = stream.get("externalProxy", [])
@@ -484,7 +532,8 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
             # Build access URL matching 3x-ui standard format
             if protocol == "vless":
                 if security == "reality":
-                    access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?type={net}&security=reality&pbk={pbk}&fp={fp}&sni={sni}&sid={sid}&flow=xtls-rprx-vision#{server.name} - {client.name}"
+                    spx_part = f"&spx={urllib.parse.quote(spx)}" if spx else ""
+                    access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?encryption=none&flow=xtls-rprx-vision&fp={fp}&pbk={pbk}&security=reality&sid={sid}&sni={sni}&type={net}{spx_part}#{server.name} - {client.name}"
                 elif security == "tls":
                     access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?alpn={alpn_enc}&encryption=none&fp={fp}&host={host_header}&path={path_enc}&security=tls&sni={sni}&type={net}#{server.name} - {client.name}"
                 else:
