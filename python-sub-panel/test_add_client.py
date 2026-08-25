@@ -1,4 +1,14 @@
 import asyncio
+import logging
+import sys
+
+# Configure logging to print to stdout so we see three_xui.py logs
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+
 from app.database import SessionLocal
 from app.models import Server, Client
 from app.services.three_xui import login_3xui, build_url, get_ssl_setting, DEFAULT_TIMEOUT
@@ -19,23 +29,29 @@ async def test_add():
             print("Client 'me' not found in DB.")
             return
             
-        print(f"=== TESTING ADD CLIENT TO: {server.name} ===")
+        print(f"\n=== TESTING ADD CLIENT TO: {server.name} ===")
         ssl_verify = get_ssl_setting(server)
         client_uuid = "4fe6318a-c8f5-4d03-8e46-cab979a12801"
         sub_id = "IsRATjpvdpXcttee"
         
         jar = aiohttp.CookieJar(unsafe=True)
         async with aiohttp.ClientSession(cookie_jar=jar) as session:
+            print("Attempting login...")
             api_base, headers = await login_3xui(session, server)
             if not api_base:
                 print("Login failed.")
                 return
                 
+            print(f"Login succeeded! api_base: {api_base}")
+            print(f"Authenticated headers: {headers}")
+            
             # Fetch inbounds
             list_url = build_url(api_base, "panel/api/inbounds/list")
+            print(f"Fetching inbounds from {list_url}...")
             async with session.get(list_url, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as resp:
                 data = await resp.json()
                 inbounds = data.get("obj", [])
+                print(f"Fetched {len(inbounds)} inbounds.")
                 
             for ib in inbounds:
                 ib_id = ib.get("id")
