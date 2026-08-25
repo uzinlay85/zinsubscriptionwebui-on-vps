@@ -627,19 +627,22 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                     except Exception as e:
                         logger.error(f"3x-ui inbound update fallback error for inbound {ib_id_int}: {e}")
 
-                # Generate access URL for this inbound
-                access_url = generate_inbound_access_url(
-                    target_inbound, server, client, client_uuid, sub_id, ext_host, ext_port
-                )
-                if access_url:
-                    generated_keys.append({
-                        "access_url": access_url,
-                        "inbound_id": ib_id_int,
-                        "inbound_remark": target_inbound.get("remark", ""),
-                        "protocol": target_inbound.get("protocol", "vless"),
-                        "uuid": client_uuid,
-                        "sub_id": sub_id
-                    })
+                # Generate access URL for this inbound only if it was successfully added
+                if added:
+                    access_url = generate_inbound_access_url(
+                        target_inbound, server, client, client_uuid, sub_id, ext_host, ext_port
+                    )
+                    if access_url:
+                        generated_keys.append({
+                            "access_url": access_url,
+                            "inbound_id": ib_id_int,
+                            "inbound_remark": target_inbound.get("remark", ""),
+                            "protocol": target_inbound.get("protocol", "vless"),
+                            "uuid": client_uuid,
+                            "sub_id": sub_id
+                        })
+                else:
+                    logger.error(f"3x-ui: Failed to add client to inbound {ib_id_int} on {server.name}")
 
     except Exception as e:
         logger.error(f"3x-ui add_3xui_client_all_inbounds error for {server.name}: {e}")
