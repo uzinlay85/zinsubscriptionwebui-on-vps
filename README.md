@@ -259,7 +259,7 @@ Web Panel သို့ ဝင်ရောက်ပြီး **Servers** -> **`+ 
 
 ## 🛡️ 1-Click System Health Checker (စနစ်တစ်ခုလုံး အလုပ်လုပ်မှု ၁ ချက်နှိပ် စစ်ဆေးခြင်း)
 
-ဆာဗာပေါ်ရှိ **VPN များအားလုံး (Outline, Hysteria 2, 3x-ui / VLESS, AmneziaWG 2.0)** နှင့် **Web Panels အားလုံး** အမှန်တကယ် အလုပ်လုပ်နေခြင်း ရှိ/မရှိ၊ Port များ ပွင့်မပွင့်နှင့် SSL Certificate မှန်မမှန်တို့ကို ၁ ချက်နှိပ်စနစ်ဖြင့် ချက်ချင်း စစ်ဆေးနိုင်ပါသည်:
+ဆာဗာပေါ်ရှိ **VPN များအားလုံး (Outline, Hysteria 2, 3x-ui / VLESS)** နှင့် **Web Panels အားလုံး** အမှန်တကယ် အလုပ်လုပ်နေခြင်း ရှိ/မရှိ၊ Port များ ပွင့်မပွင့်နှင့် SSL Certificate မှန်မမှန်တို့ကို ၁ ချက်နှိပ်စနစ်ဖြင့် ချက်ချင်း စစ်ဆေးနိုင်ပါသည်:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/uzinlay85/zinsubscriptionwebui-on-vps/main/check-system.sh | bash
@@ -271,12 +271,10 @@ curl -fsSL https://raw.githubusercontent.com/uzinlay85/zinsubscriptionwebui-on-v
    * Hysteria 2 (`UDP Port 10443`)
    * 3x-ui / Xray Core (`Port 2053`)
    * Outline VPN (`Port 8443`)
-   * AmneziaWG 2.0 (`UDP Port 58210`)
 3. **Web Panels & Internal APIs**:
    * Unified Sublink Panel (`Port 8000`)
    * Hysteria 2 Management Panel (`Port 5000`) & User Database
    * 3x-ui Web Panel (`Port 2053`)
-   * AmneziaWG Web Panel (`Port 51831`)
 4. **SSL Certificate & Reverse Proxy**: Let's Encrypt SSL သက်တမ်းနှင့် Port 443 အလုပ်လုပ်ပုံ။
 5. **Access Links Summary**: Panel တစ်ခုချင်းစီသို့ တိုက်ရိုက် ဝင်ရောက်နိုင်မည့် HTTPS Link များနှင့် Password ကြည့်ရှုနည်းများ။
 

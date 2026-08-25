@@ -1,7 +1,7 @@
-# 🌐 All-in-One Single VPS Deployment Guide (5-in-1 System)
-> **Domain တစ်ခုတည်း၊ VPS တစ်ခုတည်းပေါ်တွင် VPN (၄) မျိုး + Unified Sublink Panel (၁) ခု တပ်ဆင်အသုံးပြုနည်း လမ်းညွှန်**
+# 🌐 All-in-One Single VPS Deployment Guide (4-in-1 System)
+> **Domain တစ်ခုတည်း၊ VPS တစ်ခုတည်းပေါ်တွင် VPN (၃) မျိုး + Unified Sublink Panel (၁) ခု တပ်ဆင်အသုံးပြုနည်း လမ်းညွှန်**
 
-ဤလမ်းညွှန်သည် Single VPS Server (Ubuntu 22.04 / 24.04) တစ်ခုတည်းပေါ်တွင် **Domain တစ်ခုတည်း (ဥပမာ- `sub.yourdomain.com`)** ဖြင့် အောက်ပါ စနစ် (၅) မျိုးလုံးကို တစ်ခုနှင့်တစ်ခု လုံးဝ မထိခိုက်စေဘဲ အတူတကွ တွဲဖက်တပ်ဆင် လည်ပတ်စေနိုင်သော အပြည့်စုံဆုံး လက်တွေ့စမ်းသပ်ပြီး လမ်းညွှန်ဖြစ်ပါသည်။
+ဤလမ်းညွှန်သည် Single VPS Server (Ubuntu 22.04 / 24.04) တစ်ခုတည်းပေါ်တွင် **Domain တစ်ခုတည်း (ဥပမာ- `sub.yourdomain.com`)** ဖြင့် အောက်ပါ စနစ် (၄) မျိုးလုံးကို တစ်ခုနှင့်တစ်ခု လုံးဝ မထိခိုက်စေဘဲ အတူတကွ တွဲဖက်တပ်ဆင် လည်ပတ်စေနိုင်သော အပြည့်စုံဆုံး လက်တွေ့စမ်းသပ်ပြီး လမ်းညွှန်ဖြစ်ပါသည်။
 
 ---
 
@@ -13,10 +13,8 @@
 | **VLESS-WS** | Xray Core (3x-ui) | `Port 443` (`location /videos`) | Nginx Reverse Proxy မှတစ်ဆင့် CDN/TLS လုံခြုံစွာ သွယ်တန်းခြင်း |
 | **3x-ui Management WebUI** | VPN Core Web Panel | `Port 443` (`location /<YOUR_PANEL_PATH>/`) | Xray Inbounds စီမံခန့်ခွဲသည့် လျှို့ဝှက် Web Panel |
 | **Hysteria 2 Management WebUI** | Hy2 Flask Web Panel | `Port 443` (`location /hy2/`) | Hysteria 2 အသုံးပြုသူများ ကြည့်ရှုစီမံသည့် Web Panel |
-| **AmneziaWG 2.0 Management WebUI** | AWG Web Panel | `Port 9443 (HTTPS)` | AmneziaWG Client များ စီမံထုတ်ပေးသည့် Web Panel |
 | **Hysteria 2 Server** | UDP Protocol | `Port 10443 (UDP)` | အင်တာနက် အမြန်နှုန်းမြင့် UDP Proxy Server |
 | **Outline Server** | Shadowsocks (Docker) | `Port 8443 (TCP/UDP)` | Shadowsocks Outline VPN Proxy Server |
-| **AmneziaWG 2.0 Server** | QUIC-mimicry Obfuscated UDP | `Port 58210 (UDP)` | အဆင့်မြင့်ဆုံး ပုံဖျက်ထားသော WireGuard VPN Server |
 
 ---
 
@@ -37,7 +35,7 @@
 sudo apt update && sudo apt install -y git curl wget ufw
 ```
 
-2. Docker နှင့် Legacy NAT Module ဖွင့်ခြင်း (AmneziaWG & Outline အတွက် လိုအပ်ပါသည်):
+2. Docker နှင့် Legacy NAT Module ဖွင့်ခြင်း (Outline အတွက် လိုအပ်ပါသည်):
 ```bash
 # Docker သွင်းခြင်း
 curl -fsSL https://get.docker.com | sudo bash
@@ -55,9 +53,7 @@ sudo ufw allow 443/tcp
 sudo ufw allow 443/udp
 sudo ufw allow 8443/tcp
 sudo ufw allow 8443/udp
-sudo ufw allow 9443/tcp
 sudo ufw allow 10443/udp
-sudo ufw allow 58210/udp
 sudo ufw reload
 ```
 
@@ -116,53 +112,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.
 
 ---
 
-### 🔹 အဆင့် (၅) - AmneziaWG 2.0 တပ်ဆင်ခြင်း (zin-awg-easy2)
-
-1. Source code ကို clone ဆွဲပြီး Docker image build ပြုလုပ်ပါ:
-```bash
-git clone https://github.com/uzinlay85/zin-awg-easy2.git /opt/zin-awg-easy2
-cd /opt/zin-awg-easy2
-sudo docker build -t amnezia-wg-easy:2.0 .
-```
-
-2. Domain နှင့် Password သတ်မှတ်ပြီး Hash Code ထုတ်ပါ:
-```bash
-export DOMAIN="sub.yourdomain.com"
-export AWG_PASSWORD="YourAWGStrongPassword"
-export HASH=$(sudo docker run -i amnezia-wg-easy:2.0 wgpw "$AWG_PASSWORD" | cut -d"'" -f2)
-```
-
-3. AmneziaWG 2.0 Container ကို စတင် Run ပါ:
-```bash
-sudo rm -f ~/.amnezia-wg-easy/wg0.json ~/.amnezia-wg-easy/wg0.conf
-
-sudo docker run -d \
-  --name=amnezia-wg-easy \
-  -e WG_HOST="$DOMAIN" \
-  -e PASSWORD_HASH="$HASH" \
-  -e PORT=51831 \
-  -e WG_PORT=58210 \
-  -e WG_MTU=1200 \
-  -e WG_PERSISTENT_KEEPALIVE=25 \
-  -e UI_ENABLE_SORT_CLIENTS=true \
-  -e UI_TRAFFIC_STATS=true \
-  -e WG_ENABLE_EXPIRES_TIME=true \
-  -e WG_ENABLE_ONE_TIME_LINKS=true \
-  -v ~/.amnezia-wg-easy:/etc/wireguard \
-  -p 58210:58210/udp \
-  -p 127.0.0.1:51831:51831/tcp \
-  --cap-add=NET_ADMIN \
-  --cap-add=SYS_MODULE \
-  --sysctl="net.ipv4.conf.all.src_valid_mark=1" \
-  --sysctl="net.ipv4.ip_forward=1" \
-  --device=/dev/net/tun:/dev/net/tun \
-  --restart unless-stopped \
-  amnezia-wg-easy:2.0
-```
-
----
-
-### 🔹 အဆင့် (၆) - All-in-One Nginx Reverse Proxy ရေးဆွဲခြင်း
+### 🔹 အဆင့် (၅) - All-in-One Nginx Reverse Proxy ရေးဆွဲခြင်း
 
 ပထမဦးစွာ သင့် Domain နှင့် 3x-ui Base Path တို့ကို Environment Variable အနေဖြင့် သတ်မှတ်ပါ:
 
@@ -234,29 +184,6 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
-
-# ၅။ AmneziaWG 2.0 Web Management Panel (Port 9443 Dedicated SSL)
-server {
-    listen 9443 ssl;
-    listen [::]:9443 ssl;
-    server_name DOMAIN_PLACEHOLDER;
-
-    ssl_certificate /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-
-    location / {
-        proxy_pass http://127.0.0.1:51831;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
 EOF
 
 # Placeholder များအား အစားထိုးခြင်း
@@ -269,7 +196,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
-### 🔹 အဆင့် (၇) - 3x-ui Panel တွင် VLESS Inbound ဖန်တီးခြင်း
+### 🔹 အဆင့် (၆) - 3x-ui Panel တွင် VLESS Inbound ဖန်တီးခြင်း
 
 1. Browser တွင် **`https://sub.yourdomain.com/<YOUR_PANEL_PATH>/`** သို့ ဝင်ပါ။
 2. **Inbounds** -> **`+ Add Inbound`** ကို နှိပ်ပါ။
@@ -290,7 +217,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
-### 🔹 အဆင့် (၈) - Unified Sublink Web Panel တပ်ဆင်ခြင်း (1-Click)
+### 🔹 အဆင့် (၇) - Unified Sublink Web Panel တပ်ဆင်ခြင်း (1-Click)
 
 1. Sublink Panel Installer ကို Run ပါ:
 ```bash
@@ -341,21 +268,14 @@ Panel ပွင့်လာပါက **Servers Tab** -> **`+ Add Server`** ဖ�
 | **Unified Sublink Panel** | `https://sub.yourdomain.com/<ADMIN_SECRET_PATH>` | `.env` ထဲရှိ ADMIN Credentials |
 | **3x-ui (VLESS) Panel** | `https://sub.yourdomain.com/<YOUR_PANEL_PATH>/` | သင်သတ်မှတ်ခဲ့သော 3x-ui Username/Pass |
 | **Hysteria 2 Panel** | `https://sub.yourdomain.com/hy2/` | `admin123` (သို့မဟုတ် သင်သတ်မှတ်ထားသော Pass) |
-| **AmneziaWG 2.0 Panel** | `https://sub.yourdomain.com:9443` | သင်သတ်မှတ်ခဲ့သော `AWG_PASSWORD` |
 
 ---
 
 ## 🧪 အသုံးဝင်သော စစ်ဆေးရေး Commands များ (Useful Commands)
 
-* **🛡️ စနစ်တစ်ခုလုံး (5-in-1) အလုပ်လုပ်မှု အခြေအနေကို ၁ ချက်နှိပ် စစ်ဆေးရန် (1-Click Health Checker)**:
+* **🛡️ စနစ်တစ်ခုလုံး (4-in-1) အလုပ်လုပ်မှု အခြေအနေကို ၁ ချက်နှိပ် စစ်ဆေးရန် (1-Click Health Checker)**:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/uzinlay85/zinsubscriptionwebui-on-vps/main/check-system.sh | bash
-```
-
-* **AmneziaWG Container Status စစ်ဆေးရန်**:
-```bash
-sudo docker ps | grep amnezia-wg-easy
-sudo docker logs -f amnezia-wg-easy
 ```
 
 * **Hysteria 2 Database ထဲတွင် User ရှိမရှိ စစ်ဆေးရန်**:
@@ -371,6 +291,11 @@ cd /opt/vpn-sub-panel/python-sub-panel && docker compose logs -f
 * **Sublink Panel အား နောက်ဆုံး Version သို့ 1-Click Update လုပ်ရန်**:
 ```bash
 cd /opt/vpn-sub-panel/python-sub-panel && git pull origin main && docker compose up -d --build
+```
+
+* **Nginx Configuration စစ်ဆေးပြီး Restart ချရန်**:
+```bash
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
 * **Nginx Configuration စစ်ဆေးပြီး Restart ချရန်**:
