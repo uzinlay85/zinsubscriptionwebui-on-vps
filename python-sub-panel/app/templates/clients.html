@@ -235,7 +235,7 @@
 
         async function loadClients() {
             try {
-                const resp = await fetch('/api/clients/');
+                const resp = await fetch('/api/clients/?_t=' + Date.now());
                 if (resp.ok) {
                     clients = await resp.json();
                     renderClients();
@@ -498,7 +498,7 @@
             document.getElementById('keysModal').classList.remove('hidden');
 
             try {
-                const resp = await fetch(`/api/clients/${clientId}`);
+                const resp = await fetch(`/api/clients/${clientId}?_t=` + Date.now());
                 if (resp.ok) {
                     const client = await resp.json();
                     document.getElementById('keysModalTitle').textContent = `${client.name} - Generated Keys`;
