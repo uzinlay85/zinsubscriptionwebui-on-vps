@@ -273,9 +273,17 @@ def generate_inbound_access_url(
             ws_settings = stream.get("wsSettings", {})
             path = ws_settings.get("path", "/")
             ws_headers = ws_settings.get("headers", {})
-            host_header = ws_headers.get("Host") or ext_host
+            host_header = ws_headers.get("Host") or ws_headers.get("host") or ext_host
         elif net == "grpc":
             path = stream.get("grpcSettings", {}).get("serviceName", "")
+        elif net == "xhttp":
+            xhttp_settings = stream.get("xhttpSettings", {})
+            path = xhttp_settings.get("path", "/")
+            host_header = xhttp_settings.get("host") or ext_host
+        elif net in ["http", "h2"]:
+            http_settings = stream.get("httpSettings", {})
+            path = http_settings.get("path", "/")
+            host_header = http_settings.get("host") or http_settings.get("headers", {}).get("Host") or http_settings.get("headers", {}).get("host") or ext_host
 
         if security == "tls":
             sni = stream.get("tlsSettings", {}).get("serverName") or ext_host
