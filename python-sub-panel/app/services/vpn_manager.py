@@ -348,12 +348,27 @@ async def sync_all_usage(db: Session):
         for k in keys:
             metrics = server_metrics.get(k.server_id, {})
             user_metric = None
-            if k.outline_key_id and k.outline_key_id in metrics:
-                user_metric = metrics.get(k.outline_key_id)
-            elif k.uuid and k.uuid in metrics:
-                user_metric = metrics.get(k.uuid)
-            elif client.name in metrics:
-                user_metric = metrics.get(client.name)
+            server = servers.get(k.server_id)
+            if server and server.type == "3x-ui":
+                # For 3x-ui, match specific inbound key to avoid double-counting across inbounds
+                if k.outline_key_id and k.outline_key_id in metrics:
+                    user_metric = metrics.get(k.outline_key_id)
+                elif k.uuid and k.outline_key_id and ":" in k.outline_key_id:
+                    inbound_id_part = k.outline_key_id.split(':')[-1]
+                    uuid_inbound_key = f"{k.uuid}:{inbound_id_part}"
+                    if uuid_inbound_key in metrics:
+                        user_metric = metrics.get(uuid_inbound_key)
+                elif k.uuid and k.uuid in metrics and ":" not in (k.outline_key_id or ""):
+                    # Fallback to UUID only if outline_key_id has no specific inbound ID
+                    user_metric = metrics.get(k.uuid)
+            else:
+                # Standard lookup for Outline and Hysteria
+                if k.outline_key_id and k.outline_key_id in metrics:
+                    user_metric = metrics.get(k.outline_key_id)
+                elif k.uuid and k.uuid in metrics:
+                    user_metric = metrics.get(k.uuid)
+                elif client.name in metrics:
+                    user_metric = metrics.get(client.name)
                 
             if isinstance(user_metric, dict):
                 current_bytes = int(user_metric.get("bytes", 0) or 0)
