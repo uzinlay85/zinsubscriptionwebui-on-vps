@@ -302,3 +302,104 @@ sudo nginx -t && sudo systemctl reload nginx
 ```bash
 sudo nginx -t && sudo systemctl reload nginx
 ```
+
+---
+
+## 🗑️ စနစ်တစ်ခုချင်းစီအား Uninstall ပြုလုပ်နည်းနှင့် ရှင်းထုတ်နည်းများ (Uninstallation & Cleanup Guide)
+
+အကယ်၍ စနစ်တစ်ခုခုကို ပြန်လည်ပြင်ဆင်လို၍ဖြစ်စေ၊ အသုံးမပြုတော့၍ဖြစ်စေ တစ်ခုချင်းစီအလိုက် သန့်ရှင်းစွာ ရှင်းထုတ်ဖျက်ဆီး (Clean Uninstall) ပြုလုပ်လိုပါက အောက်ပါ Command များကို အသုံးပြုနိုင်ပါသည်:
+
+---
+
+### 1️⃣ Outline Server အား အပြီးတိုင် ဖျက်နည်း (Uninstall Outline)
+Outline ၏ Docker Container များ၊ Configuration ဖိုင်များနှင့် Firewall Port များကို အပြီးတိုင် ရှင်းထုတ်ရန်:
+
+```bash
+# ၁။ Outline Container များကို ရပ်တန့်ပြီး ဖျက်ခြင်း
+sudo docker stop shadowbox watchtower 2>/dev/null
+sudo docker rm shadowbox watchtower 2>/dev/null
+
+# ၂။ Outline ၏ Config Directory များကို ရှင်းထုတ်ခြင်း
+sudo rm -rf /opt/outline /root/shadowbox ~/.outline
+
+# ၃။ Firewall Port (8443) ပိတ်သိမ်းခြင်း
+sudo ufw delete allow 8443/tcp
+sudo ufw delete allow 8443/udp
+sudo ufw reload
+```
+
+---
+
+### 2️⃣ Hysteria 2 Server & Web Panel အား အပြီးတိုင် ဖျက်နည်း (Uninstall Hysteria 2)
+Hysteria 2 Server၊ Flask Web Panel Service များနှင့် Database ဖိုင်များကို ရှင်းထုတ်ရန်:
+
+```bash
+# ၁။ Systemd Services များကို ရပ်တန့်ပြီး ပိတ်သိမ်းခြင်း
+sudo systemctl stop hysteria-server hysteria-panel 2>/dev/null
+sudo systemctl disable hysteria-server hysteria-panel 2>/dev/null
+sudo rm -f /etc/systemd/system/hysteria-server.service /etc/systemd/system/hysteria-panel.service
+sudo systemctl daemon-reload
+
+# ၂။ Hysteria 2 ဖိုင်တွဲများနှင့် Binary များကို ဖျက်ခြင်း
+sudo rm -rf /opt/hysteria-panel /etc/hysteria /usr/local/bin/hysteria /usr/local/bin/hy2
+
+# ၃။ Firewall Port (10443) ပိတ်သိမ်းခြင်း
+sudo ufw delete allow 10443/udp
+sudo ufw reload
+```
+
+---
+
+### 3️⃣ 3x-ui (VLESS / Xray Core) အား အပြီးတိုင် ဖျက်နည်း (Uninstall 3x-ui)
+3x-ui Panel၊ Xray Core Service နှင့် Database များကို ရှင်းထုတ်ရန်:
+
+```bash
+# ၁။ 3x-ui Service အား ရပ်တန့်ပြီး Disable လုပ်ခြင်း
+sudo systemctl stop x-ui 3x-ui 2>/dev/null
+sudo systemctl disable x-ui 3x-ui 2>/dev/null
+sudo rm -f /etc/systemd/system/x-ui.service /etc/systemd/system/3x-ui.service
+sudo systemctl daemon-reload
+
+# ၂။ 3x-ui ဖိုင်တွဲများ၊ Core Binary များနှင့် Database များကို ရှင်းထုတ်ခြင်း
+sudo rm -rf /etc/x-ui /usr/local/x-ui /usr/bin/x-ui /usr/local/bin/x-ui
+```
+
+---
+
+### 4️⃣ Unified Sublink Web Panel အား အပြီးတိုင် ဖျက်နည်း (Uninstall Sublink Panel)
+Sublink Web Panel ၏ Docker Container၊ Database Volume များနှင့် Source Code များကို ရှင်းထုတ်ရန်:
+
+```bash
+# ၁။ Sublink Container အား ရပ်တန့်ပြီး Volume များနှင့်တကွ ဖျက်ခြင်း
+cd /opt/vpn-sub-panel/python-sub-panel 2>/dev/null && sudo docker compose down -v
+
+# ၂။ Panel Source Directory အား ဖျက်ခြင်း
+sudo rm -rf /opt/vpn-sub-panel
+```
+
+---
+
+### 5️⃣ Nginx Reverse Proxy Config အား မူလအခြေအနေသို့ ပြန်ရှင်းထုတ်နည်း (Reset Nginx Config)
+Domain ပေါ်တွင် ချိတ်ဆက်ထားသော Reverse Proxy လမ်းကြောင်းများကို မူလအတိုင်း သန့်ရှင်းသွားစေရန်:
+
+```bash
+# Nginx site configuration အား ဖျက်ပြီး Default site ပြန်ထားခြင်း
+sudo rm -f /etc/nginx/sites-enabled/vless /etc/nginx/sites-available/vless
+sudo ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/ 2>/dev/null
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+---
+
+### ⚡ 1-Click Total VPS Reset (စနစ်အားလုံး တစ်ပြိုင်နက်တည်း အပြီးတိုင် ရှင်းထုတ်ပြီး အသစ်ပြန်စတင်နည်း)
+အကယ်၍ VPS တစ်ခုလုံးကို ပထမဆုံး စတင်ဝယ်ယူထားသည့် မူလသန့်ရှင်းသော အခြေအနေသို့ ချက်ချင်း ပြန်လည်သန့်စင်လိုပါက အောက်ပါ Command တစ်ကြောင်းတည်းကို Run ပေးလိုက်ရုံပါပဲခင်ဗျာ:
+
+```bash
+# Services အားလုံး ရပ်တန့်ဖျက်ဆီးခြင်း
+sudo systemctl stop hysteria-server hysteria-panel x-ui 3x-ui 2>/dev/null
+sudo systemctl disable hysteria-server hysteria-panel x-ui 3x-ui 2>/dev/null
+sudo docker stop $(sudo docker ps -aq) 2>/dev/null && sudo docker rm $(sudo docker ps -aq) 2>/dev/null
+sudo rm -rf /opt/outline /opt/hysteria-panel /etc/hysteria /etc/x-ui /usr/local/x-ui /opt/vpn-sub-panel /etc/nginx/sites-enabled/*
+sudo systemctl daemon-reload && sudo nginx -t && sudo systemctl reload nginx
+echo "✅ Total VPS Reset Completed! Your VPS is clean."
+```
