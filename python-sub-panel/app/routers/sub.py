@@ -179,10 +179,11 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
         elif server.type == "3x-ui":
             if k.access_url.startswith("3x-ui-sub:"):
                 sub_id = k.access_url.replace("3x-ui-sub:", "")
+                base_api_url = "/".join(server.api_url.split('/')[:3])
                 try:
                     async with aiohttp.ClientSession() as session:
                         async with session.get(
-                            f"{server.api_url}/sub/{sub_id}",
+                            f"{base_api_url}/sub/{sub_id}",
                             timeout=aiohttp.ClientTimeout(total=5),
                             ssl=False
                         ) as resp:
