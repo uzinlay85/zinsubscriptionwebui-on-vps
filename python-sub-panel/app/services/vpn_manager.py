@@ -324,14 +324,18 @@ async def sync_all_usage(db: Session):
     await asyncio.gather(*tasks, return_exceptions=True)
     
     for client in clients:
-        client_total = 0
+        client_delta = 0
         keys = [k for k in db.query(ClientKey).filter(ClientKey.client_id == client.id).all()]
         
         for k in keys:
             metrics = server_metrics.get(k.server_id, {})
-            user_metric = metrics.get(k.outline_key_id)
-            if user_metric is None:
-                user_metric = metrics.get(client.name, 0)
+            user_metric = None
+            if k.outline_key_id and k.outline_key_id in metrics:
+                user_metric = metrics.get(k.outline_key_id)
+            elif k.uuid and k.uuid in metrics:
+                user_metric = metrics.get(k.uuid)
+            elif client.name in metrics:
+                user_metric = metrics.get(client.name)
                 
             if isinstance(user_metric, dict):
                 current_bytes = int(user_metric.get("bytes", 0) or 0)
@@ -342,26 +346,30 @@ async def sync_all_usage(db: Session):
             else:
                 current_bytes = int(user_metric or 0)
             
-            if current_bytes < k.last_seen_bytes * 0.9:
+            # Initial baseline capture for brand new key
+            if k.last_seen_bytes is None:
+                k.last_seen_bytes = current_bytes
+                delta = 0
+            elif current_bytes < k.last_seen_bytes:
+                # Counter was reset on remote server
                 delta = current_bytes
+                k.last_seen_bytes = current_bytes
             else:
-                delta = max(0, current_bytes - k.last_seen_bytes)
+                delta = current_bytes - k.last_seen_bytes
+                k.last_seen_bytes = current_bytes
             
-            k.last_seen_bytes = current_bytes
-            client_total += delta
-            
-            # If server reports cumulative usage higher than stored, sync directly
-            if current_bytes > client.total_usage_bytes:
-                client.total_usage_bytes = current_bytes
+            client_delta += delta
         
-        if client_total > 0:
-            client.total_usage_bytes += client_total
-            if not client.last_seen:
-                client.last_seen = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        if client_delta > 0:
+            client.total_usage_bytes = (client.total_usage_bytes or 0) + client_delta
+            client.last_seen = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         
-        if client.data_limit_gb and client.total_usage_bytes >= client.data_limit_gb * 1024 * 1024 * 1024:
-            client.status = "disabled"
-            await block_client_keys(client, db)
+        # Check quota limit and disable only when truly exceeded
+        limit_bytes = int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0
+        if limit_bytes > 0 and (client.total_usage_bytes or 0) >= limit_bytes:
+            if client.status == "active":
+                client.status = "disabled"
+                await block_client_keys(client, db)
     
     db.commit()
 

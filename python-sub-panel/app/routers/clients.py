@@ -364,9 +364,6 @@ async def quick_renew_client(client_id: str, renew_req: Optional[QuickRenewReque
         
     if req.reset_usage:
         client.total_usage_bytes = 0
-        keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
-        for k in keys:
-            k.last_seen_bytes = 0
             
     client.status = "active"
     db.commit()
@@ -374,6 +371,9 @@ async def quick_renew_client(client_id: str, renew_req: Optional[QuickRenewReque
     
     from app.services.vpn_manager import unblock_client_keys
     await unblock_client_keys(client, db)
+    
+    from app.routers.sub import invalidate_sub_cache
+    invalidate_sub_cache(client.sub_token)
     
     return format_client_response(client)
 
@@ -398,17 +398,16 @@ async def reset_usage(client_id: str, db: Session = Depends(get_db)):
     
     client.total_usage_bytes = 0
     client.status = "active"
-    
-    keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
-    for k in keys:
-        k.last_seen_bytes = 0
-    
     db.commit()
+    db.refresh(client)
     
     from app.services.vpn_manager import unblock_client_keys
     await unblock_client_keys(client, db)
     
-    return {"ok": True}
+    from app.routers.sub import invalidate_sub_cache
+    invalidate_sub_cache(client.sub_token)
+    
+    return format_client_response(client)
 
 @router.post("/{client_id}/sync-keys")
 async def sync_keys(client_id: str, force: bool = False, db: Session = Depends(get_db)):
