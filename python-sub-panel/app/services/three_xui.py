@@ -286,7 +286,15 @@ def generate_inbound_access_url(
             host_header = http_settings.get("host") or http_settings.get("headers", {}).get("Host") or http_settings.get("headers", {}).get("host") or ext_host
 
         if security == "tls":
-            sni = stream.get("tlsSettings", {}).get("serverName") or ext_host
+            tls_settings = stream.get("tlsSettings", {})
+            original_domain = parse_server_host_port(server)[0]
+            sni = original_domain
+            tls_alpn = tls_settings.get("alpn")
+            if tls_alpn:
+                if isinstance(tls_alpn, list):
+                    alpn = ",".join(tls_alpn)
+                elif isinstance(tls_alpn, str):
+                    alpn = tls_alpn
         elif security == "reality":
             real = stream.get("realitySettings", {})
             real_settings = real.get("settings", {}) if isinstance(real.get("settings"), dict) else {}
@@ -329,13 +337,21 @@ def generate_inbound_access_url(
             if eproxy.get("port") and not server.external_port:
                 inbound_port = eproxy.get("port")
             if eproxy.get("dest") and not server.external_domain:
-                ext_host = eproxy.get("dest")
+                dest_val = eproxy.get("dest")
+                if not re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', dest_val):
+                    ext_host = dest_val
             if eproxy.get("sni"):
-                sni = eproxy.get("sni")
+                dest_val = eproxy.get("dest") or ""
+                if not re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', dest_val):
+                    sni = eproxy.get("sni")
             if eproxy.get("fingerprint"):
                 fp = eproxy.get("fingerprint")
-            if eproxy.get("alpn") and isinstance(eproxy.get("alpn"), list) and eproxy.get("alpn"):
-                alpn = eproxy.get("alpn")[0]
+            if eproxy.get("alpn"):
+                val_alpn = eproxy.get("alpn")
+                if isinstance(val_alpn, list):
+                    alpn = ",".join(val_alpn)
+                elif isinstance(val_alpn, str):
+                    alpn = val_alpn
 
         # Format node display name with remark
         if inbound_remark:
@@ -344,18 +360,37 @@ def generate_inbound_access_url(
             node_tag = f"[{protocol.upper()}-{inbound_port}]"
         node_title = f"{server.name} {node_tag} - {client.name}"
 
-        path_enc = urllib.parse.quote(path)
-        alpn_enc = urllib.parse.quote(alpn)
+        path_enc = urllib.parse.quote(path, safe="")
+        alpn_enc = urllib.parse.quote(alpn, safe="")
+
+        # Build extra_query for xhttp transport type
+        extra_query = ""
+        if net == "xhttp":
+            xhttp_settings = stream.get("xhttpSettings", {})
+            mode = xhttp_settings.get("mode", "auto")
+            x_padding_bytes = xhttp_settings.get("xPaddingBytes") or xhttp_settings.get("x_padding_bytes") or ""
+            
+            extra_query += f"&mode={mode}"
+            if x_padding_bytes:
+                extra_query += f"&x_padding_bytes={urllib.parse.quote(x_padding_bytes)}"
+                
+            # Build extra json object
+            extra_dict = {"mode": mode}
+            if x_padding_bytes:
+                extra_dict["xPaddingBytes"] = x_padding_bytes
+            
+            extra_json = json.dumps(extra_dict, separators=(',', ':'))
+            extra_query += f"&extra={urllib.parse.quote(extra_json)}"
 
         if protocol == "vless":
             if security == "reality":
                 spx_part = f"&spx={urllib.parse.quote(spx)}" if spx else ""
                 path_part = f"&path={path_enc}" if path else ""
-                return f"vless://{client_uuid}@{ext_host}:{inbound_port}?encryption=none&flow=xtls-rprx-vision&fp={fp}&pbk={pbk}&security=reality&sid={sid}&sni={sni}&type={net}{spx_part}{path_part}#{node_title}"
+                return f"vless://{client_uuid}@{ext_host}:{inbound_port}?encryption=none&flow=xtls-rprx-vision&fp={fp}&pbk={pbk}&security=reality&sid={sid}&sni={sni}&type={net}{spx_part}{path_part}{extra_query}#{node_title}"
             elif security == "tls":
-                return f"vless://{client_uuid}@{ext_host}:{inbound_port}?alpn={alpn_enc}&encryption=none&fp={fp}&host={host_header}&path={path_enc}&security=tls&sni={sni}&type={net}#{node_title}"
+                return f"vless://{client_uuid}@{ext_host}:{inbound_port}?alpn={alpn_enc}&encryption=none&fp={fp}&host={host_header}&path={path_enc}&security=tls&sni={sni}&type={net}{extra_query}#{node_title}"
             else:
-                return f"vless://{client_uuid}@{ext_host}:{inbound_port}?type={net}&security=none&path={path_enc}&host={host_header}#{node_title}"
+                return f"vless://{client_uuid}@{ext_host}:{inbound_port}?type={net}&security=none&path={path_enc}&host={host_header}{extra_query}#{node_title}"
         elif protocol == "vmess":
             vmess_dic = {
                 "v": "2",
