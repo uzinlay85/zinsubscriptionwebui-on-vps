@@ -237,21 +237,162 @@ async def login_3xui(session: aiohttp.ClientSession, server: Server, timeout: Op
     return None, {}
 
 
-async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_id: str) -> Optional[str]:
+def generate_inbound_access_url(
+    target_inbound: dict,
+    server: Server,
+    client: Client,
+    client_uuid: str,
+    sub_id: str,
+    ext_host: str,
+    ext_port: int
+) -> Optional[str]:
+    """Build standardized node access URL for a specific 3x-ui inbound."""
+    try:
+        protocol = target_inbound.get("protocol", "vless").lower()
+        inbound_port = target_inbound.get("port") or ext_port
+        inbound_remark = target_inbound.get("remark", "").strip()
+
+        stream_raw = target_inbound.get("streamSettings", "{}")
+        try:
+            stream = json.loads(stream_raw) if isinstance(stream_raw, str) else (stream_raw or {})
+        except Exception:
+            stream = {}
+
+        net = stream.get("network", "tcp")
+        security = stream.get("security", "none")
+        path = ""
+        sni = ext_host
+        pbk = ""
+        fp = "chrome"
+        sid = ""
+        alpn = "http/1.1"
+        host_header = ext_host
+        spx = ""
+
+        if net == "ws":
+            ws_settings = stream.get("wsSettings", {})
+            path = ws_settings.get("path", "/")
+            ws_headers = ws_settings.get("headers", {})
+            host_header = ws_headers.get("Host") or ext_host
+        elif net == "grpc":
+            path = stream.get("grpcSettings", {}).get("serviceName", "")
+
+        if security == "tls":
+            sni = stream.get("tlsSettings", {}).get("serverName") or ext_host
+        elif security == "reality":
+            real = stream.get("realitySettings", {})
+            real_settings = real.get("settings", {}) if isinstance(real.get("settings"), dict) else {}
+
+            # 1. Public Key (pbk)
+            pbk = real_settings.get("publicKey") or real.get("publicKey") or ""
+            if not pbk and real.get("privateKey"):
+                pbk = derive_x25519_public_key(real.get("privateKey"))
+
+            # 2. Fingerprint (fp)
+            fp = real_settings.get("fingerprint") or real.get("fingerprint") or "chrome"
+
+            # 3. Server Names / SNI
+            snis = real.get("serverNames", [])
+            if isinstance(snis, list) and snis:
+                sni = snis[0]
+            elif isinstance(snis, str) and snis:
+                sni = snis.split(",")[0].strip()
+            else:
+                sni = real_settings.get("serverName") or (real.get("dest", "").split(":")[0] if ":" in real.get("dest", "") else real.get("dest", "")) or ext_host
+
+            # 4. Short IDs (sid)
+            sids = real.get("shortIds", [])
+            if isinstance(sids, list) and sids:
+                sid = sids[0]
+            elif isinstance(sids, str) and sids:
+                sid = sids.split(",")[0].strip()
+            else:
+                sid = ""
+
+            # 5. SpiderX (spx)
+            spx = real_settings.get("spiderX") or real.get("spiderX") or real.get("spx") or ""
+
+        # Parse externalProxy for Nginx / reverse proxy TLS settings
+        ext_proxy_list = stream.get("externalProxy", [])
+        if ext_proxy_list and isinstance(ext_proxy_list, list):
+            eproxy = ext_proxy_list[0]
+            if eproxy.get("forceTls"):
+                security = eproxy.get("forceTls")
+            if eproxy.get("port") and not server.external_port:
+                inbound_port = eproxy.get("port")
+            if eproxy.get("dest") and not server.external_domain:
+                ext_host = eproxy.get("dest")
+            if eproxy.get("sni"):
+                sni = eproxy.get("sni")
+            if eproxy.get("fingerprint"):
+                fp = eproxy.get("fingerprint")
+            if eproxy.get("alpn") and isinstance(eproxy.get("alpn"), list) and eproxy.get("alpn"):
+                alpn = eproxy.get("alpn")[0]
+
+        # Format node display name with remark
+        if inbound_remark:
+            node_tag = f"[{inbound_remark}]"
+        else:
+            node_tag = f"[{protocol.upper()}-{inbound_port}]"
+        node_title = f"{server.name} {node_tag} - {client.name}"
+
+        path_enc = urllib.parse.quote(path)
+        alpn_enc = urllib.parse.quote(alpn)
+
+        if protocol == "vless":
+            if security == "reality":
+                spx_part = f"&spx={urllib.parse.quote(spx)}" if spx else ""
+                path_part = f"&path={path_enc}" if path else ""
+                return f"vless://{client_uuid}@{ext_host}:{inbound_port}?encryption=none&flow=xtls-rprx-vision&fp={fp}&pbk={pbk}&security=reality&sid={sid}&sni={sni}&type={net}{spx_part}{path_part}#{node_title}"
+            elif security == "tls":
+                return f"vless://{client_uuid}@{ext_host}:{inbound_port}?alpn={alpn_enc}&encryption=none&fp={fp}&host={host_header}&path={path_enc}&security=tls&sni={sni}&type={net}#{node_title}"
+            else:
+                return f"vless://{client_uuid}@{ext_host}:{inbound_port}?type={net}&security=none&path={path_enc}&host={host_header}#{node_title}"
+        elif protocol == "vmess":
+            vmess_dic = {
+                "v": "2",
+                "ps": node_title,
+                "add": ext_host,
+                "port": str(inbound_port),
+                "id": client_uuid,
+                "aid": "0",
+                "scy": "auto",
+                "net": net,
+                "type": "none",
+                "host": host_header,
+                "path": path,
+                "tls": security if security != "none" else "",
+                "sni": sni if security == "tls" else ""
+            }
+            return "vmess://" + base64.b64encode(json.dumps(vmess_dic).encode()).decode()
+        elif protocol == "trojan":
+            return f"trojan://{client_uuid}@{ext_host}:{inbound_port}?type={net}&security={security}&sni={sni}&path={path_enc}#{node_title}"
+        elif protocol in ["shadowsocks", "ss"]:
+            ss_settings_raw = target_inbound.get("settings", "{}")
+            try:
+                ss_settings = json.loads(ss_settings_raw) if isinstance(ss_settings_raw, str) else (ss_settings_raw or {})
+            except Exception:
+                ss_settings = {}
+            method = ss_settings.get("method", "aes-256-gcm")
+            password = ss_settings.get("password") or client_uuid
+            user_info = base64.b64encode(f"{method}:{password}".encode()).decode()
+            return f"ss://{user_info}@{ext_host}:{inbound_port}#{node_title}"
+        else:
+            return f"vless://{client_uuid}@{ext_host}:{inbound_port}?type={net}&security={security}#{node_title}"
+    except Exception as e:
+        logger.error(f"3x-ui generate_inbound_access_url error: {e}")
+        return None
+
+
+async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uuid: str, sub_id: str) -> List[Dict[str, Any]]:
+    """
+    Add client to all applicable inbounds on the 3x-ui server and return generated keys for each inbound.
+    If server.inbound_id is specified, targets only that inbound.
+    Otherwise, extracts and generates keys for ALL inbounds.
+    """
     ext_host, ext_port = parse_server_host_port(server)
     ssl_verify = get_ssl_setting(server)
-
-    # Default stream settings
-    protocol = "vless"
-    net = "tcp"
-    security = "none"
-    path = ""
-    sni = ext_host
-    pbk = ""
-    fp = "chrome"
-    sid = ""
-    alpn = "http/1.1"
-    host_header = ext_host
+    generated_keys: List[Dict[str, Any]] = []
 
     try:
         jar = aiohttp.CookieJar(unsafe=True)
@@ -259,12 +400,10 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
             api_base, headers = await login_3xui(session, server)
             if not api_base:
                 logger.error(f"3x-ui: Cannot login for server {server.name}")
-                return None
-
-            inbound_id = server.inbound_id
-            target_inbound = None
+                return []
 
             # Step 1: Fetch all inbounds list
+            inbound_list = []
             list_url = build_url(api_base, "panel/api/inbounds/list")
             try:
                 async with session.get(
@@ -277,46 +416,49 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
                         ldata = await list_resp.json()
                         if ldata.get("success"):
                             inbound_list = ldata.get("obj", [])
-                            if inbound_list:
-                                if inbound_id:
-                                    for inb in inbound_list:
-                                        if str(inb.get("id")) == str(inbound_id):
-                                            target_inbound = inb
-                                            break
-                                if not target_inbound:
-                                    target_inbound = inbound_list[0]
-                                    inbound_id = target_inbound.get("id")
-            except asyncio.TimeoutError:
-                logger.error(f"3x-ui timeout fetching inbounds list for {server.name}")
-            except aiohttp.ClientError as e:
-                logger.error(f"3x-ui network error fetching inbounds list for {server.name}: {e}")
-            except json.JSONDecodeError as e:
-                logger.error(f"3x-ui invalid JSON fetching inbounds list for {server.name}: {e}")
             except Exception as e:
-                logger.error(f"3x-ui unexpected error fetching inbounds list: {e}")
+                logger.error(f"3x-ui error fetching inbounds list for {server.name}: {e}")
 
-            # Step 2: Single get fallback
-            if not target_inbound and inbound_id:
-                get_inbound_url = build_url(api_base, f"panel/api/inbounds/get/{inbound_id}")
+            # Filter inbounds
+            target_inbounds = []
+            if server.inbound_id:
+                for inb in inbound_list:
+                    if str(inb.get("id")) == str(server.inbound_id):
+                        target_inbounds.append(inb)
+                        break
+                if not target_inbounds:
+                    # Single get fallback
+                    get_inbound_url = build_url(api_base, f"panel/api/inbounds/get/{server.inbound_id}")
+                    try:
+                        async with session.get(
+                            get_inbound_url,
+                            headers=headers,
+                            timeout=DEFAULT_TIMEOUT,
+                            ssl=ssl_verify
+                        ) as get_resp:
+                            if get_resp.status == 200:
+                                gdata = await get_resp.json()
+                                if gdata.get("success") and gdata.get("obj"):
+                                    target_inbounds.append(gdata.get("obj"))
+                    except Exception as e:
+                        logger.error(f"3x-ui: Failed to get inbound {server.inbound_id}: {e}")
+            else:
+                # Include all inbounds from list
+                target_inbounds = inbound_list
+
+            if not target_inbounds:
+                logger.warning(f"3x-ui: No inbounds found on {server.name}")
+                return []
+
+            for target_inbound in target_inbounds:
+                ib_id = target_inbound.get("id")
+                if ib_id is None:
+                    continue
+
                 try:
-                    async with session.get(
-                        get_inbound_url,
-                        headers=headers,
-                        timeout=DEFAULT_TIMEOUT,
-                        ssl=ssl_verify
-                    ) as get_resp:
-                        if get_resp.status == 200:
-                            gdata = await get_resp.json()
-                            if gdata.get("success"):
-                                target_inbound = gdata.get("obj", {})
-                except Exception as e:
-                    logger.error(f"3x-ui: Failed to get inbound {inbound_id}: {e}")
-
-            # Parse inbound settings if found
-            if target_inbound:
-                inbound_id = target_inbound.get("id")
-                protocol = target_inbound.get("protocol", "vless").lower()
-                ext_port = server.external_port or target_inbound.get("port") or ext_port
+                    ib_id_int = int(ib_id)
+                except (ValueError, TypeError):
+                    ib_id_int = 1
 
                 stream_raw = target_inbound.get("streamSettings", "{}")
                 try:
@@ -324,249 +466,154 @@ async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_
                 except Exception:
                     stream = {}
 
-                net = stream.get("network", "tcp")
                 security = stream.get("security", "none")
 
-                if net == "ws":
-                    ws_settings = stream.get("wsSettings", {})
-                    path = ws_settings.get("path", "/")
-                    ws_headers = ws_settings.get("headers", {})
-                    host_header = ws_headers.get("Host") or ext_host
-                elif net == "grpc":
-                    path = stream.get("grpcSettings", {}).get("serviceName", "")
+                # Build client data payload (tgId MUST BE integer 0, NOT empty string "")
+                c_data = {
+                    "id": client_uuid,
+                    "password": client_uuid,  # For Trojan / Shadowsocks
+                    "email": client.name,
+                    "limitIp": 0,
+                    "totalGB": int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0,
+                    "expiryTime": 0,
+                    "enable": True,
+                    "subId": sub_id,
+                    "tgId": 0,
+                    "reset": 0
+                }
+                if security == "reality":
+                    c_data["flow"] = "xtls-rprx-vision"
 
-                if security == "tls":
-                    sni = stream.get("tlsSettings", {}).get("serverName") or ext_host
-                elif security == "reality":
-                    real = stream.get("realitySettings", {})
-                    real_settings = real.get("settings", {}) if isinstance(real.get("settings"), dict) else {}
-                    
-                    # 1. Public Key (pbk)
-                    pbk = real_settings.get("publicKey") or real.get("publicKey") or ""
-                    if not pbk and real.get("privateKey"):
-                        pbk = derive_x25519_public_key(real.get("privateKey"))
-                    
-                    # 2. Fingerprint (fp)
-                    fp = real_settings.get("fingerprint") or real.get("fingerprint") or "chrome"
-                    
-                    # 3. Server Names / SNI
-                    snis = real.get("serverNames", [])
-                    if isinstance(snis, list) and snis:
-                        sni = snis[0]
-                    elif isinstance(snis, str) and snis:
-                        sni = snis.split(",")[0].strip()
-                    else:
-                        sni = real_settings.get("serverName") or (real.get("dest", "").split(":")[0] if ":" in real.get("dest", "") else real.get("dest", "")) or ext_host
-                        
-                    # 4. Short IDs (sid)
-                    sids = real.get("shortIds", [])
-                    if isinstance(sids, list) and sids:
-                        sid = sids[0]
-                    elif isinstance(sids, str) and sids:
-                        sid = sids.split(",")[0].strip()
-                    else:
-                        sid = ""
-                        
-                    # 5. SpiderX (spx)
-                    spx = real_settings.get("spiderX") or real.get("spiderX") or real.get("spx") or ""
+                added = False
 
-                # Parse externalProxy for Nginx / reverse proxy TLS settings
-                ext_proxy_list = stream.get("externalProxy", [])
-                if ext_proxy_list and isinstance(ext_proxy_list, list):
-                    eproxy = ext_proxy_list[0]
-                    if eproxy.get("forceTls"):
-                        security = eproxy.get("forceTls")
-                    if eproxy.get("port") and not server.external_port:
-                        ext_port = eproxy.get("port")
-                    if eproxy.get("dest") and not server.external_domain:
-                        ext_host = eproxy.get("dest")
-                    if eproxy.get("sni"):
-                        sni = eproxy.get("sni")
-                    if eproxy.get("fingerprint"):
-                        fp = eproxy.get("fingerprint")
-                    if eproxy.get("alpn") and isinstance(eproxy.get("alpn"), list) and eproxy.get("alpn"):
-                        alpn = eproxy.get("alpn")[0]
-            else:
-                logger.warning(f"3x-ui: No inbound found for server {server.name}, will still try to add client")
-
-            # Build client data payload (tgId MUST BE integer 0, NOT empty string "")
-            c_data = {
-                "id": client_uuid,
-                "email": client.name,
-                "limitIp": 0,
-                "totalGB": int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0,
-                "expiryTime": 0,
-                "enable": True,
-                "subId": sub_id,
-                "tgId": 0,
-                "reset": 0
-            }
-            if security == "reality":
-                c_data["flow"] = "xtls-rprx-vision"
-
-            # Resolve inbound ID as integer
-            ib_id_int = 1
-            if inbound_id is not None:
-                try:
-                    ib_id_int = int(inbound_id)
-                except (ValueError, TypeError):
-                    pass
-
-            added = False
-
-            # Method 1: POST /panel/api/inbounds/addClient
-            add_client_url = build_url(api_base, "panel/api/inbounds/addClient")
-            for payload in [
-                {"id": ib_id_int, "settings": json.dumps({"clients": [c_data]})},
-                {"id": ib_id_int, "settings": {"clients": [c_data]}},
-            ]:
-                if added:
-                    break
-                try:
-                    async with session.post(
-                        add_client_url,
-                        json=payload,
-                        headers=headers,
-                        timeout=DEFAULT_TIMEOUT,
-                        ssl=ssl_verify
-                    ) as add_resp:
-                        resp_text = await add_resp.text()
-                        if add_resp.status == 200:
-                            try:
-                                res = json.loads(resp_text)
-                            except Exception:
-                                res = {}
-                            if res.get("success"):
-                                added = True
-                                logger.info(f"3x-ui: Client added via addClient for {server.name}")
-                                break
-                            else:
-                                logger.warning(f"3x-ui: addClient returned: {resp_text[:200]}")
-                except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                    logger.error(f"3x-ui: addClient network error: {type(e).__name__}: {e}")
-                except Exception as e:
-                    logger.error(f"3x-ui: addClient exception: {e}")
-
-            # Method 2: POST /panel/api/inbounds/{id}/addClient
-            if not added:
-                add_client_path_url = build_url(api_base, f"panel/api/inbounds/{ib_id_int}/addClient")
-                for payload in [{"clients": [c_data]}, {"settings": json.dumps({"clients": [c_data]})}]:
+                # Method 1: POST /panel/api/inbounds/addClient
+                add_client_url = build_url(api_base, "panel/api/inbounds/addClient")
+                for payload in [
+                    {"id": ib_id_int, "settings": json.dumps({"clients": [c_data]})},
+                    {"id": ib_id_int, "settings": {"clients": [c_data]}},
+                ]:
+                    if added:
+                        break
                     try:
                         async with session.post(
-                            add_client_path_url,
+                            add_client_url,
                             json=payload,
                             headers=headers,
                             timeout=DEFAULT_TIMEOUT,
                             ssl=ssl_verify
-                        ) as add_resp2:
-                            resp_text2 = await add_resp2.text()
-                            if add_resp2.status == 200:
+                        ) as add_resp:
+                            resp_text = await add_resp.text()
+                            if add_resp.status == 200:
                                 try:
-                                    res2 = json.loads(resp_text2)
+                                    res = json.loads(resp_text)
                                 except Exception:
-                                    res2 = {}
-                                if res2.get("success"):
+                                    res = {}
+                                if res.get("success"):
                                     added = True
-                                    logger.info(f"3x-ui: Client added via /{ib_id_int}/addClient for {server.name}")
+                                    logger.info(f"3x-ui: Client added to inbound {ib_id_int} on {server.name}")
                                     break
-                                else:
-                                    logger.warning(f"3x-ui: /{ib_id_int}/addClient returned: {resp_text2[:200]}")
-                    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                        logger.error(f"3x-ui: /{ib_id_int}/addClient network error: {type(e).__name__}: {e}")
                     except Exception as e:
-                        logger.error(f"3x-ui: /{ib_id_int}/addClient exception: {e}")
-                    if added:
-                        break
+                        logger.debug(f"3x-ui addClient inbound {ib_id_int} error: {e}")
 
-            # Method 3: Inbound update fallback (/panel/api/inbounds/update/{id})
-            if not added:
-                get_inb_url = build_url(api_base, f"panel/api/inbounds/get/{ib_id_int}")
-                update_inb_url = build_url(api_base, f"panel/api/inbounds/update/{ib_id_int}")
-                try:
-                    async with session.get(
-                        get_inb_url,
-                        headers=headers,
-                        timeout=DEFAULT_TIMEOUT,
-                        ssl=ssl_verify
-                    ) as get_resp2:
-                        if get_resp2.status == 200:
-                            gdata2 = await get_resp2.json()
-                            if gdata2.get("success"):
-                                inb_obj = gdata2.get("obj", {})
-                                inb_settings_raw = inb_obj.get("settings", "{}")
-                                try:
-                                    inb_settings = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else (inb_settings_raw or {})
-                                except Exception:
-                                    inb_settings = {}
+                # Method 2: POST /panel/api/inbounds/{id}/addClient
+                if not added:
+                    add_client_path_url = build_url(api_base, f"panel/api/inbounds/{ib_id_int}/addClient")
+                    for payload in [{"clients": [c_data]}, {"settings": json.dumps({"clients": [c_data]})}]:
+                        try:
+                            async with session.post(
+                                add_client_path_url,
+                                json=payload,
+                                headers=headers,
+                                timeout=DEFAULT_TIMEOUT,
+                                ssl=ssl_verify
+                            ) as add_resp2:
+                                resp_text2 = await add_resp2.text()
+                                if add_resp2.status == 200:
+                                    try:
+                                        res2 = json.loads(resp_text2)
+                                    except Exception:
+                                        res2 = {}
+                                    if res2.get("success"):
+                                        added = True
+                                        logger.info(f"3x-ui: Client added via /{ib_id_int}/addClient on {server.name}")
+                                        break
+                        except Exception as e:
+                            logger.debug(f"3x-ui /{ib_id_int}/addClient error: {e}")
+                        if added:
+                            break
 
-                                existing_clients = inb_settings.get("clients", [])
-                                existing_clients = [cl for cl in existing_clients if cl.get("email") != client.name and cl.get("id") != client_uuid]
-                                existing_clients.append(c_data)
-                                inb_settings["clients"] = existing_clients
-                                inb_obj["settings"] = json.dumps(inb_settings)
+                # Method 3: Inbound update fallback (/panel/api/inbounds/update/{id})
+                if not added:
+                    get_inb_url = build_url(api_base, f"panel/api/inbounds/get/{ib_id_int}")
+                    update_inb_url = build_url(api_base, f"panel/api/inbounds/update/{ib_id_int}")
+                    try:
+                        async with session.get(
+                            get_inb_url,
+                            headers=headers,
+                            timeout=DEFAULT_TIMEOUT,
+                            ssl=ssl_verify
+                        ) as get_resp2:
+                            if get_resp2.status == 200:
+                                gdata2 = await get_resp2.json()
+                                if gdata2.get("success"):
+                                    inb_obj = gdata2.get("obj", {})
+                                    inb_settings_raw = inb_obj.get("settings", "{}")
+                                    try:
+                                        inb_settings = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else (inb_settings_raw or {})
+                                    except Exception:
+                                        inb_settings = {}
 
-                                async with session.post(
-                                    update_inb_url,
-                                    json=inb_obj,
-                                    headers=headers,
-                                    timeout=DEFAULT_TIMEOUT,
-                                    ssl=ssl_verify
-                                ) as update_resp:
-                                    if update_resp.status == 200:
-                                        ures = await update_resp.json()
-                                        if ures.get("success"):
-                                            added = True
-                                            logger.info(f"3x-ui: Client added via inbound update for {server.name}")
-                                        else:
-                                            logger.warning(f"3x-ui: Inbound update returned: {ures}")
-                except Exception as e:
-                    logger.error(f"3x-ui: Inbound update fallback exception: {e}")
+                                    existing_clients = inb_settings.get("clients", [])
+                                    existing_clients = [cl for cl in existing_clients if cl.get("email") != client.name and cl.get("id") != client_uuid]
+                                    existing_clients.append(c_data)
+                                    inb_settings["clients"] = existing_clients
+                                    inb_obj["settings"] = json.dumps(inb_settings)
 
-            if not added:
-                logger.error(f"3x-ui: All methods failed to add client {client.name} on {server.name}")
-                return None
+                                    async with session.post(
+                                        update_inb_url,
+                                        json=inb_obj,
+                                        headers=headers,
+                                        timeout=DEFAULT_TIMEOUT,
+                                        ssl=ssl_verify
+                                    ) as update_resp:
+                                        if update_resp.status == 200:
+                                            ures = await update_resp.json()
+                                            if ures.get("success"):
+                                                added = True
+                                                logger.info(f"3x-ui: Client added via inbound update for {server.name} (inbound {ib_id_int})")
+                    except Exception as e:
+                        logger.error(f"3x-ui inbound update fallback error for inbound {ib_id_int}: {e}")
 
-            path_enc = urllib.parse.quote(path)
-            alpn_enc = urllib.parse.quote(alpn)
-
-            # Build access URL matching 3x-ui standard format
-            if protocol == "vless":
-                if security == "reality":
-                    spx_part = f"&spx={urllib.parse.quote(spx)}" if spx else ""
-                    access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?encryption=none&flow=xtls-rprx-vision&fp={fp}&pbk={pbk}&security=reality&sid={sid}&sni={sni}&type={net}{spx_part}#{server.name} - {client.name}"
-                elif security == "tls":
-                    access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?alpn={alpn_enc}&encryption=none&fp={fp}&host={host_header}&path={path_enc}&security=tls&sni={sni}&type={net}#{server.name} - {client.name}"
-                else:
-                    access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?type={net}&security=none&path={path_enc}#{server.name} - {client.name}"
-            elif protocol == "vmess":
-                vmess_dic = {
-                    "v": "2",
-                    "ps": f"{server.name} - {client.name}",
-                    "add": ext_host,
-                    "port": str(ext_port),
-                    "id": client_uuid,
-                    "aid": "0",
-                    "scy": "auto",
-                    "net": net,
-                    "type": "none",
-                    "host": host_header,
-                    "path": path,
-                    "tls": security if security != "none" else ""
-                }
-                access_url = "vmess://" + base64.b64encode(json.dumps(vmess_dic).encode()).decode()
-            elif protocol == "trojan":
-                access_url = f"trojan://{client_uuid}@{ext_host}:{ext_port}?type={net}&security={security}&sni={sni}&path={path_enc}#{server.name} - {client.name}"
-            else:
-                access_url = f"vless://{client_uuid}@{ext_host}:{ext_port}?type={net}&security={security}#{server.name} - {client.name}"
-
-            return access_url
+                # Generate access URL for this inbound
+                access_url = generate_inbound_access_url(
+                    target_inbound, server, client, client_uuid, sub_id, ext_host, ext_port
+                )
+                if access_url:
+                    generated_keys.append({
+                        "access_url": access_url,
+                        "inbound_id": ib_id_int,
+                        "inbound_remark": target_inbound.get("remark", ""),
+                        "protocol": target_inbound.get("protocol", "vless"),
+                        "uuid": client_uuid,
+                        "sub_id": sub_id
+                    })
 
     except Exception as e:
-        logger.error(f"3x-ui add client error for {server.name}: {e}")
+        logger.error(f"3x-ui add_3xui_client_all_inbounds error for {server.name}: {e}")
+
+    return generated_keys
+
+
+async def add_3xui_client(server: Server, client: Client, client_uuid: str, sub_id: str) -> Optional[str]:
+    """Backwards-compatible helper returning the primary access URL."""
+    keys = await add_3xui_client_all_inbounds(server, client, client_uuid, sub_id)
+    if keys:
+        return keys[0].get("access_url")
     return None
 
 
 async def delete_3xui_client(server: Server, client_uuid: str) -> bool:
+    """Delete client from all inbounds on the 3x-ui server."""
     ssl_verify = get_ssl_setting(server)
     try:
         jar = aiohttp.CookieJar(unsafe=True)
@@ -575,36 +622,142 @@ async def delete_3xui_client(server: Server, client_uuid: str) -> bool:
             if not api_base:
                 return False
 
-            inbound_id = server.inbound_id or 1
+            # Fetch all inbounds
+            list_url = build_url(api_base, "panel/api/inbounds/list")
+            inbound_ids = []
             try:
-                inbound_id = int(inbound_id)
-            except (ValueError, TypeError):
-                inbound_id = 1
-
-            deleted = False
-
-            # Method 1: direct delete endpoint
-            del_url = build_url(api_base, f"panel/api/inbounds/{inbound_id}/delClient/{client_uuid}")
-            try:
-                async with session.post(
-                    del_url,
+                async with session.get(
+                    list_url,
                     headers=headers,
                     timeout=DEFAULT_TIMEOUT,
                     ssl=ssl_verify
-                ) as del_resp:
-                    if del_resp.status == 200:
-                        res = await del_resp.json()
-                        if res.get("success"):
-                            deleted = True
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                logger.debug(f"3x-ui direct delClient network error for {client_uuid}: {e}")
-            except Exception as e:
-                logger.debug(f"3x-ui direct delClient failed for {client_uuid}: {e}")
+                ) as list_resp:
+                    if list_resp.status == 200:
+                        ldata = await list_resp.json()
+                        if ldata.get("success"):
+                            inbound_ids = [inb.get("id") for inb in ldata.get("obj", []) if inb.get("id") is not None]
+            except Exception:
+                pass
 
-            # Method 2: update inbound settings fallback
-            if not deleted:
-                get_inb_url = build_url(api_base, f"panel/api/inbounds/get/{inbound_id}")
-                update_inb_url = build_url(api_base, f"panel/api/inbounds/update/{inbound_id}")
+            if not inbound_ids and server.inbound_id:
+                inbound_ids = [server.inbound_id]
+            elif not inbound_ids:
+                inbound_ids = [1]
+
+            deleted_any = False
+            for ib_id in inbound_ids:
+                try:
+                    ib_id_int = int(ib_id)
+                except Exception:
+                    ib_id_int = 1
+
+                # Method 1: direct delete endpoint
+                del_url = build_url(api_base, f"panel/api/inbounds/{ib_id_int}/delClient/{client_uuid}")
+                del_success = False
+                try:
+                    async with session.post(
+                        del_url,
+                        headers=headers,
+                        timeout=DEFAULT_TIMEOUT,
+                        ssl=ssl_verify
+                    ) as del_resp:
+                        if del_resp.status == 200:
+                            res = await del_resp.json()
+                            if res.get("success"):
+                                del_success = True
+                                deleted_any = True
+                except Exception:
+                    pass
+
+                # Method 2: update inbound settings fallback
+                if not del_success:
+                    get_inb_url = build_url(api_base, f"panel/api/inbounds/get/{ib_id_int}")
+                    update_inb_url = build_url(api_base, f"panel/api/inbounds/update/{ib_id_int}")
+                    try:
+                        async with session.get(
+                            get_inb_url,
+                            headers=headers,
+                            timeout=DEFAULT_TIMEOUT,
+                            ssl=ssl_verify
+                        ) as get_resp:
+                            if get_resp.status == 200:
+                                gdata = await get_resp.json()
+                                if gdata.get("success"):
+                                    inb_obj = gdata.get("obj", {})
+                                    inb_settings_raw = inb_obj.get("settings", "{}")
+                                    try:
+                                        inb_settings = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else (inb_settings_raw or {})
+                                    except Exception:
+                                        inb_settings = {}
+
+                                    existing_clients = inb_settings.get("clients", [])
+                                    new_clients = [cl for cl in existing_clients if cl.get("id") != client_uuid and cl.get("password") != client_uuid]
+                                    if len(new_clients) != len(existing_clients):
+                                        inb_settings["clients"] = new_clients
+                                        inb_obj["settings"] = json.dumps(inb_settings)
+
+                                        async with session.post(
+                                            update_inb_url,
+                                            json=inb_obj,
+                                            headers=headers,
+                                            timeout=DEFAULT_TIMEOUT,
+                                            ssl=ssl_verify
+                                        ) as update_resp:
+                                            if update_resp.status == 200:
+                                                ures = await update_resp.json()
+                                                if ures.get("success"):
+                                                    deleted_any = True
+                    except Exception as e:
+                        logger.error(f"3x-ui delete fallback error for inbound {ib_id_int}: {e}")
+
+            return deleted_any
+    except Exception as e:
+        logger.error(f"3x-ui delete client root error: {e}")
+        return False
+
+
+async def set_3xui_client_enabled(server: Server, client_uuid: str, enabled: bool) -> bool:
+    """Enable or disable a client across all inbounds on 3x-ui panel."""
+    ssl_verify = get_ssl_setting(server)
+    try:
+        jar = aiohttp.CookieJar(unsafe=True)
+        async with aiohttp.ClientSession(cookie_jar=jar) as session:
+            api_base, headers = await login_3xui(session, server)
+            if not api_base:
+                return False
+
+            # Fetch all inbounds
+            list_url = build_url(api_base, "panel/api/inbounds/list")
+            inbound_ids = []
+            try:
+                async with session.get(
+                    list_url,
+                    headers=headers,
+                    timeout=DEFAULT_TIMEOUT,
+                    ssl=ssl_verify
+                ) as list_resp:
+                    if list_resp.status == 200:
+                        ldata = await list_resp.json()
+                        if ldata.get("success"):
+                            inbound_ids = [inb.get("id") for inb in ldata.get("obj", []) if inb.get("id") is not None]
+            except Exception:
+                pass
+
+            if not inbound_ids and server.inbound_id:
+                inbound_ids = [server.inbound_id]
+            elif not inbound_ids:
+                inbound_ids = [1]
+
+            updated_any = False
+            for ib_id in inbound_ids:
+                try:
+                    ib_id_int = int(ib_id)
+                except Exception:
+                    ib_id_int = 1
+
+                get_inb_url = build_url(api_base, f"panel/api/inbounds/get/{ib_id_int}")
+                update_inb_url = build_url(api_base, f"panel/api/inbounds/update/{ib_id_int}")
+
                 try:
                     async with session.get(
                         get_inb_url,
@@ -622,92 +775,36 @@ async def delete_3xui_client(server: Server, client_uuid: str) -> bool:
                                 except Exception:
                                     inb_settings = {}
 
-                                existing_clients = inb_settings.get("clients", [])
-                                existing_clients = [cl for cl in existing_clients if cl.get("id") != client_uuid]
-                                inb_settings["clients"] = existing_clients
-                                inb_obj["settings"] = json.dumps(inb_settings)
+                                clients_list = inb_settings.get("clients", [])
+                                client_found = False
+                                for c in clients_list:
+                                    if c.get("id") == client_uuid or c.get("password") == client_uuid:
+                                        c["enable"] = enabled
+                                        client_found = True
 
-                                async with session.post(
-                                    update_inb_url,
-                                    json=inb_obj,
-                                    headers=headers,
-                                    timeout=DEFAULT_TIMEOUT,
-                                    ssl=ssl_verify
-                                ) as update_resp:
-                                    if update_resp.status == 200:
-                                        ures = await update_resp.json()
-                                        if ures.get("success"):
-                                            deleted = True
+                                if client_found:
+                                    inb_settings["clients"] = clients_list
+                                    inb_obj["settings"] = json.dumps(inb_settings)
+
+                                    async with session.post(
+                                        update_inb_url,
+                                        json=inb_obj,
+                                        headers=headers,
+                                        timeout=DEFAULT_TIMEOUT,
+                                        ssl=ssl_verify
+                                    ) as update_resp:
+                                        if update_resp.status == 200:
+                                            ures = await update_resp.json()
+                                            if ures.get("success"):
+                                                updated_any = True
                 except Exception as e:
-                    logger.error(f"3x-ui delete fallback error: {e}")
+                    logger.error(f"3x-ui set_enabled error for inbound {ib_id_int}: {e}")
 
-            return deleted
-    except Exception as e:
-        logger.error(f"3x-ui delete client root error: {e}")
-        return False
-
-
-async def set_3xui_client_enabled(server: Server, client_uuid: str, enabled: bool) -> bool:
-    """Enable or disable a client on 3x-ui panel."""
-    ssl_verify = get_ssl_setting(server)
-    try:
-        jar = aiohttp.CookieJar(unsafe=True)
-        async with aiohttp.ClientSession(cookie_jar=jar) as session:
-            api_base, headers = await login_3xui(session, server)
-            if not api_base:
-                return False
-
-            inbound_id = server.inbound_id or 1
-            try:
-                inbound_id = int(inbound_id)
-            except (ValueError, TypeError):
-                inbound_id = 1
-
-            get_inb_url = build_url(api_base, f"panel/api/inbounds/get/{inbound_id}")
-            update_inb_url = build_url(api_base, f"panel/api/inbounds/update/{inbound_id}")
-
-            try:
-                async with session.get(
-                    get_inb_url,
-                    headers=headers,
-                    timeout=DEFAULT_TIMEOUT,
-                    ssl=ssl_verify
-                ) as get_resp:
-                    if get_resp.status == 200:
-                        gdata = await get_resp.json()
-                        if gdata.get("success"):
-                            inb_obj = gdata.get("obj", {})
-                            inb_settings_raw = inb_obj.get("settings", "{}")
-                            try:
-                                inb_settings = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else (inb_settings_raw or {})
-                            except Exception:
-                                inb_settings = {}
-
-                            clients_list = inb_settings.get("clients", [])
-                            for c in clients_list:
-                                if c.get("id") == client_uuid:
-                                    c["enable"] = enabled
-                                    break
-                            inb_settings["clients"] = clients_list
-                            inb_obj["settings"] = json.dumps(inb_settings)
-
-                            async with session.post(
-                                update_inb_url,
-                                json=inb_obj,
-                                headers=headers,
-                                timeout=DEFAULT_TIMEOUT,
-                                ssl=ssl_verify
-                            ) as update_resp:
-                                if update_resp.status == 200:
-                                    ures = await update_resp.json()
-                                    return bool(ures.get("success"))
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                logger.error(f"3x-ui set_enabled network error for {client_uuid}: {e}")
-            except Exception as e:
-                logger.error(f"3x-ui set_enabled error: {e}")
+            return updated_any
 
     except Exception as e:
         logger.error(f"3x-ui set_enabled root error: {e}")
     return False
+
 
 

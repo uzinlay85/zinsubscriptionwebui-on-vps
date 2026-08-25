@@ -472,12 +472,12 @@ async def regenerate_single_key(client_id: str, server_id: str, db: Session = De
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
         
-    existing_key = db.query(ClientKey).filter(
+    existing_keys = db.query(ClientKey).filter(
         ClientKey.client_id == client_id,
         ClientKey.server_id == server_id
-    ).first()
+    ).all()
     
-    if existing_key:
+    for existing_key in existing_keys:
         if server.type == "outline":
             from app.services import outline
             await outline.delete_key(server, existing_key.outline_key_id)
@@ -495,6 +495,8 @@ async def regenerate_single_key(client_id: str, server_id: str, db: Session = De
                 await delete_3xui_client(server, existing_key.uuid)
                 
         db.delete(existing_key)
+    
+    if existing_keys:
         db.commit()
         
     from app.services.vpn_manager import generate_keys_for_client

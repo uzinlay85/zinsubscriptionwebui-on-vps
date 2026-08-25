@@ -114,23 +114,32 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
             client_uuid = generate_uuid()
             sub_id = generate_sub_id()
             
-            from app.services.three_xui import add_3xui_client
-            access_url = await add_3xui_client(server, client, client_uuid, sub_id)
-            if access_url:
-                if "#" in access_url:
-                    base_acc = access_url.split('#')[0]
-                    access_url = f"{base_acc}#{flag} {server.name} - {client.name}"
-                client_key = ClientKey(
-                    id=key_id,
-                    client_id=client.id,
-                    server_id=server.id,
-                    outline_key_id=sub_id,
-                    access_url=access_url,
-                    created_at=now,
-                    uuid=client_uuid,
-                    last_seen_bytes=0
-                )
-                db.add(client_key)
+            from app.services.three_xui import add_3xui_client_all_inbounds
+            inbound_keys = await add_3xui_client_all_inbounds(server, client, client_uuid, sub_id)
+            for ib_info in inbound_keys:
+                raw_access_url = ib_info.get("access_url", "")
+                ib_id = ib_info.get("inbound_id", "")
+                if raw_access_url:
+                    if "#" in raw_access_url:
+                        base_acc, rem = raw_access_url.split('#', 1)
+                        if flag not in rem:
+                            access_url = f"{base_acc}#{flag} {rem}"
+                        else:
+                            access_url = raw_access_url
+                    else:
+                        access_url = f"{raw_access_url}#{flag} {server.name} - {client.name}"
+
+                    client_key = ClientKey(
+                        id=generate_id(),
+                        client_id=client.id,
+                        server_id=server.id,
+                        outline_key_id=f"{sub_id}:{ib_id}" if ib_id else sub_id,
+                        access_url=access_url,
+                        created_at=now,
+                        uuid=client_uuid,
+                        last_seen_bytes=0
+                    )
+                    db.add(client_key)
 
     tasks = [_create_for_server(s) for s in servers]
     await asyncio.gather(*tasks, return_exceptions=True)
@@ -280,12 +289,22 @@ async def fetch_3xui_metrics(server: Server, keys: list) -> Dict[str, int]:
                             email = item.get("email", "")
                             sub_id = item.get("subId", "")
                             uuid_val = item.get("id", "")
+                            inbound_id = item.get("inboundId")
                             up = item.get("up", 0) or 0
                             down = item.get("down", 0) or 0
                             total = up + down
-                            if email: traffics[email] = total
-                            if sub_id: traffics[sub_id] = total
-                            if uuid_val: traffics[uuid_val] = total
+                            if email:
+                                traffics[email] = (traffics.get(email, 0) + total)
+                                if inbound_id is not None:
+                                    traffics[f"{email}:{inbound_id}"] = total
+                            if sub_id:
+                                traffics[sub_id] = (traffics.get(sub_id, 0) + total)
+                                if inbound_id is not None:
+                                    traffics[f"{sub_id}:{inbound_id}"] = total
+                            if uuid_val:
+                                traffics[uuid_val] = (traffics.get(uuid_val, 0) + total)
+                                if inbound_id is not None:
+                                    traffics[f"{uuid_val}:{inbound_id}"] = total
                         return traffics
     except Exception:
         pass
