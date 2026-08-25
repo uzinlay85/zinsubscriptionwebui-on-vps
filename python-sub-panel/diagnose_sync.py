@@ -33,10 +33,23 @@ async def diagnose():
         print("\nFetching current live metrics from servers...")
         server_metrics = {}
         for server_id, server in servers.items():
-            if server.type == "3x-ui":
-                metrics = await fetch_3xui_metrics(server, keys)
-                server_metrics[server_id] = metrics
-                print(f"  - Metrics keys fetched from {server.name}: {list(metrics.keys())}")
+            try:
+                if server.type == "3x-ui":
+                    metrics = await fetch_3xui_metrics(server, keys)
+                    server_metrics[server_id] = metrics
+                    print(f"  - {server.name} (3x-ui) returned {len(metrics)} keys: {list(metrics.keys())}")
+                elif server.type == "outline":
+                    from app.services import outline
+                    metrics = await outline.fetch_metrics(server)
+                    server_metrics[server_id] = metrics
+                    print(f"  - {server.name} (Outline) returned {len(metrics)} keys: {list(metrics.keys())}")
+                elif server.type in ["hysteria2", "hysteria2_python"]:
+                    from app.services import hysteria2
+                    metrics = await hysteria2.fetch_hysteria2_metrics(server)
+                    server_metrics[server_id] = metrics
+                    print(f"  - {server.name} (Hysteria2) returned {len(metrics)} keys: {list(metrics.keys())}")
+            except Exception as e:
+                print(f"  - Failed to fetch from {server.name}: {e}")
                 
         print("\n=== SIMULATING sync_all_usage STEP-BY-STEP ===")
         client_delta = 0
