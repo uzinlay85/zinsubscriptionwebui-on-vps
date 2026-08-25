@@ -364,6 +364,9 @@ async def quick_renew_client(client_id: str, renew_req: Optional[QuickRenewReque
         
     if req.reset_usage:
         client.total_usage_bytes = 0
+        keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
+        for k in keys:
+            k.last_seen_bytes = 0
             
     client.status = "active"
     db.commit()
@@ -398,6 +401,11 @@ async def reset_usage(client_id: str, db: Session = Depends(get_db)):
     
     client.total_usage_bytes = 0
     client.status = "active"
+    
+    keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
+    for k in keys:
+        k.last_seen_bytes = 0
+        
     db.commit()
     db.refresh(client)
     

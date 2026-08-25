@@ -345,8 +345,8 @@ async def sync_all_usage(db: Session):
             else:
                 current_bytes = int(user_metric or 0)
             
-            # Initial baseline capture for brand new key
-            if k.last_seen_bytes is None:
+            # Initial baseline capture for brand new key or reset key
+            if k.last_seen_bytes is None or k.last_seen_bytes <= 0:
                 k.last_seen_bytes = current_bytes
                 delta = 0
             elif current_bytes < k.last_seen_bytes:
