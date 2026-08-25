@@ -164,9 +164,10 @@ async def create_server(server_req: ServerCreate, db: Session = Depends(get_db))
     db.refresh(server)
 
     active_clients = db.query(Client).filter(Client.status == "active").all()
-    from app.services.vpn_manager import generate_keys_for_client
-    for client in active_clients:
-        await generate_keys_for_client(client, [server_id], db)
+    if active_clients:
+        from app.services.vpn_manager import generate_keys_for_client
+        tasks = [generate_keys_for_client(c, [server_id], db) for c in active_clients]
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     return format_server_response(server)
 

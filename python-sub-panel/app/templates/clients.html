@@ -174,7 +174,7 @@
                 </div>
 
                 <div class="flex gap-3 pt-4">
-                    <button type="submit" class="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-colors">
+                    <button type="submit" id="saveClientBtn" class="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-wait text-white rounded-xl font-medium transition-colors">
                         Save Client
                     </button>
                     <button type="button" onclick="closeModal()" class="px-4 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium transition-colors border border-white/10">
@@ -314,13 +314,13 @@
                             ` : ''}
                         </td>
                         <td class="p-4 text-right space-x-1 whitespace-nowrap">
-                            <button onclick="quickRenewClient('${c.id}', '${escapeHtml(c.name)}', 30)" title="Extend +30 Days & Reset Quota" class="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded-lg text-xs font-semibold transition-colors border border-emerald-500/30">⚡ +30d</button>
-                            <button onclick="resetClientUsage('${c.id}', '${escapeHtml(c.name)}')" title="Reset Data Usage to 0 GB and Unblock" class="px-2.5 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded-lg text-xs font-semibold transition-colors border border-amber-500/30">🔄 0 GB</button>
+                            <button onclick="quickRenewClient('${c.id}', '${escapeHtml(c.name)}', 30, this)" title="Extend +30 Days & Reset Quota" class="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded-lg text-xs font-semibold transition-colors border border-emerald-500/30">⚡ +30d</button>
+                            <button onclick="resetClientUsage('${c.id}', '${escapeHtml(c.name)}', this)" title="Reset Data Usage to 0 GB and Unblock" class="px-2.5 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded-lg text-xs font-semibold transition-colors border border-amber-500/30">🔄 0 GB</button>
                             <a href="/my/${c.sub_token}" target="_blank" class="inline-block px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-white/10">🌐 Portal</a>
                             <button onclick="copySubLink('${c.sub_token}')" class="px-2.5 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-xs font-semibold transition-colors border border-blue-500/20">📋 Sub</button>
                             <button onclick="viewKeys('${c.id}')" class="px-2.5 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg text-xs font-semibold transition-colors border border-purple-500/20">🔑 Keys</button>
                             <button onclick="editClient('${c.id}')" class="px-2 py-1.5 text-zinc-400 hover:text-white text-xs font-medium">Edit</button>
-                            <button onclick="deleteClient('${c.id}')" class="px-2 py-1.5 text-red-400 hover:text-red-300 text-xs font-medium">Delete</button>
+                            <button onclick="deleteClient('${c.id}', this)" class="px-2 py-1.5 text-red-400 hover:text-red-300 text-xs font-medium">Delete</button>
                         </td>
                     </tr>
                 `;
@@ -365,8 +365,10 @@
             document.getElementById('clientModal').classList.remove('hidden');
         }
 
-        async function resetClientUsage(id, name) {
+        async function resetClientUsage(id, name, btn) {
             if (!confirm(`Reset data usage for client "${name}" to 0 GB and unblock account?`)) return;
+            const origText = btn ? btn.innerHTML : '🔄 0 GB';
+            if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Resetting...'; }
             try {
                 const resp = await fetch(`/api/clients/${id}/reset-usage`, { method: 'POST' });
                 if (resp.ok) {
@@ -377,11 +379,15 @@
                 }
             } catch (err) {
                 showError('Error resetting usage');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = origText; }
             }
         }
 
-        async function quickRenewClient(id, name, days) {
+        async function quickRenewClient(id, name, days, btn) {
             if (!confirm(`Extend account "${name}" by +${days} days and reset traffic usage?`)) return;
+            const origText = btn ? btn.innerHTML : '⚡ +30d';
+            if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Renewing...'; }
             try {
                 const resp = await fetch(`/api/clients/${id}/quick-renew`, {
                     method: 'POST',
@@ -397,12 +403,15 @@
                 }
             } catch (err) {
                 showError('Error renewing client');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = origText; }
             }
         }
 
-        async function deleteClient(id) {
+        async function deleteClient(id, btn) {
             if (!confirm('Are you sure you want to delete this client?')) return;
-            
+            const origText = btn ? btn.innerHTML : 'Delete';
+            if (btn) { btn.disabled = true; btn.innerHTML = 'Deleting...'; }
             try {
                 const resp = await fetch(`/api/clients/${id}`, { method: 'DELETE' });
                 if (resp.ok) {
@@ -413,6 +422,8 @@
                 }
             } catch (err) {
                 showError('Failed to delete client');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = origText; }
             }
         }
 
@@ -426,8 +437,11 @@
             }
         }
 
+        let isSavingClient = false;
         document.getElementById('clientForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isSavingClient) return;
+
             const id = document.getElementById('clientId').value;
             const dataLimitVal = document.getElementById('data_limit_gb').value;
             const data = {
@@ -439,6 +453,12 @@
                 plan_price: document.getElementById('plan_price').value.trim() || null,
                 notes: document.getElementById('notes').value.trim() || null
             };
+
+            const saveBtn = document.getElementById('saveClientBtn');
+            const originalText = saveBtn.innerHTML;
+            isSavingClient = true;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span>⏳ Saving & Syncing Keys...</span>';
 
             try {
                 const url = id ? `/api/clients/${id}` : '/api/clients/';
@@ -463,6 +483,10 @@
                 }
             } catch (err) {
                 showError('Failed to save client');
+            } finally {
+                isSavingClient = false;
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalText;
             }
         });
 

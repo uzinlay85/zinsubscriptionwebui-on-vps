@@ -25,8 +25,13 @@ def generate_sub_id():
 
 async def generate_keys_for_client(client: Client, server_ids: list, db: Session):
     servers = db.query(Server).filter(Server.id.in_(server_ids)).all()
-    
-    for server in servers:
+    if not servers:
+        return
+        
+    now = datetime.utcnow().isoformat()
+    from app.services.geo import detect_server_country, get_flag_emoji
+
+    async def _create_for_server(server: Server):
         # Delete any pre-existing key for this exact (client_id, server_id) to prevent duplicate cards
         old_keys = db.query(ClientKey).filter(
             ClientKey.client_id == client.id,
@@ -44,9 +49,6 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
             db.commit()
             
         key_id = generate_id()
-        now = datetime.utcnow().isoformat()
-        
-        from app.services.geo import detect_server_country, get_flag_emoji
         if not server.country_code:
             try:
                 cc, cname, _ = await detect_server_country(server)
@@ -60,11 +62,7 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
             result = await outline.create_key(server, client.name)
             if result:
                 raw_url = result.get("access_url", "")
-                if raw_url:
-                    base_acc = raw_url.split('#')[0]
-                    access_url = f"{base_acc}#{flag} {server.name} - {client.name}"
-                else:
-                    access_url = ""
+                access_url = f"{raw_url.split('#')[0]}#{flag} {server.name} - {client.name}" if raw_url else ""
                 client_key = ClientKey(
                     id=key_id,
                     client_id=client.id,
@@ -98,7 +96,6 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                 
             host = server.external_domain or parsed_host
             port = server.external_port or int(parsed_port)
-            
             access_url = f"hy2://{password}@{host}:{port}/?security=tls&sni={host}#{flag} {server.name} - {client.name}"
             
             client_key = ClientKey(
@@ -134,7 +131,9 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                     last_seen_bytes=0
                 )
                 db.add(client_key)
-    
+
+    tasks = [_create_for_server(s) for s in servers]
+    await asyncio.gather(*tasks, return_exceptions=True)
     db.commit()
 
 async def delete_client_keys(client: Client, db: Session):

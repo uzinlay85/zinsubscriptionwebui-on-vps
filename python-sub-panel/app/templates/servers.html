@@ -477,8 +477,11 @@
             }
         }
 
+        let isSavingServer = false;
         document.getElementById('serverForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isSavingServer) return;
+
             const id = document.getElementById('serverId').value;
             const type = document.getElementById('type').value;
             const data = {
@@ -499,11 +502,12 @@
 
             const saveBtn = document.getElementById('saveServerBtn');
             const originalText = saveBtn.textContent;
+            isSavingServer = true;
             saveBtn.disabled = true;
             if (type === '3x-ui' && !id) {
                 saveBtn.textContent = '🔗 Connecting to 3x-ui Panel...';
             } else {
-                saveBtn.textContent = 'Saving...';
+                saveBtn.textContent = '⏳ Saving & Generating Keys...';
             }
 
             try {
@@ -530,6 +534,7 @@
             } catch (err) {
                 showModalError('Connection error. Please try again.');
             } finally {
+                isSavingServer = false;
                 saveBtn.disabled = false;
                 saveBtn.textContent = originalText;
             }
