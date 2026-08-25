@@ -224,9 +224,9 @@ async def unblock_client_keys(client: Client, db: Session):
         if server.type == "outline":
             await outline.remove_data_limit(server, k.outline_key_id)
         elif server.type in ["hysteria2", "hysteria2_python"]:
-            if server.type == "hysteria2":
-                await hysteria2.express_update_user(server, k.outline_key_id, client.name, k.outline_key_id, 30)
-            else:
+            # Always ensure the user is re-created with the exact original password (k.outline_key_id)
+            res = await hysteria2.express_create_user(server, client.name, k.outline_key_id)
+            if not res:
                 await hysteria2.flask_add_user(server, client.name, k.outline_key_id)
         elif server.type == "3x-ui":
             if k.uuid:
