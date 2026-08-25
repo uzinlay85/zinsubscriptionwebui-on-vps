@@ -391,6 +391,28 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
+### 6️⃣ AmneziaWG 2.0 (Docker) အား အပြီးတိုင် ဖျက်နည်း (Uninstall AmneziaWG)
+အကယ်၍ သင့် VPS ပေါ်တွင် AmneziaWG 2.0 တင်ထားဖူးပါက ၎င်း၏ Docker Container၊ Images၊ Config Directories များနှင့် Ports များကို ရှင်းထုတ်ရန်:
+
+```bash
+# ၁။ AmneziaWG Container အား ရပ်တန့်ပြီး ဖျက်ခြင်း
+sudo docker stop amnezia-wg-easy 2>/dev/null
+sudo docker rm amnezia-wg-easy 2>/dev/null
+
+# ၂။ AmneziaWG Docker Image အား ဖျက်ခြင်း
+sudo docker rmi amnezia-wg-easy:2.0 2>/dev/null
+
+# ၃။ AmneziaWG Configuration Directory များနှင့် Source Code များကို ရှင်းထုတ်ခြင်း
+sudo rm -rf ~/.amnezia-wg-easy /opt/zin-awg-easy2
+
+# ၄။ Firewall Ports (58210, 9443) ပိတ်သိမ်းခြင်း
+sudo ufw delete allow 58210/udp 2>/dev/null
+sudo ufw delete allow 9443/tcp 2>/dev/null
+sudo ufw reload
+```
+
+---
+
 ### ⚡ 1-Click Total VPS Reset (စနစ်အားလုံး တစ်ပြိုင်နက်တည်း အပြီးတိုင် ရှင်းထုတ်ပြီး အသစ်ပြန်စတင်နည်း)
 အကယ်၍ VPS တစ်ခုလုံးကို ပထမဆုံး စတင်ဝယ်ယူထားသည့် မူလသန့်ရှင်းသော အခြေအနေသို့ ချက်ချင်း ပြန်လည်သန့်စင်လိုပါက အောက်ပါ Command တစ်ကြောင်းတည်းကို Run ပေးလိုက်ရုံပါပဲခင်ဗျာ:
 
@@ -399,7 +421,7 @@ sudo nginx -t && sudo systemctl reload nginx
 sudo systemctl stop hysteria-server hysteria-panel x-ui 3x-ui 2>/dev/null
 sudo systemctl disable hysteria-server hysteria-panel x-ui 3x-ui 2>/dev/null
 sudo docker stop $(sudo docker ps -aq) 2>/dev/null && sudo docker rm $(sudo docker ps -aq) 2>/dev/null
-sudo rm -rf /opt/outline /opt/hysteria-panel /etc/hysteria /etc/x-ui /usr/local/x-ui /opt/vpn-sub-panel /etc/nginx/sites-enabled/*
+sudo rm -rf /opt/outline /opt/hysteria-panel /etc/hysteria /etc/x-ui /usr/local/x-ui /opt/vpn-sub-panel ~/.amnezia-wg-easy /opt/zin-awg-easy2 /etc/nginx/sites-enabled/*
 sudo systemctl daemon-reload && sudo nginx -t && sudo systemctl reload nginx
 echo "✅ Total VPS Reset Completed! Your VPS is clean."
 ```
