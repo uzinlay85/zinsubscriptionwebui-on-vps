@@ -2,7 +2,6 @@ import asyncio
 import logging
 import sys
 
-# Configure logging to print to stdout so we see three_xui.py logs
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -36,22 +35,16 @@ async def test_add():
         
         jar = aiohttp.CookieJar(unsafe=True)
         async with aiohttp.ClientSession(cookie_jar=jar) as session:
-            print("Attempting login...")
             api_base, headers = await login_3xui(session, server)
             if not api_base:
                 print("Login failed.")
                 return
                 
-            print(f"Login succeeded! api_base: {api_base}")
-            print(f"Authenticated headers: {headers}")
-            
             # Fetch inbounds
             list_url = build_url(api_base, "panel/api/inbounds/list")
-            print(f"Fetching inbounds from {list_url}...")
             async with session.get(list_url, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as resp:
                 data = await resp.json()
                 inbounds = data.get("obj", [])
-                print(f"Fetched {len(inbounds)} inbounds.")
                 
             for ib in inbounds:
                 ib_id = ib.get("id")
@@ -84,6 +77,34 @@ async def test_add():
                 async with session.post(add_client_path_url, json={"clients": [c_data]}, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as r2:
                     print(f"  Method 2 Status: {r2.status}")
                     print(f"  Method 2 Response: {await r2.text()}")
+                    
+                # Test Method 3 (Inbound update fallback)
+                get_inb_url = build_url(api_base, f"panel/api/inbounds/get/{ib_id}")
+                update_inb_url = build_url(api_base, f"panel/api/inbounds/update/{ib_id}")
+                print(f"Fetching inbound details from {get_inb_url} (Method 3 prep)...")
+                async with session.get(get_inb_url, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as get_r:
+                    print(f"  Get Inbound Status: {get_r.status}")
+                    gdata = await get_r.json()
+                    
+                if gdata.get("success"):
+                    inb_obj = gdata.get("obj", {})
+                    inb_settings_raw = inb_obj.get("settings", "{}")
+                    try:
+                        inb_settings = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else (inb_settings_raw or {})
+                    except Exception:
+                        inb_settings = {}
+                        
+                    existing_clients = inb_settings.get("clients", [])
+                    # Append client
+                    existing_clients = [cl for cl in existing_clients if cl.get("email") != client.name and cl.get("id") != client_uuid]
+                    existing_clients.append(c_data)
+                    inb_settings["clients"] = existing_clients
+                    inb_obj["settings"] = json.dumps(inb_settings)
+                    
+                    print(f"Sending Method 3 POST to {update_inb_url}...")
+                    async with session.post(update_inb_url, json=inb_obj, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as update_r:
+                        print(f"  Method 3 Status: {update_r.status}")
+                        print(f"  Method 3 Response: {await update_r.text()}")
                     
     finally:
         db.close()
