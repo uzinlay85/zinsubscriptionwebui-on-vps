@@ -72,8 +72,21 @@ async def diagnose():
                 elif k.uuid and k.uuid in metrics and ":" not in (k.outline_key_id or ""):
                     user_metric = metrics.get(k.uuid)
                     matched_by = f"uuid ({k.uuid})"
+            else:
+                if k.outline_key_id and k.outline_key_id in metrics:
+                    user_metric = metrics.get(k.outline_key_id)
+                    matched_by = f"outline_key_id ({k.outline_key_id})"
+                elif k.uuid and k.uuid in metrics:
+                    user_metric = metrics.get(k.uuid)
+                    matched_by = f"uuid ({k.uuid})"
+                elif client.name in metrics:
+                    user_metric = metrics.get(client.name)
+                    matched_by = f"client.name ({client.name})"
             
-            current_bytes = int(user_metric or 0)
+            if isinstance(user_metric, dict):
+                current_bytes = int(user_metric.get("bytes", 0) or 0)
+            else:
+                current_bytes = int(user_metric or 0)
             
             # Print mapping and current bytes
             print(f"\nKey ID: {k.id} ({k.outline_key_id})")
