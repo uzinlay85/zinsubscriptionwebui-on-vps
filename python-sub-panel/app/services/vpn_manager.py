@@ -173,14 +173,12 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                     if server.type == "outline" and ok.outline_key_id and ok.outline_key_id not in deleted_key_ids:
                         deleted_key_ids.add(ok.outline_key_id)
                         try:
-                            from app.services import outline
                             await outline.delete_key(server, ok.outline_key_id)
                         except Exception as e:
                             logger.error(f"Error revoking old Outline key {ok.outline_key_id}: {e}")
                     elif server.type in ["hysteria2", "hysteria2_python"] and ok.outline_key_id and ok.outline_key_id not in deleted_key_ids:
                         deleted_key_ids.add(ok.outline_key_id)
                         try:
-                            from app.services import hysteria2
                             if server.type == "hysteria2":
                                 remote_id = ok.remote_id or ok.outline_key_id
                                 del_res = await hysteria2.express_delete_user(server, remote_id)
