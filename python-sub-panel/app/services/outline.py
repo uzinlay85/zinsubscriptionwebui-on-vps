@@ -44,78 +44,127 @@ async def create_key(server: Server, client_name: str) -> Optional[Dict[str, Any
         return None
 
     url = f"{base_url}/access-keys"
+
+    def normalize_key(data: Any) -> Optional[Dict[str, Any]]:
+        if not isinstance(data, dict):
+            return None
+        key_id = str(data.get("id") or "")
+        raw_url = data.get("accessUrl") or data.get("access_url") or ""
+        if not key_id or not raw_url:
+            return None
+        raw_url = raw_url.split("#", 1)[0]
+        raw_url = rewrite_outline_access_url(raw_url, server)
+        return {
+            "key_id": key_id,
+            "access_url": f"{raw_url}#{server.name} - {client_name}",
+            "uuid": None,
+        }
+
+    async def find_key_by_name(session: aiohttp.ClientSession) -> Optional[Dict[str, Any]]:
+        try:
+            async with session.get(
+                url,
+                timeout=aiohttp.ClientTimeout(total=5),
+                ssl=False,
+            ) as list_resp:
+                if list_resp.status != 200:
+                    logger.warning(
+                        "Outline key lookup after create returned HTTP %s on %s",
+                        list_resp.status,
+                        server.name,
+                    )
+                    return None
+                listing = await list_resp.json(content_type=None)
+                keys = listing.get("accessKeys", []) if isinstance(listing, dict) else []
+                for item in keys:
+                    if isinstance(item, dict) and item.get("name") == client_name:
+                        return normalize_key(item)
+        except Exception as e:
+            logger.warning("Outline key lookup after create failed on %s: %s", server.name, e)
+        return None
+
     try:
         async with aiohttp.ClientSession() as session:
-            data = None
-            key_id = None
-            
-            # Method 1: POST with json body {"name": client_name}
+            # Standard Outline API: POST /access-keys with a JSON name.
             try:
                 async with session.post(
                     url,
                     json={"name": client_name},
-                    timeout=aiohttp.ClientTimeout(total=5),
-                    ssl=False
+                    timeout=aiohttp.ClientTimeout(total=8),
+                    ssl=False,
                 ) as resp:
                     if resp.status in [200, 201]:
-                        data = await resp.json()
+                        try:
+                            data = await resp.json(content_type=None)
+                        except Exception:
+                            data = None
+                        normalized = normalize_key(data)
+                        if normalized:
+                            return normalized
+                        # Some reverse proxies return 2xx with an empty/non-JSON
+                        # body even though Outline created the key.
+                        normalized = await find_key_by_name(session)
+                        if normalized:
+                            return normalized
+                    else:
+                        body = (await resp.text())[:180]
+                        logger.warning(
+                            "Outline create returned HTTP %s on %s: %s",
+                            resp.status,
+                            server.name,
+                            body,
+                        )
             except Exception as e:
-                logger.debug(f"Outline POST with name failed on {server.name}: {e}")
-                data = None
+                logger.warning("Outline named create failed on %s: %s", server.name, e)
 
-            # Method 2: Fallback POST with empty body (standard Shadowbox API), then rename
-            if not data:
-                try:
-                    async with session.post(
-                        url,
-                        timeout=aiohttp.ClientTimeout(total=5),
-                        ssl=False
-                    ) as resp2:
-                        if resp2.status in [200, 201]:
-                            data = await resp2.json()
-                            key_id = data.get("id", "")
-                            # Set key name via PUT
-                            if key_id:
-                                try:
-                                    async with session.put(
-                                        f"{url}/{key_id}/name",
-                                        json={"name": client_name},
-                                        timeout=aiohttp.ClientTimeout(total=5),
-                                        ssl=False
-                                    ) as put_resp:
-                                        if put_resp.status not in [200, 204]:
-                                            # Fallback to form data
-                                            await session.put(
-                                                f"{url}/{key_id}/name",
-                                                data={"name": client_name},
-                                                timeout=aiohttp.ClientTimeout(total=5),
-                                                ssl=False
-                                            )
-                                except Exception:
-                                    pass
-                except Exception as e:
-                    logger.debug(f"Outline fallback POST failed on {server.name}: {e}")
-                    data = None
-
-            if data:
-                key_id = str(data.get("id", ""))
-                raw_url = data.get("accessUrl", "")
-                if raw_url:
-                    if "#" in raw_url:
-                        raw_url = raw_url.split("#")[0]
-                    raw_url = rewrite_outline_access_url(raw_url, server)
-                    access_url = f"{raw_url}#{server.name} - {client_name}"
-                else:
-                    access_url = ""
-                return {
-                    "key_id": key_id,
-                    "access_url": access_url,
-                    "uuid": None
-                }
-            else:
-                logger.error(f"Outline create_key failed on {server.name} ({url}) using all methods.")
+            # Compatibility fallback for standard Shadowbox implementations that
+            # require an empty POST followed by a name update.
+            try:
+                async with session.post(
+                    url,
+                    timeout=aiohttp.ClientTimeout(total=8),
+                    ssl=False,
+                ) as resp2:
+                    if resp2.status in [200, 201]:
+                        try:
+                            data = await resp2.json(content_type=None)
+                        except Exception:
+                            data = None
+                        normalized = normalize_key(data)
+                        if normalized:
+                            return normalized
+                        if isinstance(data, dict) and data.get("id"):
+                            key_id = str(data["id"])
+                            try:
+                                async with session.put(
+                                    f"{url}/{key_id}/name",
+                                    json={"name": client_name},
+                                    timeout=aiohttp.ClientTimeout(total=5),
+                                    ssl=False,
+                                ) as put_resp:
+                                    if put_resp.status not in [200, 204]:
+                                        logger.warning(
+                                            "Outline key rename returned HTTP %s on %s",
+                                            put_resp.status,
+                                            server.name,
+                                        )
+                            except Exception as e:
+                                logger.warning("Outline key rename failed on %s: %s", server.name, e)
+                            return await find_key_by_name(session)
+                    else:
+                        body = (await resp2.text())[:180]
+                        logger.warning(
+                            "Outline fallback create returned HTTP %s on %s: %s",
+                            resp2.status,
+                            server.name,
+                            body,
+                        )
+            except Exception as e:
+                logger.warning("Outline fallback create failed on %s: %s", server.name, e)
     except Exception as e:
         logger.error(f"Outline create_key exception on {server.name}: {e}")
+
+    logger.error(f"Outline create_key failed on {server.name}; no usable key response was found.")
     return None
 
 async def delete_key(server: Server, key_id: str) -> bool:
