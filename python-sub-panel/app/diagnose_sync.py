@@ -1,17 +1,19 @@
 import asyncio
+import sys
 from app.database import SessionLocal
 from app.models import Client, ClientKey, Server
 from app.services.three_xui import login_3xui, build_url, get_ssl_setting, DEFAULT_TIMEOUT
 from app.services.vpn_manager import fetch_3xui_metrics
-import aiohttp
-import sys
 
-async def diagnose():
+async def diagnose(client_name: str):
     db = SessionLocal()
     try:
-        client = db.query(Client).filter(Client.name == "me").first()
+        client = db.query(Client).filter(Client.name == client_name).first()
         if not client:
-            print("Client 'me' not found in database.")
+            print(f"Client '{client_name}' not found in database.")
+            # Print available clients for convenience
+            clients = db.query(Client).all()
+            print("Available clients: " + ", ".join([c.name for c in clients]))
             return
             
         print(f"=== DIAGNOSIS FOR CLIENT: {client.name} ===")
@@ -79,9 +81,6 @@ async def diagnose():
                 elif k.uuid and k.uuid in metrics:
                     user_metric = metrics.get(k.uuid)
                     matched_by = f"uuid ({k.uuid})"
-                elif client.name in metrics:
-                    user_metric = metrics.get(client.name)
-                    matched_by = f"client.name ({client.name})"
             
             if isinstance(user_metric, dict):
                 current_bytes = int(user_metric.get("bytes", 0) or 0)
@@ -121,4 +120,7 @@ async def diagnose():
         db.close()
 
 if __name__ == '__main__':
-    asyncio.run(diagnose())
+    name = "me"
+    if len(sys.argv) > 1:
+        name = sys.argv[1]
+    asyncio.run(diagnose(name))
