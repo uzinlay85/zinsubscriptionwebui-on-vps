@@ -194,6 +194,8 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
 
     try:
         db.commit()
+        from app.routers.sub import invalidate_sub_cache
+        invalidate_sub_cache(client.sub_token)
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to commit key changes for client {client.name}: {e}")
@@ -240,6 +242,11 @@ async def delete_client_keys(client: Client, db: Session):
         db.delete(k)
     
     db.commit()
+    try:
+        from app.routers.sub import invalidate_sub_cache
+        invalidate_sub_cache(client.sub_token)
+    except Exception:
+        pass
 
 async def delete_server_keys(server: Server, db: Session):
     keys = db.query(ClientKey).filter(ClientKey.server_id == server.id).all()
@@ -274,6 +281,11 @@ async def delete_server_keys(server: Server, db: Session):
         db.delete(k)
     
     db.commit()
+    try:
+        from app.routers.sub import invalidate_sub_cache
+        invalidate_sub_cache()
+    except Exception:
+        pass
 
 async def block_client_keys(client: Client, db: Session):
     keys = db.query(ClientKey).filter(ClientKey.client_id == client.id).all()

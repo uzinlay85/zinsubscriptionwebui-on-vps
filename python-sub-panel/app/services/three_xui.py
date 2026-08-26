@@ -523,6 +523,7 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                 except Exception:
                     stream = {}
 
+                protocol = (target_inbound.get("protocol") or "vless").lower()
                 security = stream.get("security", "none")
 
                 # Build client data payload (tgId MUST BE integer 0, NOT empty string "")
@@ -540,7 +541,7 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                     "tgId": 0,
                     "reset": 0
                 }
-                if security == "reality":
+                if protocol == "vless" and security == "reality":
                     c_data["flow"] = "xtls-rprx-vision"
 
                 added = False

@@ -203,7 +203,9 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
                 except Exception:
                     pass
             
-            if k.uuid and server.external_domain and server.external_port:
+            if k.access_url and not k.access_url.startswith("3x-ui-sub:"):
+                nodes.append(format_node_with_flag(k.access_url, server, client.name))
+            elif k.uuid and server.external_domain and server.external_port:
                 host = server.external_domain
                 port = server.external_port
                 sni = server.external_domain

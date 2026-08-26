@@ -70,19 +70,23 @@ async def get_status(db: Session = Depends(get_db)):
     async def ping_server(server):
         try:
             start = time.time()
-            url = server.api_url.rstrip("/")
             if server.type == "outline":
-                url = f"{url}/access-keys"
-            elif server.type == "hysteria2":
-                url = f"{url}/api/users"
-            elif server.type == "hysteria2_python":
-                url = url
-            
-            headers = {}
-            if server.auth_username and server.auth_password:
-                import base64
-                token = base64.b64encode(f"{server.auth_username}:{server.auth_password}".encode()).decode()
-                headers["Authorization"] = f"Basic {token}"
+                from app.services.outline import get_outline_base_url
+                base_url = get_outline_base_url(server)
+                url = f"{base_url}/access-keys"
+                headers = {}
+            elif server.type in ["hysteria2", "hysteria2_python"]:
+                from app.services.hysteria2 import get_auth_headers
+                url = server.api_url.rstrip("/")
+                headers = get_auth_headers(server)
+                if not url.endswith("/api/users") and not url.endswith("/users"):
+                    url = f"{url}/api/users"
+            elif server.type == "3x-ui":
+                url = server.api_url.rstrip("/")
+                headers = {}
+            else:
+                url = server.api_url.rstrip("/")
+                headers = {}
             
             async with aiohttp.ClientSession() as session:
                 async with session.get(
@@ -325,9 +329,11 @@ async def diagnose_server_failure(server: Server) -> str:
         return f"Server '{server.name}' has an empty API URL."
     
     try:
-        async with aiohttp.ClientSession() as session:
-            if server.type == "outline":
-                test_url = f"{api_url}/access-keys"
+        if server.type == "outline":
+            from app.services import outline
+            base_url = outline.get_outline_base_url(server)
+            test_url = f"{base_url}/access-keys"
+            async with aiohttp.ClientSession() as session:
                 try:
                     async with session.post(
                         test_url,
@@ -341,7 +347,7 @@ async def diagnose_server_failure(server: Server) -> str:
                                 data = await resp.json()
                                 kid = data.get("id")
                                 if kid:
-                                    await session.delete(f"{test_url}/{kid}")
+                                    await session.delete(f"{test_url}/{kid}", ssl=False)
                             except Exception:
                                 pass
                             return f"Outline server '{server.name}' test key creation OK."
@@ -351,28 +357,35 @@ async def diagnose_server_failure(server: Server) -> str:
                             return f"Outline server '{server.name}' POST /access-keys HTTP {resp.status}: {text[:150]}"
                 except Exception as ex:
                     return f"Outline server '{server.name}' POST /access-keys error: {ex}"
+        
+        elif server.type in ["hysteria2", "hysteria2_python"]:
+            from app.services import hysteria2
+            # Test express endpoint
+            res = await hysteria2.express_create_user(server, "test_diag", "test_pass_12345")
+            if res:
+                await hysteria2.express_delete_user(server, res.get("user_id", "test_diag"))
+                return f"Hysteria2 server '{server.name}' test user creation (Express REST) OK."
             
-            elif server.type in ["hysteria2", "hysteria2_python"]:
-                from app.services import hysteria2
-                ok = await hysteria2.flask_add_user(server, "test_diag", "test_pass_12345")
-                if ok:
-                    try:
-                        await hysteria2.flask_delete_user(server, "test_pass_12345")
-                    except Exception:
-                        pass
-                    return f"Hysteria2 server '{server.name}' test user creation OK."
-                else:
-                    return f"Hysteria2 server '{server.name}' user creation failed. Please check Panel Admin Password (current: '{server.auth_password or 'default'}')."
-            
-            elif server.type == "3x-ui":
-                from app.services.three_xui import login_3xui_standalone
-                api_base, err = await login_3xui_standalone(server)
-                if not api_base:
-                    return f"3x-ui Login Failed for '{server.name}': {err}"
-                else:
-                    return f"3x-ui Login OK for '{server.name}', but adding client to inbounds failed."
+            # Test flask endpoint
+            ok = await hysteria2.flask_add_user(server, "test_diag", "test_pass_12345")
+            if ok:
+                try:
+                    await hysteria2.flask_delete_user(server, "test_pass_12345")
+                except Exception:
+                    pass
+                return f"Hysteria2 server '{server.name}' test user creation (WebUI) OK."
+            else:
+                return f"Hysteria2 server '{server.name}' user creation failed. Please verify API URL '{server.api_url}' and Admin Password (current: '{server.auth_password or server.password or 'admin123'}')."
+        
+        elif server.type == "3x-ui":
+            from app.services.three_xui import login_3xui_standalone
+            api_base, err = await login_3xui_standalone(server)
+            if not api_base:
+                return f"3x-ui Login Failed for '{server.name}': {err}"
+            else:
+                return f"3x-ui Login OK for '{server.name}', but adding client to inbounds failed. Check inbounds configuration."
 
-            return f"Unable to generate keys on server '{server.name}'."
+        return f"Unable to generate keys on server '{server.name}'."
 
     except aiohttp.ClientConnectorError as e:
         return f"Connection Failed to {server.name} ({api_url}): Cannot connect to host/port ({e}). Check server firewall or port."
