@@ -208,19 +208,25 @@ async def update_client(client_id: str, client_req: ClientUpdate, db: Session = 
     if client_req.name is not None and client_req.name.strip():
         client.name = client_req.name.strip()
         
-    client.expiry_date = client_req.expiry_date
-    if client_req.data_limit_gb is not None:
-        try:
-            client.data_limit_gb = int(client_req.data_limit_gb)
-        except Exception:
+    # Preserve fields that were omitted from a PATCH-like update. The frontend may
+    # intentionally send only the fields being changed.
+    if "expiry_date" in client_req.model_fields_set:
+        client.expiry_date = client_req.expiry_date
+    if "data_limit_gb" in client_req.model_fields_set:
+        if client_req.data_limit_gb is not None:
+            try:
+                client.data_limit_gb = int(client_req.data_limit_gb)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422, detail="data_limit_gb must be an integer")
+        else:
             client.data_limit_gb = None
-    else:
-        client.data_limit_gb = None
-        
-    client.notes = client_req.notes
-    client.contact = client_req.contact
-    client.plan_price = client_req.plan_price
-    
+    if "notes" in client_req.model_fields_set:
+        client.notes = client_req.notes
+    if "contact" in client_req.model_fields_set:
+        client.contact = client_req.contact
+    if "plan_price" in client_req.model_fields_set:
+        client.plan_price = client_req.plan_price
+
     if client_req.status is not None:
         old_status = client.status
         client.status = client_req.status

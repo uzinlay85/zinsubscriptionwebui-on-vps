@@ -66,9 +66,6 @@ def is_valid_session(token: str) -> bool:
         else:
             _ACTIVE_SESSIONS.pop(token, None)
             return False
-    # Fallback for static AUTH_SECRET token
-    if AUTH_SECRET and AUTH_SECRET != "change_me" and timing_safe_compare(token, AUTH_SECRET):
-        return True
     return False
 
 def create_session() -> str:

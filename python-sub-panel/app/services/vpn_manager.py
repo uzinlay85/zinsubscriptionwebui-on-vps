@@ -71,15 +71,20 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                 password = f"{client.name}_{rand_str}"
                 
                 added = False
+                remote_id = None
                 if server.type == "hysteria2":
                     result = await hysteria2.express_create_user(server, client.name, password)
                     if result and result.get("password"):
                         password = result.get("password")
+                        remote_id = result.get("user_id") or password
                         added = True
                     else:
                         added = await hysteria2.flask_add_user(server, client.name, password)
+                        # Flask fallback identifies users by password.
+                        remote_id = password
                 else:
                     added = await hysteria2.flask_add_user(server, client.name, password)
+                    remote_id = password
                 
                 if added:
                     raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
@@ -97,6 +102,7 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                         client_id=client.id,
                         server_id=server.id,
                         outline_key_id=password,
+                        remote_id=remote_id,
                         access_url=access_url,
                         created_at=now,
                         uuid=None,
@@ -171,11 +177,12 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                         try:
                             from app.services import hysteria2
                             if server.type == "hysteria2":
-                                del_res = await hysteria2.express_delete_user(server, ok.outline_key_id)
+                                remote_id = ok.remote_id or ok.outline_key_id
+                                del_res = await hysteria2.express_delete_user(server, remote_id)
                                 if not del_res:
                                     await hysteria2.flask_delete_user(server, ok.outline_key_id)
                             else:
-                                await hysteria2.flask_delete_user(server, ok.outline_key_id)
+                                await hysteria2.flask_delete_user(server, ok.remote_id or ok.outline_key_id)
                         except Exception as e:
                             logger.error(f"Error revoking old Hysteria2 key {ok.outline_key_id}: {e}")
                     elif server.type == "3x-ui" and ok.uuid and ok.uuid not in deleted_uuids:
@@ -300,11 +307,12 @@ async def block_client_keys(client: Client, db: Session):
             await outline.set_data_limit(server, k.outline_key_id, 1)
         elif server.type in ["hysteria2", "hysteria2_python"]:
             if server.type == "hysteria2":
-                del_res = await hysteria2.express_delete_user(server, k.outline_key_id)
+                remote_id = k.remote_id or k.outline_key_id
+                del_res = await hysteria2.express_delete_user(server, remote_id)
                 if not del_res:
                     await hysteria2.flask_delete_user(server, k.outline_key_id)
             else:
-                await hysteria2.flask_delete_user(server, k.outline_key_id)
+                await hysteria2.flask_delete_user(server, k.remote_id or k.outline_key_id)
         elif server.type == "3x-ui":
             if k.uuid:
                 try:
@@ -325,10 +333,32 @@ async def unblock_client_keys(client: Client, db: Session):
         if server.type == "outline":
             await outline.remove_data_limit(server, k.outline_key_id)
         elif server.type in ["hysteria2", "hysteria2_python"]:
-            # Always ensure the user is re-created with the exact original password (k.outline_key_id)
-            res = await hysteria2.express_create_user(server, client.name, k.outline_key_id)
-            if not res:
-                await hysteria2.flask_add_user(server, client.name, k.outline_key_id)
+            # Re-enable/update the existing remote user when the provider supports
+            # it; only fall back to create for legacy records/providers.
+            remote_id = k.remote_id or k.outline_key_id
+            updated = False
+            if server.type == "hysteria2" and k.remote_id:
+                updated = await hysteria2.express_update_user(
+                    server,
+                    remote_id,
+                    client.name,
+                    k.outline_key_id,
+                    expiry_days=0,
+                )
+            if not updated:
+                if server.type == "hysteria2":
+                    updated_result = await hysteria2.express_create_user(
+                        server, client.name, k.outline_key_id
+                    )
+                    updated = bool(updated_result)
+                    if updated_result and updated_result.get("user_id"):
+                        k.remote_id = str(updated_result["user_id"])
+                if not updated:
+                    updated = await hysteria2.flask_add_user(
+                        server, client.name, k.outline_key_id
+                    )
+                    if updated and server.type == "hysteria2_python":
+                        k.remote_id = k.outline_key_id
         elif server.type == "3x-ui":
             if k.uuid:
                 try:
@@ -336,6 +366,14 @@ async def unblock_client_keys(client: Client, db: Session):
                     await set_3xui_client_enabled(server, k.uuid, True)
                 except Exception:
                     pass
+
+    # Some callers commit before invoking this function (renew/reset), so persist
+    # any refreshed provider identifiers here as well.
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to persist unblock state: {e}")
 
 async def get_orphan_keys(server: Server, db: Session) -> List[Dict[str, Any]]:
     if server.type == "outline":

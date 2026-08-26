@@ -21,7 +21,9 @@ ALLOWED_ORIGINS = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS if ALLOWED_ORIGINS else ["*"],
+    # Same-origin requests do not require CORS. Only explicitly configured
+    # origins may use credentialed cross-origin requests.
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=bool(ALLOWED_ORIGINS),
     allow_methods=["*"],
     allow_headers=["*"],
