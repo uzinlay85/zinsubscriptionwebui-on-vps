@@ -316,6 +316,7 @@
                     </td>
                     <td class="p-4 text-right">
                         <button onclick="syncServerKeys('${s.id}', '${escapeHtml(s.name)}', this)" class="text-emerald-400 hover:text-emerald-300 mr-3 text-sm font-medium">🔄 Sync Keys</button>
+                        <button onclick="rebuildServerKeys('${s.id}', '${escapeHtml(s.name)}', this)" class="text-purple-400 hover:text-purple-300 mr-3 text-sm font-medium">♻️ Rebuild Keys</button>
                         <button onclick="deleteAllServerKeys('${s.id}', '${escapeHtml(s.name)}', this)" class="text-orange-400 hover:text-orange-300 mr-3 text-sm font-medium">🗑️ Delete Keys</button>
                         <button onclick="editServer('${s.id}')" class="text-blue-400 hover:text-blue-300 mr-3 text-sm">Edit</button>
                         <button onclick="deleteServer('${s.id}')" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
@@ -480,6 +481,36 @@
                 }
             } catch (e) {
                 showError(`Sync error: ${e.message}`);
+            } finally {
+                if (btnElement) {
+                    btnElement.innerHTML = originalText;
+                    btnElement.disabled = false;
+                }
+            }
+        }
+
+        async function rebuildServerKeys(serverId, serverName, btnElement) {
+            if (!confirm(`⚠️ Delete and regenerate ALL keys for "${serverName}"?\n\nThis will remove the existing remote clients and create new keys for every active client across all inbounds.\n\nContinue?`)) return;
+            const originalText = btnElement ? btnElement.innerHTML : '♻️ Rebuild Keys';
+            if (btnElement) {
+                btnElement.innerText = 'Rebuilding...';
+                btnElement.disabled = true;
+            }
+            try {
+                const resp = await fetch(`/api/servers/${serverId}/rebuild-keys`, { method: 'POST' });
+                const data = await resp.json();
+                if (resp.status === 401 || data.detail === 'Authentication required') {
+                    showError('Admin session expired. Please log in again.');
+                    window.setTimeout(() => { window.location.href = '/login'; }, 800);
+                } else if (resp.ok && data.ok && !data.warning) {
+                    showSuccess(`Rebuilt ${data.created_keys} key(s) for ${data.total_clients} active client(s) on server "${serverName}".`);
+                    loadServers();
+                } else {
+                    showError(data.warning || data.detail || `Rebuild failed for server "${serverName}".`);
+                    loadServers();
+                }
+            } catch (e) {
+                showError(`Rebuild error: ${e.message}`);
             } finally {
                 if (btnElement) {
                     btnElement.innerHTML = originalText;

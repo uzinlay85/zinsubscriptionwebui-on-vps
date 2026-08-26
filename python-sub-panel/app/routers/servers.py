@@ -523,6 +523,42 @@ async def sync_server_keys(server_id: str, request: Request, db: Session = Depen
         logging.getLogger(__name__).exception(f"Error in sync_server_keys: {e}")
         return JSONResponse(status_code=500, content={"ok": False, "detail": f"Server Error: {str(e)}"})
 
+@router.post("/{server_id}/rebuild-keys")
+async def rebuild_server_keys(server_id: str, db: Session = Depends(get_db)):
+    """Delete all keys for a server, then recreate them for active clients."""
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    from app.services.vpn_manager import delete_server_keys, generate_keys_for_client
+    await delete_server_keys(server, db)
+    active_clients = db.query(Client).filter(Client.status == "active").all()
+    failed_clients = []
+    for client in active_clients:
+        try:
+            await generate_keys_for_client(client, [server_id], db)
+            count = db.query(ClientKey).filter(
+                ClientKey.server_id == server_id,
+                ClientKey.client_id == client.id,
+            ).count()
+            if count == 0:
+                failed_clients.append(client.name)
+        except Exception as e:
+            failed_clients.append(f"{client.name}: {e}")
+
+    created_keys = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
+    return {
+        "ok": True,
+        "server_name": server.name,
+        "created_keys": created_keys,
+        "total_clients": len(active_clients),
+        "failed_clients": failed_clients,
+        "warning": (
+            f"Key regeneration failed for {len(failed_clients)} client(s)."
+            if failed_clients else None
+        ),
+    }
+
 @router.delete("/{server_id}/keys")
 async def delete_all_server_keys(server_id: str, db: Session = Depends(get_db)):
     """Delete all client keys associated with this server (both remote and local DB)."""

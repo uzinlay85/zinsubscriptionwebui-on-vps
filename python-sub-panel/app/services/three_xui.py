@@ -762,7 +762,13 @@ async def delete_3xui_client(server: Server, client_uuid: str) -> bool:
                                         inb_settings = {}
 
                                     existing_clients = inb_settings.get("clients", [])
-                                    new_clients = [cl for cl in existing_clients if cl.get("id") != client_uuid and cl.get("password") != client_uuid]
+                                    new_clients = [
+                                        cl for cl in existing_clients
+                                        if not any(
+                                            str(cl.get(field, "")) == str(client_uuid)
+                                            for field in ("id", "password", "subId")
+                                        )
+                                    ]
                                     if len(new_clients) != len(existing_clients):
                                         inb_settings["clients"] = new_clients
                                         inb_obj["settings"] = json.dumps(inb_settings)
