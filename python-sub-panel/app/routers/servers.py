@@ -8,7 +8,7 @@ import uuid
 import asyncio
 import aiohttp
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 router = APIRouter()
 
@@ -172,8 +172,12 @@ async def create_server(server_req: ServerCreate, db: Session = Depends(get_db))
     active_clients = db.query(Client).filter(Client.status == "active").all()
     if active_clients:
         from app.services.vpn_manager import generate_keys_for_client
-        tasks = [generate_keys_for_client(c, [server_id], db) for c in active_clients]
-        await asyncio.gather(*tasks, return_exceptions=True)
+        for c in active_clients:
+            try:
+                await generate_keys_for_client(c, [server_id], db)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Error generating keys for client {c.name} on server {server.name}: {e}")
 
     return format_server_response(server)
 

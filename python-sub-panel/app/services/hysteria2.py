@@ -2,8 +2,11 @@ import aiohttp
 import base64
 import json
 import re
+import logging
 from typing import Optional, Dict, Any, List
 from app.models import Client, ClientKey, Server
+
+logger = logging.getLogger(__name__)
 
 def get_auth_headers(server: Server) -> Dict[str, str]:
     headers = {}
