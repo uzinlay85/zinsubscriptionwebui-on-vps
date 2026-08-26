@@ -31,34 +31,52 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
     now = datetime.utcnow().isoformat()
     from app.services.geo import detect_server_country, get_flag_emoji
 
-    async def _create_for_server(server: Server):
-        # Delete any pre-existing key for this exact (client_id, server_id) to prevent duplicate cards
+    # Step 1: Sequentially delete pre-existing keys for the target servers (both remote and local DB)
+    # This prevents concurrent DB session mutation conflicts during gather()
+    for server in servers:
         old_keys = db.query(ClientKey).filter(
             ClientKey.client_id == client.id,
             ClientKey.server_id == server.id
         ).all()
+        
+        deleted_uuids = set()
+        deleted_key_ids = set()
+        
         for ok in old_keys:
-            if server.type == "outline":
-                from app.services import outline
-                await outline.delete_key(server, ok.outline_key_id)
-            elif server.type in ["hysteria2", "hysteria2_python"]:
-                from app.services import hysteria2
-                if server.type == "hysteria2":
-                    del_res = await hysteria2.express_delete_user(server, ok.outline_key_id)
-                    if not del_res:
+            if server.type == "outline" and ok.outline_key_id and ok.outline_key_id not in deleted_key_ids:
+                deleted_key_ids.add(ok.outline_key_id)
+                try:
+                    from app.services import outline
+                    await outline.delete_key(server, ok.outline_key_id)
+                except Exception:
+                    pass
+            elif server.type in ["hysteria2", "hysteria2_python"] and ok.outline_key_id and ok.outline_key_id not in deleted_key_ids:
+                deleted_key_ids.add(ok.outline_key_id)
+                try:
+                    from app.services import hysteria2
+                    if server.type == "hysteria2":
+                        del_res = await hysteria2.express_delete_user(server, ok.outline_key_id)
+                        if not del_res:
+                            await hysteria2.flask_delete_user(server, ok.outline_key_id)
+                    else:
                         await hysteria2.flask_delete_user(server, ok.outline_key_id)
-                else:
-                    await hysteria2.flask_delete_user(server, ok.outline_key_id)
-            elif server.type == "3x-ui" and ok.uuid:
+                except Exception:
+                    pass
+            elif server.type == "3x-ui" and ok.uuid and ok.uuid not in deleted_uuids:
+                deleted_uuids.add(ok.uuid)
                 try:
                     from app.services.three_xui import delete_3xui_client
                     await delete_3xui_client(server, ok.uuid)
                 except Exception:
                     pass
-            db.delete(ok)
-        if old_keys:
-            db.commit()
             
+            db.delete(ok)
+            
+    # Commit all old key deletions to DB first
+    db.commit()
+
+    # Step 2: Concurrently create new keys for each server
+    async def _create_for_server(server: Server):
         key_id = generate_id()
         if not server.country_code:
             try:
@@ -165,24 +183,39 @@ async def delete_client_keys(client: Client, db: Session):
     keys = db.query(ClientKey).filter(ClientKey.client_id == client.id).all()
     servers = {s.id: s for s in db.query(Server).all()}
     
+    deleted_uuids = set()
+    deleted_key_ids = set()
+    
     for k in keys:
         server = servers.get(k.server_id)
         if not server:
+            db.delete(k)
             continue
         
-        if server.type == "outline":
-            await outline.delete_key(server, k.outline_key_id)
-        elif server.type in ["hysteria2", "hysteria2_python"]:
-            if server.type == "hysteria2":
-                del_res = await hysteria2.express_delete_user(server, k.outline_key_id)
-                if not del_res:
+        if server.type == "outline" and k.outline_key_id and k.outline_key_id not in deleted_key_ids:
+            deleted_key_ids.add(k.outline_key_id)
+            try:
+                await outline.delete_key(server, k.outline_key_id)
+            except Exception:
+                pass
+        elif server.type in ["hysteria2", "hysteria2_python"] and k.outline_key_id and k.outline_key_id not in deleted_key_ids:
+            deleted_key_ids.add(k.outline_key_id)
+            try:
+                if server.type == "hysteria2":
+                    del_res = await hysteria2.express_delete_user(server, k.outline_key_id)
+                    if not del_res:
+                        await hysteria2.flask_delete_user(server, k.outline_key_id)
+                else:
                     await hysteria2.flask_delete_user(server, k.outline_key_id)
-            else:
-                await hysteria2.flask_delete_user(server, k.outline_key_id)
-        elif server.type == "3x-ui":
-            if k.uuid:
+            except Exception:
+                pass
+        elif server.type == "3x-ui" and k.uuid and k.uuid not in deleted_uuids:
+            deleted_uuids.add(k.uuid)
+            try:
                 from app.services.three_xui import delete_3xui_client
                 await delete_3xui_client(server, k.uuid)
+            except Exception:
+                pass
         
         db.delete(k)
     
@@ -191,21 +224,32 @@ async def delete_client_keys(client: Client, db: Session):
 async def delete_server_keys(server: Server, db: Session):
     keys = db.query(ClientKey).filter(ClientKey.server_id == server.id).all()
     
+    deleted_uuids = set()
+    deleted_key_ids = set()
+    
     for k in keys:
-        if server.type == "outline":
-            await outline.delete_key(server, k.outline_key_id)
-        elif server.type in ["hysteria2", "hysteria2_python"]:
-            if server.type == "hysteria2":
-                await hysteria2.express_delete_user(server, k.outline_key_id)
-            else:
-                await hysteria2.flask_delete_user(server, k.outline_key_id)
-        elif server.type == "3x-ui":
-            if k.uuid:
-                try:
-                    from app.services.three_xui import delete_3xui_client
-                    await delete_3xui_client(server, k.uuid)
-                except Exception:
-                    pass
+        if server.type == "outline" and k.outline_key_id and k.outline_key_id not in deleted_key_ids:
+            deleted_key_ids.add(k.outline_key_id)
+            try:
+                await outline.delete_key(server, k.outline_key_id)
+            except Exception:
+                pass
+        elif server.type in ["hysteria2", "hysteria2_python"] and k.outline_key_id and k.outline_key_id not in deleted_key_ids:
+            deleted_key_ids.add(k.outline_key_id)
+            try:
+                if server.type == "hysteria2":
+                    await hysteria2.express_delete_user(server, k.outline_key_id)
+                else:
+                    await hysteria2.flask_delete_user(server, k.outline_key_id)
+            except Exception:
+                pass
+        elif server.type == "3x-ui" and k.uuid and k.uuid not in deleted_uuids:
+            deleted_uuids.add(k.uuid)
+            try:
+                from app.services.three_xui import delete_3xui_client
+                await delete_3xui_client(server, k.uuid)
+            except Exception:
+                pass
         
         db.delete(k)
     
