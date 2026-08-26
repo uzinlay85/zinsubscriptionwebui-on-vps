@@ -38,7 +38,18 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
             ClientKey.server_id == server.id
         ).all()
         for ok in old_keys:
-            if server.type == "3x-ui" and ok.uuid:
+            if server.type == "outline":
+                from app.services import outline
+                await outline.delete_key(server, ok.outline_key_id)
+            elif server.type in ["hysteria2", "hysteria2_python"]:
+                from app.services import hysteria2
+                if server.type == "hysteria2":
+                    del_res = await hysteria2.express_delete_user(server, ok.outline_key_id)
+                    if not del_res:
+                        await hysteria2.flask_delete_user(server, ok.outline_key_id)
+                else:
+                    await hysteria2.flask_delete_user(server, ok.outline_key_id)
+            elif server.type == "3x-ui" and ok.uuid:
                 try:
                     from app.services.three_xui import delete_3xui_client
                     await delete_3xui_client(server, ok.uuid)
