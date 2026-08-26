@@ -323,6 +323,50 @@ async def sync_all_servers_keys(db: Session = Depends(get_db)):
             
     return {"ok": True, "synced_keys": total_synced_keys, "clients_count": clients_synced}
 
+async def diagnose_server_failure(server: Server) -> str:
+    api_url = (server.api_url or "").rstrip("/")
+    if not api_url:
+        return f"Server '{server.name}' has an empty API URL."
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            if server.type == "outline":
+                test_url = f"{api_url}/access-keys"
+                async with session.get(test_url, timeout=aiohttp.ClientTimeout(total=5), ssl=False) as resp:
+                    if resp.status in [200, 201]:
+                        return f"Outline server '{server.name}' connected OK, but client key creation failed."
+                    elif resp.status in [401, 403]:
+                        return f"Outline server '{server.name}' returned HTTP {resp.status} Unauthorized. Secret key token in API URL is invalid or expired."
+                    elif resp.status == 404:
+                        return f"Outline server '{server.name}' returned HTTP 404 Not Found. Please check secret URL path in API URL."
+                    else:
+                        return f"Outline server '{server.name}' returned HTTP {resp.status} on access-keys endpoint."
+            
+            elif server.type in ["hysteria2", "hysteria2_python"]:
+                from app.services import hysteria2
+                auth = await hysteria2.flask_login(server)
+                if not auth:
+                    return f"Hysteria2 Panel Login Failed for '{server.name}'. Incorrect Panel Admin Password (current: '{server.auth_password or 'default'}')."
+                else:
+                    return f"Hysteria2 Panel Login OK for '{server.name}', but adding user failed. Check panel permissions."
+            
+            elif server.type == "3x-ui":
+                from app.services import three_xui
+                session_cookie, err = await three_xui.login_3xui(server)
+                if not session_cookie:
+                    return f"3x-ui Login Failed for '{server.name}': {err or 'Invalid username or password'}"
+                else:
+                    return f"3x-ui Login OK for '{server.name}', but adding client to inbounds failed."
+
+            return f"Unable to generate keys on server '{server.name}'."
+
+    except aiohttp.ClientConnectorError as e:
+        return f"Connection Failed to {server.name} ({api_url}): Cannot connect to host/port ({e}). Check server firewall or port."
+    except asyncio.TimeoutError:
+        return f"Connection Timeout (5s) to {server.name} ({api_url}). Server is unresponsive."
+    except Exception as e:
+        return f"Error connecting to {server.name} ({api_url}): {e}"
+
 @router.post("/{server_id}/sync-keys")
 async def sync_server_keys(server_id: str, request: Request, db: Session = Depends(get_db)):
     server = db.query(Server).filter(Server.id == server_id).first()
@@ -339,8 +383,6 @@ async def sync_server_keys(server_id: str, request: Request, db: Session = Depen
     from app.services.vpn_manager import generate_keys_for_client
     
     if not client_ids:
-        # Regenerate keys for ALL active clients on this server
-        # generate_keys_for_client() handles cleanup of old keys before creating new ones
         active_clients = db.query(Client).filter(Client.status == "active").all()
         target_clients = active_clients
     else:
@@ -353,7 +395,7 @@ async def sync_server_keys(server_id: str, request: Request, db: Session = Depen
 
     warning_msg = None
     if len(target_clients) > 0 and keys_after == 0:
-        warning_msg = f"Failed to generate keys for server '{server.name}'. Please verify API URL, port, and credentials."
+        warning_msg = await diagnose_server_failure(server)
     
     return {
         "ok": True,
