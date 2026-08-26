@@ -326,17 +326,22 @@ async def sync_all_usage(db: Session):
         keys_by_server[k.server_id].append(k)
     
     server_metrics = {}
+    failed_servers = set()  # Track servers that failed to respond
     
     async def fetch_server_metrics(server_id: str, server: Server, keys: list):
-        if server.type == "outline":
-            metrics = await outline.fetch_metrics(server)
+        try:
+            if server.type == "outline":
+                metrics = await outline.fetch_metrics(server)
+            elif server.type == "3x-ui":
+                metrics = await fetch_3xui_metrics(server, keys)
+            elif server.type in ["hysteria2", "hysteria2_python"]:
+                metrics = await hysteria2.fetch_hysteria2_metrics(server)
+            else:
+                metrics = {}
             server_metrics[server_id] = metrics
-        elif server.type == "3x-ui":
-            metrics = await fetch_3xui_metrics(server, keys)
-            server_metrics[server_id] = metrics
-        elif server.type in ["hysteria2", "hysteria2_python"]:
-            metrics = await hysteria2.fetch_hysteria2_metrics(server)
-            server_metrics[server_id] = metrics
+        except Exception as e:
+            failed_servers.add(server_id)
+            print(f"[sync] Server {server_id} fetch failed: {e}")
     
     tasks = []
     for server_id, keys in keys_by_server.items():
@@ -351,6 +356,9 @@ async def sync_all_usage(db: Session):
         keys = [k for k in db.query(ClientKey).filter(ClientKey.client_id == client.id).all()]
         
         for k in keys:
+            # Skip keys on servers that failed to respond — don't touch last_seen_bytes
+            if k.server_id in failed_servers:
+                continue
             metrics = server_metrics.get(k.server_id, {})
             user_metric = None
             server = servers.get(k.server_id)
@@ -383,8 +391,11 @@ async def sync_all_usage(db: Session):
                     last_seen_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
                 elif last_seen_str:
                     client.last_seen = last_seen_str
-            else:
+            elif user_metric is not None:
                 current_bytes = int(user_metric or 0)
+            else:
+                # Server returned no metrics for this key — skip this sync cycle
+                continue
             
             # Save key-level status and last active time
             k.is_online = is_online
@@ -396,11 +407,29 @@ async def sync_all_usage(db: Session):
                 k.last_seen_bytes = current_bytes
                 delta = 0
             elif current_bytes < k.last_seen_bytes:
-                # Counter was reset on remote server
-                delta = current_bytes
-                k.last_seen_bytes = current_bytes
+                # Calculate drop percentage to distinguish real reset from rolling window
+                drop_pct = (k.last_seen_bytes - current_bytes) / k.last_seen_bytes if k.last_seen_bytes > 0 else 0
+                if drop_pct > 0.5:
+                    # More than 50% drop: likely a genuine counter reset (server restart/reinstall)
+                    # Only count the new bytes since reset, not the full current_bytes
+                    delta = current_bytes
+                    k.last_seen_bytes = current_bytes
+                    print(f"[sync] Key {k.id[:8]}: counter RESET detected (drop {drop_pct:.0%}), delta={delta}")
+                else:
+                    # Small drop (< 50%): rolling window expiry or minor fluctuation — ignore
+                    delta = 0
+                    k.last_seen_bytes = current_bytes
+                    print(f"[sync] Key {k.id[:8]}: minor counter drop (drop {drop_pct:.0%}), skipping delta")
             else:
                 delta = current_bytes - k.last_seen_bytes
+                k.last_seen_bytes = current_bytes
+            
+            # Sanity check: cap per-key delta to 10GB per sync cycle
+            MAX_DELTA_PER_SYNC = 10 * 1024 * 1024 * 1024  # 10 GB
+            if delta > MAX_DELTA_PER_SYNC:
+                print(f"[sync] Key {k.id[:8]}: delta {delta/(1024**3):.2f}GB exceeds max, capping to 0")
+                delta = 0
+                # Re-baseline to prevent repeated false spikes
                 k.last_seen_bytes = current_bytes
             
             client_delta += delta
