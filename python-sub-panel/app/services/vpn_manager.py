@@ -75,8 +75,9 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
     # Commit all old key deletions to DB first
     db.commit()
 
-    # Step 2: Concurrently create new keys for each server
-    async def _create_for_server(server: Server):
+    # Step 2: Concurrently create new keys for each server (pure async network operations)
+    async def _create_for_server(server: Server) -> list:
+        keys_to_add = []
         key_id = generate_id()
         if not server.country_code:
             try:
@@ -102,7 +103,7 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                     uuid=None,
                     last_seen_bytes=0
                 )
-                db.add(client_key)
+                keys_to_add.append(client_key)
         
         elif server.type in ["hysteria2", "hysteria2_python"]:
             rand_str = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
@@ -140,7 +141,7 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                     uuid=None,
                     last_seen_bytes=0
                 )
-                db.add(client_key)
+                keys_to_add.append(client_key)
             else:
                 logger.error(f"Hysteria2: Failed to add client {client.name} to server {server.name}")
         
@@ -173,10 +174,21 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                         uuid=client_uuid,
                         last_seen_bytes=0
                     )
-                    db.add(client_key)
+                    keys_to_add.append(client_key)
+                    
+        return keys_to_add
 
-    tasks = [_create_for_server(s) for s in servers]
-    await asyncio.gather(*tasks, return_exceptions=True)
+    # Execute network calls concurrently
+    results = await asyncio.gather(*[_create_for_server(s) for s in servers], return_exceptions=True)
+    
+    # Sequentially add all created keys to the DB session on the main thread
+    for res in results:
+        if isinstance(res, list):
+            for client_key in res:
+                db.add(client_key)
+        elif isinstance(res, Exception):
+            logger.error(f"Error in _create_for_server: {res}")
+
     db.commit()
 
 async def delete_client_keys(client: Client, db: Session):
