@@ -50,6 +50,7 @@ async def security_and_auth_middleware(request: Request, call_next):
         "/api/auth/login", "/api/auth/logout"
     ]
     is_public = any(path.startswith(p) for p in public_paths)
+    is_api_request = path.startswith("/api/")
     
     if is_public:
         response = await call_next(request)
@@ -66,6 +67,8 @@ async def security_and_auth_middleware(request: Request, call_next):
             if path == f"/{ADMIN_SECRET_PATH}":
                 response = await call_next(request)
                 return response
+            if is_api_request:
+                return JSONResponse(status_code=401, content={"ok": False, "detail": "Authentication required"})
             return RedirectResponse(url=f"/{ADMIN_SECRET_PATH}", status_code=302)
     
     from app.routers.auth import is_valid_session
@@ -73,6 +76,8 @@ async def security_and_auth_middleware(request: Request, call_next):
     if not is_valid_session(admin_auth):
         if ADMIN_SECRET_PATH and path == f"/{ADMIN_SECRET_PATH}":
             return await call_next(request)
+        if is_api_request:
+            return JSONResponse(status_code=401, content={"ok": False, "detail": "Authentication required"})
         return RedirectResponse(url="/login", status_code=302)
     
     if path == "/login" and is_valid_session(admin_auth):

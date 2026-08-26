@@ -444,11 +444,21 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ client_ids: [] })
                 });
+                const contentType = resp.headers.get('content-type') || '';
                 let data;
+                if (!contentType.includes('application/json')) {
+                    if (resp.redirected || resp.url.includes('/login')) {
+                        showError('Admin session expired. Please log in again.');
+                        window.setTimeout(() => { window.location.href = '/login'; }, 800);
+                    } else {
+                        showError(`Server Error (${resp.status}): The server returned a non-JSON response.`);
+                    }
+                    return;
+                }
                 try {
                     data = await resp.json();
                 } catch(e) {
-                    showError(`Server Error (${resp.status}): Unexpected response format.`);
+                    showError(`Server Error (${resp.status}): Invalid JSON response.`);
                     return;
                 }
                 if (resp.ok && data.ok) {
