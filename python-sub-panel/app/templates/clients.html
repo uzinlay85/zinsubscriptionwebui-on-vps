@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body class="bg-slate-950 text-white min-h-screen">
+<body class="text-white min-h-screen">
     <!-- Mobile Top Header -->
     <header class="md:hidden flex items-center justify-between p-4 bg-slate-900 border-b border-white/5 sticky top-0 z-40">
         <h1 class="text-lg font-bold text-white tracking-wide">{{ app_name }}</h1>
@@ -82,23 +82,23 @@
             </div>
         </aside>
         
-        <main class="flex-1 p-4 sm:p-6 md:p-8 max-w-full overflow-x-hidden">
+        <main class="flex-1 p-4 sm:p-6 lg:p-8 xl:p-10 max-w-full overflow-x-hidden">
             <div class="space-y-6">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h1 class="text-2xl sm:text-3xl font-bold text-white">Clients</h1>
-                        <p class="text-zinc-400 text-sm mt-1">Manage your VPN clients</p>
+                        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">Clients</h1>
+                        <p class="text-slate-400 text-sm mt-1">Manage plans, usage, expiry, and subscription access in one place.</p>
                     </div>
                     <button onclick="openModal()" class="w-full sm:w-auto px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
                         <span>+ Add Client</span>
                     </button>
                 </div>
 
-                <div id="error" class="hidden text-red-400 text-sm"></div>
-                <div id="success" class="hidden text-emerald-400 text-sm"></div>
+                <div id="error" class="hidden notice notice-error"></div>
+                <div id="success" class="hidden notice notice-success"></div>
 
-                <div class="glass-card rounded-2xl border border-white/5 overflow-x-auto">
-                    <table class="w-full text-left min-w-[700px]">
+                <div class="glass-card table-panel">
+                    <table class="data-table text-left">
                         <thead>
                             <tr class="border-b border-white/5 text-xs uppercase tracking-wider text-zinc-400 font-semibold">
                                 <th class="p-4">Client Name</th>
@@ -287,8 +287,8 @@
                 }
 
                 return `
-                    <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-                        <td class="p-4">
+                    <tr>
+                        <td data-label="Client" class="table-primary">
                             <div class="font-bold text-white text-base flex items-center gap-2 flex-wrap">
                                 <span>${escapeHtml(c.name)}</span>
                                 ${c.plan_price ? `<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">${escapeHtml(c.plan_price)}</span>` : ''}
@@ -298,29 +298,31 @@
                                 ${c.notes ? `<span class="text-zinc-400 bg-white/5 px-1.5 py-0.5 rounded text-[11px]" title="${escapeHtml(c.notes)}">📝 ${escapeHtml(c.notes.length > 25 ? c.notes.substring(0, 25) + '...' : c.notes)}</span>` : ''}
                             </div>
                         </td>
-                        <td class="p-4">
+                        <td data-label="Status">
                             ${statusBadge}
                         </td>
-                        <td class="p-4">
+                        <td data-label="Remaining">
                             ${leftTimeBadge}
                         </td>
-                        <td class="p-4">
+                        <td data-label="Usage">
                             <div class="text-sm font-medium text-white">${usageGB} GB <span class="text-xs text-zinc-400">/ ${limitGB}</span></div>
                             ${c.data_limit_gb ? `
-                            <div class="w-32 bg-white/10 h-1.5 rounded-full overflow-hidden mt-1.5">
+                            <div class="w-32 max-w-full bg-white/10 h-1.5 rounded-full overflow-hidden mt-1.5">
                                 <div class="${progressColor} h-full transition-all duration-300" style="width: ${usagePercent}%"></div>
                             </div>
                             <div class="text-[10px] text-zinc-400 mt-0.5">${usagePercent}% used</div>
                             ` : ''}
                         </td>
-                        <td class="p-4 text-right space-x-1 whitespace-nowrap">
-                            <button onclick="quickRenewClient('${c.id}', '${escapeHtml(c.name)}', 30, this)" title="Extend +30 Days & Reset Quota" class="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded-lg text-xs font-semibold transition-colors border border-emerald-500/30">⚡ +30d</button>
-                            <button onclick="resetClientUsage('${c.id}', '${escapeHtml(c.name)}', this)" title="Reset Data Usage to 0 GB and Unblock" class="px-2.5 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded-lg text-xs font-semibold transition-colors border border-amber-500/30">🔄 0 GB</button>
-                            <a href="/my/${c.sub_token}" target="_blank" class="inline-block px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-white/10">🌐 Portal</a>
-                            <button onclick="copySubLink('${c.sub_token}')" class="px-2.5 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-xs font-semibold transition-colors border border-blue-500/20">📋 Sub</button>
-                            <button onclick="viewKeys('${c.id}')" class="px-2.5 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg text-xs font-semibold transition-colors border border-purple-500/20">🔑 Keys</button>
-                            <button onclick="editClient('${c.id}')" class="px-2 py-1.5 text-zinc-400 hover:text-white text-xs font-medium">Edit</button>
-                            <button onclick="deleteClient('${c.id}', this)" class="px-2 py-1.5 text-red-400 hover:text-red-300 text-xs font-medium">Delete</button>
+                        <td data-label="Actions" class="table-actions">
+                            <div class="server-action-grid">
+                                <button onclick="quickRenewClient('${c.id}', '${escapeHtml(c.name)}', 30, this)" title="Extend +30 Days & Reset Quota" class="server-action server-action-sync">+30 days</button>
+                                <button onclick="resetClientUsage('${c.id}', '${escapeHtml(c.name)}', this)" title="Reset Data Usage to 0 GB and Unblock" class="server-action server-action-clear">Reset usage</button>
+                                <a href="/my/${c.sub_token}" target="_blank" class="server-action server-action-edit text-center">Portal</a>
+                                <button onclick="copySubLink('${c.sub_token}')" class="server-action server-action-edit">Copy link</button>
+                                <button onclick="viewKeys('${c.id}')" class="server-action server-action-rebuild">Keys</button>
+                                <button onclick="editClient('${c.id}')" class="server-action server-action-edit">Edit</button>
+                                <button onclick="deleteClient('${c.id}', this)" class="server-action server-action-danger">Delete</button>
+                            </div>
                         </td>
                     </tr>
                 `;

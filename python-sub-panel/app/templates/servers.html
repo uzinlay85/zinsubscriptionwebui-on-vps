@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body class="bg-slate-950 text-white min-h-screen">
+<body class="text-white min-h-screen">
     <!-- Mobile Top Header -->
     <header class="md:hidden flex items-center justify-between p-4 bg-slate-900 border-b border-white/5 sticky top-0 z-40">
         <h1 class="text-lg font-bold text-white tracking-wide">{{ app_name }}</h1>
@@ -82,12 +82,12 @@
             </div>
         </aside>
         
-        <main class="flex-1 p-4 sm:p-6 md:p-8 max-w-full overflow-x-hidden">
+        <main class="flex-1 p-4 sm:p-6 lg:p-8 xl:p-10 max-w-full overflow-x-hidden">
             <div class="space-y-6">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h1 class="text-2xl sm:text-3xl font-bold text-white">Servers</h1>
-                        <p class="text-zinc-400 text-sm mt-1">Manage your VPN servers</p>
+                        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">Servers</h1>
+                        <p class="text-slate-400 text-sm mt-1">Monitor capacity, manage access, and keep every VPN node in sync.</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-3">
                         <button onclick="syncAllMissingKeys()" id="btnSyncAll" class="w-full sm:w-auto px-4 py-3 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
@@ -100,11 +100,11 @@
                     </div>
                 </div>
 
-                <div id="error" class="hidden text-red-400 text-sm"></div>
-                <div id="success" class="hidden text-emerald-400 text-sm"></div>
+                <div id="error" class="hidden notice notice-error"></div>
+                <div id="success" class="hidden notice notice-success"></div>
 
-                <div class="glass-card rounded-2xl border border-white/5 overflow-x-auto">
-                    <table class="w-full text-left min-w-[600px]">
+                <div class="glass-card table-panel">
+                    <table class="data-table text-left">
                         <thead>
                             <tr class="border-b border-white/5">
                                 <th class="p-4 text-zinc-400 font-medium">Name</th>
@@ -286,8 +286,8 @@
             }
 
             tbody.innerHTML = servers.map(s => `
-                <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td class="p-4">
+                <tr>
+                    <td data-label="Server" class="table-primary">
                         <div class="font-medium text-white flex items-center gap-2.5">
                             <span class="text-2xl select-none" title="${escapeHtml(s.country_name || 'Global')}">${s.flag_emoji || '🌐'}</span>
                             <div>
@@ -302,11 +302,11 @@
                             </div>
                         </div>
                     </td>
-                    <td class="p-4">
-                        <span class="px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(s.type)}">${s.type}</span>
+                    <td data-label="Type">
+                        <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${getTypeColor(s.type)}">${s.type}</span>
                     </td>
-                    <td class="p-4 text-zinc-400 text-sm">${escapeHtml(s.api_url)}</td>
-                    <td class="p-4">
+                    <td data-label="API URL"><span class="server-url" title="${escapeHtml(s.api_url)}">${escapeHtml(s.api_url)}</span></td>
+                    <td data-label="Status">
                         <div class="flex items-center gap-2 flex-wrap">
                             <span id="status-${s.id}" class="text-zinc-400 text-sm">Unknown</span>
                             <button onclick="toggleServerActive('${s.id}')" title="Click to toggle Active / Maintenance mode" class="px-2 py-0.5 rounded-full text-xs font-semibold cursor-pointer transition-colors ${s.is_active !== false ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30' : 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/30 border border-amber-500/30'}">
@@ -314,12 +314,14 @@
                             </button>
                         </div>
                     </td>
-                    <td class="p-4 text-right">
-                        <button onclick="syncServerKeys('${s.id}', '${escapeHtml(s.name)}', this)" class="text-emerald-400 hover:text-emerald-300 mr-3 text-sm font-medium">🔄 Sync Keys</button>
-                        <button onclick="rebuildServerKeys('${s.id}', '${escapeHtml(s.name)}', this)" class="text-purple-400 hover:text-purple-300 mr-3 text-sm font-medium">♻️ Rebuild Keys</button>
-                        <button onclick="deleteAllServerKeys('${s.id}', '${escapeHtml(s.name)}', this)" class="text-orange-400 hover:text-orange-300 mr-3 text-sm font-medium">🗑️ Delete Keys</button>
-                        <button onclick="editServer('${s.id}')" class="text-blue-400 hover:text-blue-300 mr-3 text-sm">Edit</button>
-                        <button onclick="deleteServer('${s.id}')" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
+                    <td data-label="Actions" class="table-actions">
+                        <div class="server-action-grid">
+                            <button onclick="syncServerKeys('${s.id}', '${escapeHtml(s.name)}', this)" class="server-action server-action-sync">Sync</button>
+                            <button onclick="rebuildServerKeys('${s.id}', '${escapeHtml(s.name)}', this)" class="server-action server-action-rebuild">Rebuild</button>
+                            <button onclick="deleteAllServerKeys('${s.id}', '${escapeHtml(s.name)}', this)" class="server-action server-action-clear">Clear keys</button>
+                            <button onclick="editServer('${s.id}')" class="server-action server-action-edit">Edit</button>
+                            <button onclick="deleteServer('${s.id}')" class="server-action server-action-danger">Delete</button>
+                        </div>
                     </td>
                 </tr>
             `).join('');
