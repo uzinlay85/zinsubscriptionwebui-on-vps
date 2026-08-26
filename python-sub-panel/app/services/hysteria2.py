@@ -130,37 +130,41 @@ async def flask_login(server: Server) -> Optional[Dict[str, Any]]:
                 csrf_token = csrf_match.group(1)
                 
                 passwords_to_try = []
-                if server.password: passwords_to_try.append(server.password)
                 if server.auth_password and server.auth_password not in passwords_to_try: passwords_to_try.append(server.auth_password)
+                if server.password and server.password not in passwords_to_try: passwords_to_try.append(server.password)
                 if "admin123" not in passwords_to_try: passwords_to_try.append("admin123")
                 if "admin" not in passwords_to_try: passwords_to_try.append("admin")
                 
                 for pass_attempt in passwords_to_try:
-                    async with session.post(
-                        f"{base_url}/login",
-                        data={
-                            "csrf_token": csrf_token,
-                            "admin_pass": pass_attempt,
-                            "password": pass_attempt
-                        },
-                        timeout=aiohttp.ClientTimeout(total=5),
-                        ssl=False,
-                        allow_redirects=False
-                    ) as login_resp:
-                        # 302 redirect after login or 200 with cookies indicates successful authentication
-                        if login_resp.status in [200, 302]:
-                            fresh_csrf = csrf_token
-                            res_html = await login_resp.text()
-                            csrf_match2 = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', res_html) or \
-                                          re.search(r'csrf_token.*?value=["\']([^"\']+)["\']', res_html) or \
-                                          re.search(r'value=["\']([a-f0-9]{32,64})["\']', res_html)
-                            if csrf_match2:
-                                fresh_csrf = csrf_match2.group(1)
-                            return {
-                                "cookie": session.cookie_jar,
-                                "csrf_token": fresh_csrf,
-                                "working_base_url": base_url
-                            }
+                    try:
+                        async with session.post(
+                            f"{base_url}/login",
+                            data={
+                                "csrf_token": csrf_token,
+                                "admin_pass": pass_attempt,
+                                "password": pass_attempt
+                            },
+                            timeout=aiohttp.ClientTimeout(total=5),
+                            ssl=False,
+                            allow_redirects=True
+                        ) as login_resp:
+                            if login_resp.status == 200:
+                                res_html = await login_resp.text()
+                                is_login_page = ('action="/login"' in res_html or 'name="admin_pass"' in res_html or "name='admin_pass'" in res_html or "Invalid password" in res_html or "Incorrect password" in res_html)
+                                if not is_login_page:
+                                    fresh_csrf = csrf_token
+                                    csrf_match2 = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', res_html) or \
+                                                  re.search(r'csrf_token.*?value=["\']([^"\']+)["\']', res_html) or \
+                                                  re.search(r'value=["\']([a-f0-9]{32,64})["\']', res_html)
+                                    if csrf_match2:
+                                        fresh_csrf = csrf_match2.group(1)
+                                    return {
+                                        "cookie": session.cookie_jar,
+                                        "csrf_token": fresh_csrf,
+                                        "working_base_url": base_url
+                                    }
+                    except Exception:
+                        continue
         except Exception:
             continue
     return None
