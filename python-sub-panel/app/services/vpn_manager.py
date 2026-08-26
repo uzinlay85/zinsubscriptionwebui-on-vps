@@ -79,36 +79,41 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
             rand_str = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
             password = f"{client.name}_{rand_str}"
             
+            added = False
             if server.type == "hysteria2":
                 result = await hysteria2.express_create_user(server, client.name, password)
                 if result and result.get("password"):
                     password = result.get("password")
+                    added = True
                 else:
-                    await hysteria2.flask_add_user(server, client.name, password)
+                    added = await hysteria2.flask_add_user(server, client.name, password)
             else:
-                await hysteria2.flask_add_user(server, client.name, password)
+                added = await hysteria2.flask_add_user(server, client.name, password)
             
-            raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
-            if ':' in raw_host_port:
-                parsed_host, parsed_port = raw_host_port.split(':')[0], raw_host_port.split(':')[1]
-            else:
-                parsed_host, parsed_port = raw_host_port, "10443"
+            if added:
+                raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
+                if ':' in raw_host_port:
+                    parsed_host, parsed_port = raw_host_port.split(':')[0], raw_host_port.split(':')[1]
+                else:
+                    parsed_host, parsed_port = raw_host_port, "10443"
+                    
+                host = server.external_domain or parsed_host
+                port = server.external_port or int(parsed_port)
+                access_url = f"hy2://{password}@{host}:{port}/?security=tls&sni={host}#{flag} {server.name} - {client.name}"
                 
-            host = server.external_domain or parsed_host
-            port = server.external_port or int(parsed_port)
-            access_url = f"hy2://{password}@{host}:{port}/?security=tls&sni={host}#{flag} {server.name} - {client.name}"
-            
-            client_key = ClientKey(
-                id=key_id,
-                client_id=client.id,
-                server_id=server.id,
-                outline_key_id=password,
-                access_url=access_url,
-                created_at=now,
-                uuid=None,
-                last_seen_bytes=0
-            )
-            db.add(client_key)
+                client_key = ClientKey(
+                    id=key_id,
+                    client_id=client.id,
+                    server_id=server.id,
+                    outline_key_id=password,
+                    access_url=access_url,
+                    created_at=now,
+                    uuid=None,
+                    last_seen_bytes=0
+                )
+                db.add(client_key)
+            else:
+                logger.error(f"Hysteria2: Failed to add client {client.name} to server {server.name}")
         
         elif server.type == "3x-ui":
             client_uuid = generate_uuid()
@@ -367,8 +372,6 @@ async def sync_all_usage(db: Session):
                     user_metric = metrics.get(k.outline_key_id)
                 elif k.uuid and k.uuid in metrics:
                     user_metric = metrics.get(k.uuid)
-                elif client.name in metrics:
-                    user_metric = metrics.get(client.name)
                 
             if isinstance(user_metric, dict):
                 current_bytes = int(user_metric.get("bytes", 0) or 0)
