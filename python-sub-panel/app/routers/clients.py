@@ -453,16 +453,15 @@ async def sync_keys(client_id: str, force: bool = False, db: Session = Depends(g
         
     if invalid_keys:
         db.commit()
-        existing_keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
 
-    existing_server_ids = {k.server_id for k in existing_keys}
+    # Regenerate keys for ALL servers (generate_keys_for_client handles old key cleanup)
     all_servers = db.query(Server).all()
-    missing_server_ids = [s.id for s in all_servers if s.id not in existing_server_ids]
+    all_server_ids = [s.id for s in all_servers]
     
-    if missing_server_ids:
-        await generate_keys_for_client(client, missing_server_ids, db)
+    if all_server_ids:
+        await generate_keys_for_client(client, all_server_ids, db)
     
-    return {"ok": True, "synced": len(missing_server_ids)}
+    return {"ok": True, "synced": len(all_server_ids)}
 
 @router.post("/{client_id}/keys/{server_id}/regenerate")
 async def regenerate_single_key(client_id: str, server_id: str, db: Session = Depends(get_db)):

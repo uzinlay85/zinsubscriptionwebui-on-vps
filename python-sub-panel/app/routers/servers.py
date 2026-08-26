@@ -331,9 +331,10 @@ async def sync_server_keys(server_id: str, request: Request, db: Session = Depen
     from app.services.vpn_manager import generate_keys_for_client
     
     if not client_ids:
-        existing_key_client_ids = {k.client_id for k in db.query(ClientKey).filter(ClientKey.server_id == server_id).all()}
+        # Regenerate keys for ALL active clients on this server
+        # generate_keys_for_client() handles cleanup of old keys before creating new ones
         active_clients = db.query(Client).filter(Client.status == "active").all()
-        target_clients = [c for c in active_clients if c.id not in existing_key_client_ids]
+        target_clients = active_clients
     else:
         target_clients = db.query(Client).filter(Client.id.in_(client_ids), Client.status == "active").all()
 
@@ -342,7 +343,7 @@ async def sync_server_keys(server_id: str, request: Request, db: Session = Depen
         await generate_keys_for_client(client, [server_id], db)
         synced += 1
     
-    return {"ok": True, "server_name": server.name, "synced": synced, "total_missing": len(target_clients)}
+    return {"ok": True, "server_name": server.name, "synced": synced, "total_clients": len(target_clients)}
 
 @router.delete("/{server_id}/keys")
 async def delete_all_server_keys(server_id: str, db: Session = Depends(get_db)):
