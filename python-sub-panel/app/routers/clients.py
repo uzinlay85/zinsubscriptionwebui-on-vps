@@ -419,49 +419,58 @@ async def reset_usage(client_id: str, db: Session = Depends(get_db)):
     
     return format_client_response(client)
 
+from fastapi.responses import JSONResponse
+
 @router.post("/{client_id}/sync-keys")
 async def sync_keys(client_id: str, force: bool = False, db: Session = Depends(get_db)):
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    
-    if client.status != "active":
-        raise HTTPException(status_code=400, detail="Client is not active")
-    
-    from app.services.vpn_manager import delete_client_keys, generate_keys_for_client
-    
-    if force:
-        await delete_client_keys(client, db)
+    try:
+        client = db.query(Client).filter(Client.id == client_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+        
+        if client.status != "active":
+            raise HTTPException(status_code=400, detail="Client is not active")
+        
+        from app.services.vpn_manager import delete_client_keys, generate_keys_for_client
+        
+        if force:
+            await delete_client_keys(client, db)
+            all_servers = db.query(Server).all()
+            all_server_ids = [s.id for s in all_servers]
+            if all_server_ids:
+                await generate_keys_for_client(client, all_server_ids, db)
+            return {"ok": True, "synced": len(all_server_ids)}
+        
+        existing_keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
+        invalid_keys = [k for k in existing_keys if not k.access_url or k.access_url.startswith("3x-ui-sub:") or "security=none" in k.access_url]
+        
+        for ik in invalid_keys:
+            server = db.query(Server).filter(Server.id == ik.server_id).first()
+            if server and server.type == "3x-ui" and ik.uuid:
+                try:
+                    from app.services.three_xui import delete_3xui_client
+                    await delete_3xui_client(server, ik.uuid)
+                except Exception:
+                    pass
+            db.delete(ik)
+            
+        if invalid_keys:
+            db.commit()
+
+        # Regenerate keys for ALL servers (generate_keys_for_client handles old key cleanup)
         all_servers = db.query(Server).all()
         all_server_ids = [s.id for s in all_servers]
+        
         if all_server_ids:
             await generate_keys_for_client(client, all_server_ids, db)
-        return {"ok": True, "synced": len(all_server_ids)}
-    
-    existing_keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
-    invalid_keys = [k for k in existing_keys if not k.access_url or k.access_url.startswith("3x-ui-sub:") or "security=none" in k.access_url]
-    
-    for ik in invalid_keys:
-        server = db.query(Server).filter(Server.id == ik.server_id).first()
-        if server and server.type == "3x-ui" and ik.uuid:
-            try:
-                from app.services.three_xui import delete_3xui_client
-                await delete_3xui_client(server, ik.uuid)
-            except Exception:
-                pass
-        db.delete(ik)
         
-    if invalid_keys:
-        db.commit()
-
-    # Regenerate keys for ALL servers (generate_keys_for_client handles old key cleanup)
-    all_servers = db.query(Server).all()
-    all_server_ids = [s.id for s in all_servers]
-    
-    if all_server_ids:
-        await generate_keys_for_client(client, all_server_ids, db)
-    
-    return {"ok": True, "synced": len(all_server_ids)}
+        return {"ok": True, "synced": len(all_server_ids)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception(f"Error in client sync_keys: {e}")
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Client Sync Error: {str(e)}"})
 
 @router.post("/{client_id}/keys/{server_id}/regenerate")
 async def regenerate_single_key(client_id: str, server_id: str, db: Session = Depends(get_db)):

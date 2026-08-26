@@ -442,7 +442,13 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ client_ids: [] })
                 });
-                const data = await resp.json();
+                let data;
+                try {
+                    data = await resp.json();
+                } catch(e) {
+                    showError(`Server Error (${resp.status}): Unexpected response format.`);
+                    return;
+                }
                 if (resp.ok && data.ok) {
                     if (data.warning) {
                         showError(data.warning);

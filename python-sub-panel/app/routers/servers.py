@@ -323,6 +323,8 @@ async def sync_all_servers_keys(db: Session = Depends(get_db)):
             
     return {"ok": True, "synced_keys": total_synced_keys, "clients_count": clients_synced}
 
+from fastapi.responses import JSONResponse
+
 async def diagnose_server_failure(server: Server) -> str:
     api_url = (server.api_url or "").rstrip("/")
     if not api_url:
@@ -387,42 +389,52 @@ async def diagnose_server_failure(server: Server) -> str:
 
 @router.post("/{server_id}/sync-keys")
 async def sync_server_keys(server_id: str, request: Request, db: Session = Depends(get_db)):
-    server = db.query(Server).filter(Server.id == server_id).first()
-    if not server:
-        raise HTTPException(status_code=404, detail="Server not found")
-    
-    client_ids = []
     try:
-        body = await request.json()
-        client_ids = body.get("client_ids", [])
-    except Exception:
+        server = db.query(Server).filter(Server.id == server_id).first()
+        if not server:
+            raise HTTPException(status_code=404, detail="Server not found")
+        
         client_ids = []
-    
-    from app.services.vpn_manager import generate_keys_for_client
-    
-    if not client_ids:
-        active_clients = db.query(Client).filter(Client.status == "active").all()
-        target_clients = active_clients
-    else:
-        target_clients = db.query(Client).filter(Client.id.in_(client_ids), Client.status == "active").all()
+        try:
+            body = await request.json()
+            client_ids = body.get("client_ids", [])
+        except Exception:
+            client_ids = []
+        
+        from app.services.vpn_manager import generate_keys_for_client
+        
+        if not client_ids:
+            active_clients = db.query(Client).filter(Client.status == "active").all()
+            target_clients = active_clients
+        else:
+            target_clients = db.query(Client).filter(Client.id.in_(client_ids), Client.status == "active").all()
 
-    keys_before = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
-    for client in target_clients:
-        await generate_keys_for_client(client, [server_id], db)
-    keys_after = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
+        keys_before = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
+        for client in target_clients:
+            await generate_keys_for_client(client, [server_id], db)
+        keys_after = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
 
-    warning_msg = None
-    if len(target_clients) > 0 and keys_after == 0:
-        warning_msg = await diagnose_server_failure(server)
-    
-    return {
-        "ok": True,
-        "server_name": server.name,
-        "synced": len(target_clients),
-        "created_keys": keys_after,
-        "total_clients": len(target_clients),
-        "warning": warning_msg
-    }
+        warning_msg = None
+        if len(target_clients) > 0 and keys_after == 0:
+            try:
+                warning_msg = await diagnose_server_failure(server)
+            except Exception as diag_err:
+                warning_msg = f"Failed to generate keys for server '{server.name}': {diag_err}"
+        
+        return {
+            "ok": True,
+            "server_name": server.name,
+            "synced": len(target_clients),
+            "created_keys": keys_after,
+            "total_clients": len(target_clients),
+            "warning": warning_msg
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception(f"Error in sync_server_keys: {e}")
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Server Error: {str(e)}"})
 
 @router.delete("/{server_id}/keys")
 async def delete_all_server_keys(server_id: str, db: Session = Depends(get_db)):
