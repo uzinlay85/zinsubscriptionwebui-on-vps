@@ -271,15 +271,22 @@ async def delete_server_keys(server: Server, db: Session):
                 await outline.delete_key(server, k.outline_key_id)
             except Exception:
                 pass
-        elif server.type in ["hysteria2", "hysteria2_python"] and k.outline_key_id and k.outline_key_id not in deleted_key_ids:
-            deleted_key_ids.add(k.outline_key_id)
-            try:
-                if server.type == "hysteria2":
-                    await hysteria2.express_delete_user(server, k.outline_key_id)
-                else:
-                    await hysteria2.flask_delete_user(server, k.outline_key_id)
-            except Exception:
-                pass
+        elif server.type in ["hysteria2", "hysteria2_python"] and (k.remote_id or k.outline_key_id):
+            remote_id = k.remote_id or k.outline_key_id
+            delete_key = (server.id, str(remote_id))
+            if delete_key not in deleted_key_ids:
+                deleted_key_ids.add(delete_key)
+                try:
+                    if server.type == "hysteria2":
+                        deleted = await hysteria2.express_delete_user(server, str(remote_id))
+                        if not deleted and k.outline_key_id and str(k.outline_key_id) != str(remote_id):
+                            deleted = await hysteria2.express_delete_user(server, str(k.outline_key_id))
+                        if not deleted:
+                            await hysteria2.flask_delete_user(server, k.remote_username or k.outline_key_id)
+                    else:
+                        await hysteria2.flask_delete_user(server, k.remote_username or k.outline_key_id)
+                except Exception as e:
+                    logger.error(f"Hysteria2 server delete failed for {server.name}: {e}")
         elif server.type == "3x-ui" and k.uuid and k.uuid not in deleted_uuids:
             deleted_uuids.add(k.uuid)
             try:
