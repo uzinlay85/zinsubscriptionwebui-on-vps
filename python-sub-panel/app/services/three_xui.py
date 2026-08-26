@@ -512,10 +512,12 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                 security = stream.get("security", "none")
 
                 # Build client data payload (tgId MUST BE integer 0, NOT empty string "")
+                # Use unique email per inbound to avoid 3x-ui "Duplicate email" rejection
+                client_email = f"{client.name}_{ib_id_int}" if len(target_inbounds) > 1 else client.name
                 c_data = {
                     "id": client_uuid,
                     "password": client_uuid,  # For Trojan / Shadowsocks
-                    "email": client.name,
+                    "email": client_email,
                     "limitIp": 0,
                     "totalGB": int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0,
                     "expiryTime": 0,
@@ -555,6 +557,10 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                                     added = True
                                     logger.info(f"3x-ui: Client added to inbound {ib_id_int} on {server.name}")
                                     break
+                                else:
+                                    logger.warning(f"3x-ui addClient inbound {ib_id_int} rejected: {res.get('msg', resp_text[:200])}")
+                            else:
+                                logger.warning(f"3x-ui addClient inbound {ib_id_int} HTTP {add_resp.status}: {resp_text[:200]}")
                     except Exception as e:
                         logger.debug(f"3x-ui addClient inbound {ib_id_int} error: {e}")
 
@@ -580,6 +586,10 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                                         added = True
                                         logger.info(f"3x-ui: Client added via /{ib_id_int}/addClient on {server.name}")
                                         break
+                                    else:
+                                        logger.warning(f"3x-ui /{ib_id_int}/addClient rejected: {res2.get('msg', resp_text2[:200])}")
+                                else:
+                                    logger.warning(f"3x-ui /{ib_id_int}/addClient HTTP {add_resp2.status}: {resp_text2[:200]}")
                         except Exception as e:
                             logger.debug(f"3x-ui /{ib_id_int}/addClient error: {e}")
                         if added:
@@ -607,7 +617,7 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                                         inb_settings = {}
 
                                     existing_clients = inb_settings.get("clients", [])
-                                    existing_clients = [cl for cl in existing_clients if cl.get("email") != client.name and cl.get("id") != client_uuid]
+                                    existing_clients = [cl for cl in existing_clients if cl.get("email") != client.name and cl.get("email") != client_email and cl.get("id") != client_uuid]
                                     existing_clients.append(c_data)
                                     inb_settings["clients"] = existing_clients
                                     inb_obj["settings"] = json.dumps(inb_settings)
