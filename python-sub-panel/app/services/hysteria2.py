@@ -193,31 +193,38 @@ async def flask_add_user(server: Server, username: str, password: str, limit_gb:
                     if csrf_match:
                         fresh_csrf = csrf_match.group(1)
             
-            # Step 2: POST /add with the session cookie and fresh CSRF token
-            async with session.post(
-                f"{base_url}/add",
-                data={
-                    "csrf_token": fresh_csrf,
-                    "user_name": username,
-                    "name": username,
-                    "user_pass": password,
-                    "password": password,
-                    "limit_gb": str(limit_gb),
-                    "days": str(days)
-                },
-                timeout=aiohttp.ClientTimeout(total=10),
-                ssl=False,
-                allow_redirects=True
-            ) as resp:
-                text = await resp.text()
-                # Verify that the new password or username actually appears in the resulting HTML
-                if resp.status in [200, 302] and (password in text or username in text or "success" in text.lower()):
-                    return True
-                else:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"Hysteria2 flask_add_user failed for {username}. HTTP {resp.status}. Response snippet: {text[:200]}")
-                    return False
+            # Step 2: Try POST endpoints (/add, /add_user, /user/add) with session cookie and fresh CSRF token
+            headers = {"X-CSRFToken": fresh_csrf, "X-CSRF-Token": fresh_csrf}
+            payload = {
+                "csrf_token": fresh_csrf,
+                "user_name": username,
+                "name": username,
+                "user_pass": password,
+                "password": password,
+                "limit_gb": str(limit_gb),
+                "days": str(days)
+            }
+
+            for endpoint in ["/add", "/add_user", "/user/add"]:
+                try:
+                    async with session.post(
+                        f"{base_url}{endpoint}",
+                        data=payload,
+                        headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                        ssl=False,
+                        allow_redirects=True
+                    ) as resp:
+                        text = await resp.text()
+                        if resp.status in [200, 302] and (password in text or username in text or "success" in text.lower()):
+                            return True
+                except Exception:
+                    continue
+
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Hysteria2 flask_add_user failed for {username} across all endpoints.")
+            return False
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
