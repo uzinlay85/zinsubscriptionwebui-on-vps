@@ -461,6 +461,11 @@
                     showError(`Server Error (${resp.status}): Invalid JSON response.`);
                     return;
                 }
+                if (resp.status === 401 || data.detail === 'Authentication required') {
+                    showError('Admin session expired. Please log in again.');
+                    window.setTimeout(() => { window.location.href = '/login'; }, 800);
+                    return;
+                }
                 if (resp.ok && data.ok) {
                     if (data.warning) {
                         showError(data.warning);
