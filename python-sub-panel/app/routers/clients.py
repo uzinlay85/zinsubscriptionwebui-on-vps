@@ -7,7 +7,7 @@ from typing import List, Optional
 import uuid
 import random
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 import aiohttp
 
@@ -24,130 +24,37 @@ def generate_password():
 
 @router.get("/usage", response_model=UsageMetricsResponse)
 async def get_usage(request: Request, db: Session = Depends(get_db)):
-    clients = db.query(Client).filter(Client.status == "active").all()
     servers = db.query(Server).all()
-    
-    metrics_map = {}
-    
-    async def fetch_outline_metrics(server, keys):
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{server.api_url}/metrics/transfer",
-                    timeout=aiohttp.ClientTimeout(total=5),
-                    ssl=False
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return data.get("bytesTransferredByUserId", {})
-        except Exception:
-            pass
-        return {}
-    
-    async def fetch_3xui_metrics(server, keys):
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{server.api_url}/",
-                    timeout=aiohttp.ClientTimeout(total=5),
-                    ssl=False
-                ) as resp:
-                    if resp.status != 200:
-                        return {}
-                    html = await resp.text()
-                    import re
-                    csrf_match = re.search(r'csrfToken.*?"([^"]+)"', html)
-                    if not csrf_match:
-                        return {}
-                    csrf_token = csrf_match.group(1)
-                    
-                    async with session.post(
-                        f"{server.api_url}/login",
-                        data={"username": server.username, "password": server.password},
-                        timeout=aiohttp.ClientTimeout(total=5),
-                        ssl=False
-                    ) as login_resp:
-                        if login_resp.status != 200:
-                            return {}
-                
-                async with session.get(
-                    f"{server.api_url}/panel/api/inbounds/clientTraffics",
-                    timeout=aiohttp.ClientTimeout(total=5),
-                    ssl=False
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("success"):
-                            traffics = {}
-                            for item in data.get("obj", []):
-                                email = item.get("email", "")
-                                up = item.get("up", 0) or 0
-                                down = item.get("down", 0) or 0
-                                traffics[email] = up + down
-                            return traffics
-        except Exception:
-            pass
-        return {}
-    
-    async def fetch_hysteria2_metrics(server, keys):
-        try:
-            auth = None
-            if server.auth_username and server.auth_password:
-                import base64
-                token = base64.b64encode(f"{server.auth_username}:{server.auth_password}".encode()).decode()
-                auth = {"Authorization": f"Basic {token}"}
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{server.api_url}/api/users",
-                    headers=auth,
-                    timeout=aiohttp.ClientTimeout(total=5),
-                    ssl=False
-                ) as resp:
-                    if resp.status == 200:
-                        users = await resp.json()
-                        metrics = {}
-                        for user in users:
-                            username = user.get("username", "")
-                            tx = user.get("tx", 0) or 0
-                            rx = user.get("rx", 0) or 0
-                            metrics[username] = tx + rx
-                        return metrics
-        except Exception:
-            pass
-        return {}
-    
     server_keys = {}
     for key in db.query(ClientKey).all():
         if key.server_id not in server_keys:
             server_keys[key.server_id] = []
         server_keys[key.server_id].append(key)
     
-    tasks = []
+    from app.services.vpn_manager import fetch_server_metrics_single
     server_map = {s.id: s for s in servers}
+    tasks = []
+    task_server_ids = []
     
     for server_id, keys in server_keys.items():
         server = server_map.get(server_id)
-        if not server:
-            continue
-        
-        if server.type == "outline":
-            tasks.append(fetch_outline_metrics(server, keys))
-        elif server.type in ["3x-ui"]:
-            tasks.append(fetch_3xui_metrics(server, keys))
-        elif server.type in ["hysteria2", "hysteria2_python"]:
-            tasks.append(fetch_hysteria2_metrics(server, keys))
+        if server:
+            tasks.append(fetch_server_metrics_single(server, keys))
+            task_server_ids.append(server_id)
     
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    
-    for server_id, result in zip(server_keys.keys(), results):
-        if isinstance(result, dict):
-            metrics_map[server_id] = result
-    
+    metrics_map = {}
+    for s_id, res in zip(task_server_ids, results):
+        if isinstance(res, dict):
+            # Ensure values are ints or dicts matching schema
+            metrics_map[s_id] = res
+        else:
+            metrics_map[s_id] = {}
+            
     return {"metricsMap": metrics_map}
 
 def format_client_response(c: Client) -> dict:
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     
     # 1. Calculate remaining time
     remaining_time = "Unlimited"
@@ -201,16 +108,14 @@ def format_client_response(c: Client) -> dict:
         "last_seen": last_seen_val,
         "is_online": is_online,
         "remaining_time": remaining_time,
-        "notes": getattr(c, 'notes', None),
-        "contact": getattr(c, 'contact', None),
-        "plan_price": getattr(c, 'plan_price', None)
+        "notes": c.notes,
+        "contact": c.contact,
+        "plan_price": c.plan_price
     }
 
 @router.get("", response_model=List[ClientResponse])
 @router.get("/", response_model=List[ClientResponse])
 async def list_clients(db: Session = Depends(get_db)):
-    # NOTE: Usage sync runs on a background cron every 5min via main.py scheduler
-    # Do NOT call sync_all_usage here - it causes page to hang waiting on VPN servers
     clients = db.query(Client).order_by(Client.created_at.desc()).all()
     return [format_client_response(c) for c in clients]
 
@@ -219,34 +124,39 @@ async def get_client(client_id: str, db: Session = Depends(get_db)):
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    
+        
     keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
-    server_map = {s.id: s for s in db.query(Server).all()}
+    resp = format_client_response(client)
+    
+    server_ids = [k.server_id for k in keys]
+    servers = {s.id: s for s in db.query(Server).filter(Server.id.in_(server_ids)).all()} if server_ids else {}
     
     key_responses = []
-    from app.services.geo import get_flag_emoji
     for k in keys:
-        server = server_map.get(k.server_id)
-        flg = get_flag_emoji(getattr(server, "country_code", None)) if server else "🌐"
+        server = servers.get(k.server_id)
+        sname = server.name if server else "Unknown Server"
+        cc = server.country_code if server else None
+        cname = server.country_name if server else None
+        
+        from app.services.geo import get_flag_emoji
+        flag = get_flag_emoji(cc)
+        
         key_responses.append({
             "id": k.id,
+            "client_id": k.client_id,
             "server_id": k.server_id,
+            "server_name": sname,
             "outline_key_id": k.outline_key_id,
             "access_url": k.access_url,
             "created_at": k.created_at,
-            "uuid": k.uuid,
-            "last_seen_bytes": k.last_seen_bytes,
-            "server_name": server.name if server else None,
-            "server_type": server.type if server else None,
-            "is_online": getattr(k, "is_online", False) or False,
-            "last_seen": getattr(k, "last_seen", None),
-            "flag_emoji": flg,
-            "country_name": getattr(server, "country_name", None) if server else None
+            "is_online": getattr(k, 'is_online', False),
+            "last_seen": getattr(k, 'last_seen', None),
+            "flag_emoji": flag,
+            "country_name": cname
         })
-    
-    res = format_client_response(client)
-    res["keys"] = key_responses
-    return res
+        
+    resp["keys"] = key_responses
+    return resp
 
 @router.post("", response_model=ClientResponse)
 @router.post("/", response_model=ClientResponse)
@@ -254,7 +164,7 @@ async def create_client(client_req: ClientCreate, db: Session = Depends(get_db))
     client_id = generate_id()
     sub_token = generate_sub_token()
     
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     
     client = Client(
         id=client_id,
@@ -270,8 +180,12 @@ async def create_client(client_req: ClientCreate, db: Session = Depends(get_db))
         plan_price=client_req.plan_price
     )
     db.add(client)
-    db.commit()
-    db.refresh(client)
+    try:
+        db.commit()
+        db.refresh(client)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create client: {e}")
     
     target_server_ids = client_req.server_ids
     if not target_server_ids:
@@ -324,8 +238,12 @@ async def update_client(client_id: str, client_req: ClientUpdate, db: Session = 
             if k.access_url and f" - {old_name}" in k.access_url:
                 k.access_url = k.access_url.replace(f" - {old_name}", f" - {client.name}")
     
-    db.commit()
-    db.refresh(client)
+    try:
+        db.commit()
+        db.refresh(client)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update client: {e}")
     
     # Invalidate sub cache so changes reflect instantly
     from app.routers.sub import invalidate_sub_cache
@@ -339,7 +257,7 @@ async def quick_renew_client(client_id: str, renew_req: Optional[QuickRenewReque
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
         
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     req = renew_req or QuickRenewRequest()
     days = req.days if req.days is not None else 30
     
@@ -474,42 +392,23 @@ async def sync_keys(client_id: str, force: bool = False, db: Session = Depends(g
 
 @router.post("/{client_id}/keys/{server_id}/regenerate")
 async def regenerate_single_key(client_id: str, server_id: str, db: Session = Depends(get_db)):
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
+    try:
+        client = db.query(Client).filter(Client.id == client_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+            
+        server = db.query(Server).filter(Server.id == server_id).first()
+        if not server:
+            raise HTTPException(status_code=404, detail="Server not found")
+            
+        from app.services.vpn_manager import generate_keys_for_client
+        await generate_keys_for_client(client, [server_id], db)
         
-    server = db.query(Server).filter(Server.id == server_id).first()
-    if not server:
-        raise HTTPException(status_code=404, detail="Server not found")
-        
-    existing_keys = db.query(ClientKey).filter(
-        ClientKey.client_id == client_id,
-        ClientKey.server_id == server_id
-    ).all()
-    
-    for existing_key in existing_keys:
-        if server.type == "outline":
-            from app.services import outline
-            await outline.delete_key(server, existing_key.outline_key_id)
-        elif server.type in ["hysteria2", "hysteria2_python"]:
-            from app.services import hysteria2
-            if server.type == "hysteria2":
-                del_res = await hysteria2.express_delete_user(server, existing_key.outline_key_id)
-                if not del_res:
-                    await hysteria2.flask_delete_user(server, existing_key.outline_key_id)
-            else:
-                await hysteria2.flask_delete_user(server, existing_key.outline_key_id)
-        elif server.type == "3x-ui":
-            if existing_key.uuid:
-                from app.services.three_xui import delete_3xui_client
-                await delete_3xui_client(server, existing_key.uuid)
-                
-        db.delete(existing_key)
-    
-    if existing_keys:
-        db.commit()
-        
-    from app.services.vpn_manager import generate_keys_for_client
-    await generate_keys_for_client(client, [server_id], db)
-    
-    return format_client_response(client)
+        return format_client_response(client)
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).exception(f"Error regenerating key: {e}")
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Regeneration Error: {str(e)}"})

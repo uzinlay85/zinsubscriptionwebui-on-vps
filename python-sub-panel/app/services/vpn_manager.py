@@ -8,8 +8,11 @@ import asyncio
 import aiohttp
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 def generate_id():
     return str(uuid.uuid4())
@@ -28,7 +31,7 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
     if not servers:
         return
         
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     from app.services.geo import detect_server_country, get_flag_emoji
 
     # Step 1: Sequentially delete pre-existing keys for the target servers (both remote and local DB)
@@ -48,8 +51,8 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                 try:
                     from app.services import outline
                     await outline.delete_key(server, ok.outline_key_id)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error deleting Outline key {ok.outline_key_id}: {e}")
             elif server.type in ["hysteria2", "hysteria2_python"] and ok.outline_key_id and ok.outline_key_id not in deleted_key_ids:
                 deleted_key_ids.add(ok.outline_key_id)
                 try:
@@ -60,32 +63,30 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                             await hysteria2.flask_delete_user(server, ok.outline_key_id)
                     else:
                         await hysteria2.flask_delete_user(server, ok.outline_key_id)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error deleting Hysteria2 key {ok.outline_key_id}: {e}")
             elif server.type == "3x-ui" and ok.uuid and ok.uuid not in deleted_uuids:
                 deleted_uuids.add(ok.uuid)
                 try:
                     from app.services.three_xui import delete_3xui_client
                     await delete_3xui_client(server, ok.uuid)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error deleting 3x-ui client {ok.uuid}: {e}")
             
             db.delete(ok)
             
-    # Commit all old key deletions to DB first
-    db.commit()
+    # Commit all old key deletions to DB first with rollback safety
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error committing old key deletions for client {client.name}: {e}")
+        raise e
 
     # Step 2: Concurrently create new keys for each server (pure async network operations)
     async def _create_for_server(server: Server) -> list:
         keys_to_add = []
         key_id = generate_id()
-        if not server.country_code:
-            try:
-                cc, cname, _ = await detect_server_country(server)
-                server.country_code = cc
-                server.country_name = cname
-            except Exception:
-                pass
         flag = get_flag_emoji(server.country_code)
         
         if server.type == "outline":
@@ -125,7 +126,7 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                 if ':' in raw_host_port:
                     parsed_host, parsed_port = raw_host_port.split(':')[0], raw_host_port.split(':')[1]
                 else:
-                    parsed_host, parsed_port = raw_host_port, "10443"
+                    parsed_host, parsed_port = raw_host_port, "443"
                     
                 host = server.external_domain or parsed_host
                 port = server.external_port or int(parsed_port)
@@ -382,6 +383,19 @@ async def fetch_3xui_metrics(server: Server, keys: list) -> Dict[str, int]:
         pass
     return {}
 
+async def fetch_server_metrics_single(server: Server, keys: list = None) -> Dict[str, Any]:
+    """Centralized metrics fetch for any server type (Outline, 3x-ui, Hysteria2)."""
+    try:
+        if server.type == "outline":
+            return await outline.fetch_metrics(server)
+        elif server.type == "3x-ui":
+            return await fetch_3xui_metrics(server, keys or [])
+        elif server.type in ["hysteria2", "hysteria2_python"]:
+            return await hysteria2.fetch_hysteria2_metrics(server)
+    except Exception as e:
+        logger.error(f"fetch_server_metrics_single failed for server {server.name}: {e}")
+    return {}
+
 async def sync_all_usage(db: Session):
     clients = db.query(Client).filter(Client.status == "active").all()
     servers = {s.id: s for s in db.query(Server).all()}
@@ -397,18 +411,11 @@ async def sync_all_usage(db: Session):
     
     async def fetch_server_metrics(server_id: str, server: Server, keys: list):
         try:
-            if server.type == "outline":
-                metrics = await outline.fetch_metrics(server)
-            elif server.type == "3x-ui":
-                metrics = await fetch_3xui_metrics(server, keys)
-            elif server.type in ["hysteria2", "hysteria2_python"]:
-                metrics = await hysteria2.fetch_hysteria2_metrics(server)
-            else:
-                metrics = {}
+            metrics = await fetch_server_metrics_single(server, keys)
             server_metrics[server_id] = metrics
         except Exception as e:
             failed_servers.add(server_id)
-            print(f"[sync] Server {server_id} fetch failed: {e}")
+            logger.error(f"[sync] Server {server_id} fetch failed: {e}")
     
     tasks = []
     for server_id, keys in keys_by_server.items():
@@ -417,6 +424,8 @@ async def sync_all_usage(db: Session):
             tasks.append(fetch_server_metrics(server_id, server, keys))
     
     await asyncio.gather(*tasks, return_exceptions=True)
+    
+    now_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     
     for client in clients:
         client_delta = 0
@@ -454,8 +463,8 @@ async def sync_all_usage(db: Session):
                 is_online = bool(user_metric.get("is_online", False))
                 last_seen_str = user_metric.get("last_seen")
                 if is_online:
-                    client.last_seen = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-                    last_seen_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                    client.last_seen = now_utc_str
+                    last_seen_str = now_utc_str
                 elif last_seen_str:
                     client.last_seen = last_seen_str
             elif user_metric is not None:
@@ -477,16 +486,13 @@ async def sync_all_usage(db: Session):
                 # Calculate drop percentage to distinguish real reset from rolling window
                 drop_pct = (k.last_seen_bytes - current_bytes) / k.last_seen_bytes if k.last_seen_bytes > 0 else 0
                 if drop_pct > 0.5:
-                    # More than 50% drop: likely a genuine counter reset (server restart/reinstall)
-                    # Only count the new bytes since reset, not the full current_bytes
                     delta = current_bytes
                     k.last_seen_bytes = current_bytes
-                    print(f"[sync] Key {k.id[:8]}: counter RESET detected (drop {drop_pct:.0%}), delta={delta}")
+                    logger.info(f"[sync] Key {k.id[:8]}: counter RESET detected (drop {drop_pct:.0%}), delta={delta}")
                 else:
-                    # Small drop (< 50%): rolling window expiry or minor fluctuation — ignore
                     delta = 0
                     k.last_seen_bytes = current_bytes
-                    print(f"[sync] Key {k.id[:8]}: minor counter drop (drop {drop_pct:.0%}), skipping delta")
+                    logger.info(f"[sync] Key {k.id[:8]}: minor counter drop (drop {drop_pct:.0%}), skipping delta")
             else:
                 delta = current_bytes - k.last_seen_bytes
                 k.last_seen_bytes = current_bytes
@@ -494,16 +500,15 @@ async def sync_all_usage(db: Session):
             # Sanity check: cap per-key delta to 10GB per sync cycle
             MAX_DELTA_PER_SYNC = 10 * 1024 * 1024 * 1024  # 10 GB
             if delta > MAX_DELTA_PER_SYNC:
-                print(f"[sync] Key {k.id[:8]}: delta {delta/(1024**3):.2f}GB exceeds max, capping to 0")
+                logger.warning(f"[sync] Key {k.id[:8]}: delta {delta/(1024**3):.2f}GB exceeds max, capping to 0")
                 delta = 0
-                # Re-baseline to prevent repeated false spikes
                 k.last_seen_bytes = current_bytes
             
             client_delta += delta
         
         if client_delta > 0:
             client.total_usage_bytes = (client.total_usage_bytes or 0) + client_delta
-            client.last_seen = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            client.last_seen = now_utc_str
         
         # Check quota limit and disable only when truly exceeded
         limit_bytes = int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0
@@ -512,10 +517,14 @@ async def sync_all_usage(db: Session):
                 client.status = "disabled"
                 await block_client_keys(client, db)
     
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to commit sync_all_usage: {e}")
 
 async def check_all_expiry(db: Session):
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     expired_clients = db.query(Client).filter(
         Client.status == "active",
         Client.expiry_date <= now
@@ -525,4 +534,8 @@ async def check_all_expiry(db: Session):
         client.status = "expired"
         await block_client_keys(client, db)
     
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to commit check_all_expiry: {e}")

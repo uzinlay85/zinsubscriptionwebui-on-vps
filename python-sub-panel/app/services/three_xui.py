@@ -88,6 +88,20 @@ def parse_server_host_port(server: Server):
     return ext_host, ext_port
 
 
+async def login_3xui_standalone(server: Any) -> Tuple[Optional[str], str]:
+    """Standalone 3x-ui login helper returning (api_base, error_message)."""
+    ssl_verify = get_ssl_setting(server)
+    try:
+        jar = aiohttp.CookieJar(unsafe=True)
+        async with aiohttp.ClientSession(cookie_jar=jar) as session:
+            api_base, headers = await login_3xui(session, server)
+            if api_base:
+                return api_base, "Login successful"
+            return None, "Invalid 3x-ui username, password, or panel URL"
+    except Exception as e:
+        return None, str(e)
+
+
 async def login_3xui(session: aiohttp.ClientSession, server: Server, timeout: Optional[aiohttp.ClientTimeout] = None) -> Tuple[Optional[str], Dict[str, str]]:
     """Login to 3x-ui panel and return (working api_base URL, authenticated headers), or (None, {}) on failure."""
     u_name = server.username or server.auth_username or "admin"

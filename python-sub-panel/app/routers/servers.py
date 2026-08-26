@@ -51,7 +51,7 @@ async def list_servers(db: Session = Depends(get_db)):
         .group_by(ClientKey.server_id)
         .all()
     )
-    # Auto-resolve country for any servers that don't have it yet
+    # Read-only country code resolution for response formatting without GET DB mutation
     for s in servers:
         if not s.country_code:
             try:
@@ -60,7 +60,6 @@ async def list_servers(db: Session = Depends(get_db)):
                 s.country_name = cname
             except Exception:
                 pass
-    db.commit()
     return [format_server_response(s, key_counts.get(s.id, 0)) for s in servers]
 
 @router.get("/status", response_model=List[ServerStatusResponse])
@@ -115,10 +114,8 @@ async def create_server(server_req: ServerCreate, db: Session = Depends(get_db))
 
     # --- Pre-validate 3x-ui credentials BEFORE saving ---
     if server_req.type == "3x-ui":
-        from app.services.three_xui import login_3xui
-        import aiohttp
+        from app.services.three_xui import login_3xui_standalone
 
-        # Build a temporary Server-like object for validation
         class _TempServer:
             api_url = server_req.api_url or ""
             username = server_req.username or ""
@@ -127,18 +124,15 @@ async def create_server(server_req: ServerCreate, db: Session = Depends(get_db))
             auth_password = server_req.auth_password or ""
             name = server_req.name or ""
 
-        jar = aiohttp.CookieJar(unsafe=True)
-        async with aiohttp.ClientSession(cookie_jar=jar) as session:
-            api_base, _ = await login_3xui(session, _TempServer())
-
+        api_base, err = await login_3xui_standalone(_TempServer())
         if not api_base:
             raise HTTPException(
                 status_code=400,
-                detail="3x-ui Panel login failed. Please check the Panel URL, Username, and Password."
+                detail=f"3x-ui Panel login failed: {err}"
             )
 
     server_id = generate_id()
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
 
     server = Server(
         id=server_id,
@@ -371,10 +365,10 @@ async def diagnose_server_failure(server: Server) -> str:
                     return f"Hysteria2 server '{server.name}' user creation failed. Please check Panel Admin Password (current: '{server.auth_password or 'default'}')."
             
             elif server.type == "3x-ui":
-                from app.services import three_xui
-                session_cookie, err = await three_xui.login_3xui(server)
-                if not session_cookie:
-                    return f"3x-ui Login Failed for '{server.name}': {err or 'Invalid username or password'}"
+                from app.services.three_xui import login_3xui_standalone
+                api_base, err = await login_3xui_standalone(server)
+                if not api_base:
+                    return f"3x-ui Login Failed for '{server.name}': {err}"
                 else:
                     return f"3x-ui Login OK for '{server.name}', but adding client to inbounds failed."
 
