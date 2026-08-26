@@ -346,12 +346,23 @@ async def sync_server_keys(server_id: str, request: Request, db: Session = Depen
     else:
         target_clients = db.query(Client).filter(Client.id.in_(client_ids), Client.status == "active").all()
 
-    synced = 0
+    keys_before = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
     for client in target_clients:
         await generate_keys_for_client(client, [server_id], db)
-        synced += 1
+    keys_after = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
+
+    warning_msg = None
+    if len(target_clients) > 0 and keys_after == 0:
+        warning_msg = f"Failed to generate keys for server '{server.name}'. Please verify API URL, port, and credentials."
     
-    return {"ok": True, "server_name": server.name, "synced": synced, "total_clients": len(target_clients)}
+    return {
+        "ok": True,
+        "server_name": server.name,
+        "synced": len(target_clients),
+        "created_keys": keys_after,
+        "total_clients": len(target_clients),
+        "warning": warning_msg
+    }
 
 @router.delete("/{server_id}/keys")
 async def delete_all_server_keys(server_id: str, db: Session = Depends(get_db)):

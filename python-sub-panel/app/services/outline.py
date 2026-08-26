@@ -3,16 +3,20 @@ import json
 from typing import Optional, Dict, Any, List
 from app.models import Client, ClientKey, Server
 
+import logging
+logger = logging.getLogger(__name__)
+
 async def create_key(server: Server, client_name: str) -> Optional[Dict[str, Any]]:
     try:
+        url = f"{server.api_url.rstrip('/')}/access-keys"
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{server.api_url}/access-keys",
+                url,
                 json={"name": client_name},
                 timeout=aiohttp.ClientTimeout(total=5),
                 ssl=False
             ) as resp:
-                if resp.status == 201:
+                if resp.status in [200, 201]:
                     data = await resp.json()
                     raw_url = data.get("accessUrl", "")
                     if raw_url:
@@ -26,8 +30,11 @@ async def create_key(server: Server, client_name: str) -> Optional[Dict[str, Any
                         "access_url": access_url,
                         "uuid": None
                     }
-    except Exception:
-        pass
+                else:
+                    text = await resp.text()
+                    logger.error(f"Outline create_key failed on {server.name} ({url}). Status {resp.status}: {text[:200]}")
+    except Exception as e:
+        logger.error(f"Outline create_key exception on {server.name}: {e}")
     return None
 
 async def delete_key(server: Server, key_id: str) -> bool:

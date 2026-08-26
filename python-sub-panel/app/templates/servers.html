@@ -444,7 +444,12 @@
                 });
                 const data = await resp.json();
                 if (resp.ok && data.ok) {
-                    showSuccess(`Successfully synced keys for ${data.synced} client(s) on server "${serverName}"!`);
+                    if (data.warning) {
+                        showError(data.warning);
+                    } else {
+                        showSuccess(`Successfully generated ${data.created_keys} key(s) for ${data.total_clients} client(s) on server "${serverName}"!`);
+                    }
+                    loadServers();
                 } else {
                     showError(`Failed to sync keys: ${data.detail || 'Unknown error'}`);
                 }
@@ -473,6 +478,7 @@
                 const data = await resp.json();
                 if (resp.ok && data.ok) {
                     showSuccess(`Deleted ${data.deleted_keys} key(s) from server "${serverName}" (${data.affected_clients} client(s) affected)`);
+                    loadServers();
                 } else {
                     showError(`Failed to delete keys: ${data.detail || 'Unknown error'}`);
                 }
