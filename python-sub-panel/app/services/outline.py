@@ -7,7 +7,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 def get_outline_base_url(server: Server) -> str:
-    url = (server.api_url or "").rstrip("/")
+    raw = (server.api_url or "").strip().strip('"').strip("'")
+    if raw.startswith("{") and "apiUrl" in raw:
+        try:
+            parsed = json.loads(raw)
+            raw = parsed.get("apiUrl", raw).strip().strip('"').strip("'")
+        except Exception:
+            pass
+    url = raw.rstrip("/")
     if url.endswith("/access-keys"):
         url = url[:-len("/access-keys")].rstrip("/")
     return url

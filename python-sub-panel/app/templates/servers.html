@@ -522,6 +522,24 @@
             }
         }
 
+        // Auto-detect & parse Outline JSON when pasted into API URL
+        document.getElementById('api_url').addEventListener('input', function(e) {
+            const val = this.value.trim();
+            if (val.startsWith('{') && val.includes('apiUrl')) {
+                try {
+                    const parsed = JSON.parse(val);
+                    if (parsed.apiUrl) {
+                        this.value = parsed.apiUrl;
+                        document.getElementById('type').value = 'outline';
+                        updateFormFields();
+                    }
+                    if (parsed.certSha256) {
+                        document.getElementById('cert_sha256').value = parsed.certSha256;
+                    }
+                } catch(ex) {}
+            }
+        });
+
         let isSavingServer = false;
         document.getElementById('serverForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -529,17 +547,29 @@
 
             const id = document.getElementById('serverId').value;
             const type = document.getElementById('type').value;
+            let apiUrl = document.getElementById('api_url').value.trim();
+            let certSha256 = document.getElementById('cert_sha256').value.trim() || null;
+
+            // Client-side quick check for Outline JSON
+            if (apiUrl.startsWith('{') && apiUrl.includes('apiUrl')) {
+                try {
+                    const parsed = JSON.parse(apiUrl);
+                    if (parsed.apiUrl) apiUrl = parsed.apiUrl;
+                    if (!certSha256 && parsed.certSha256) certSha256 = parsed.certSha256;
+                } catch(ex) {}
+            }
+
             const data = {
-                name: document.getElementById('name').value,
+                name: document.getElementById('name').value.trim(),
                 type: type,
-                api_url: document.getElementById('api_url').value,
-                cert_sha256: document.getElementById('cert_sha256').value || null,
-                auth_username: document.getElementById('auth_username').value || null,
-                auth_password: document.getElementById('auth_password').value || null,
-                username: document.getElementById('username').value || null,
-                password: document.getElementById('password').value || null,
+                api_url: apiUrl,
+                cert_sha256: certSha256,
+                auth_username: document.getElementById('auth_username').value.trim() || null,
+                auth_password: document.getElementById('auth_password').value.trim() || null,
+                username: document.getElementById('username').value.trim() || null,
+                password: document.getElementById('password').value.trim() || null,
                 inbound_id: document.getElementById('inbound_id').value ? parseInt(document.getElementById('inbound_id').value) : null,
-                external_domain: document.getElementById('external_domain').value || null,
+                external_domain: document.getElementById('external_domain').value.trim() || null,
                 external_port: document.getElementById('external_port').value ? parseInt(document.getElementById('external_port').value) : null,
                 country_code: document.getElementById('country_code').value.trim() || null,
                 country_name: document.getElementById('country_name').value.trim() || null
@@ -572,12 +602,20 @@
                     let errMsg = 'Failed to save server';
                     try {
                         const err = await resp.json();
-                        errMsg = err.detail || errMsg;
-                    } catch(e) {}
+                        if (typeof err.detail === 'string') {
+                            errMsg = err.detail;
+                        } else if (Array.isArray(err.detail)) {
+                            errMsg = err.detail.map(d => `${d.loc ? d.loc.slice(-1)[0] : 'field'}: ${d.msg}`).join(', ');
+                        } else if (err.message) {
+                            errMsg = err.message;
+                        }
+                    } catch(e) {
+                        errMsg = `Server error (${resp.status}): Failed to save server`;
+                    }
                     showModalError(errMsg);
                 }
             } catch (err) {
-                showModalError('Connection error. Please try again.');
+                showModalError('Connection error. Please check your network and try again.');
             } finally {
                 isSavingServer = false;
                 saveBtn.disabled = false;
@@ -595,9 +633,11 @@
 
         function showError(msg) {
             const el = document.getElementById('error');
-            el.textContent = msg;
-            el.classList.remove('hidden');
-            setTimeout(() => el.classList.add('hidden'), 5000);
+            if (el) {
+                el.textContent = msg;
+                el.classList.remove('hidden');
+                setTimeout(() => el.classList.add('hidden'), 5000);
+            }
         }
 
         function showSuccess(msg) {

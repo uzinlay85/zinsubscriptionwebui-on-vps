@@ -112,141 +112,198 @@ async def get_server(server_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Server not found")
     return format_server_response(server)
 
+import json
+import logging
+
+logger = logging.getLogger(__name__)
+
 @router.post("", response_model=ServerResponse)
 @router.post("/", response_model=ServerResponse)
 async def create_server(server_req: ServerCreate, db: Session = Depends(get_db)):
-
-    # --- Pre-validate 3x-ui credentials BEFORE saving ---
-    if server_req.type == "3x-ui":
-        from app.services.three_xui import login_3xui_standalone
-
-        class _TempServer:
-            api_url = server_req.api_url or ""
-            username = server_req.username or ""
-            auth_username = server_req.auth_username or ""
-            password = server_req.password or ""
-            auth_password = server_req.auth_password or ""
-            name = server_req.name or ""
-
-        api_base, err = await login_3xui_standalone(_TempServer())
-        if not api_base:
-            raise HTTPException(
-                status_code=400,
-                detail=f"3x-ui Panel login failed: {err}"
-            )
-
-    server_id = generate_id()
-    now = datetime.now(timezone.utc).isoformat()
-
-    server = Server(
-        id=server_id,
-        name=server_req.name,
-        api_url=server_req.api_url,
-        cert_sha256=server_req.cert_sha256,
-        created_at=now,
-        type=server_req.type,
-        auth_username=server_req.auth_username,
-        auth_password=server_req.auth_password,
-        username=server_req.username,
-        password=server_req.password,
-        inbound_id=server_req.inbound_id,
-        external_domain=server_req.external_domain,
-        external_port=server_req.external_port,
-        is_active=server_req.is_active if server_req.is_active is not None else True,
-        country_code=server_req.country_code,
-        country_name=server_req.country_name
-    )
-    
-    if not server.country_code:
-        try:
-            cc, cname, _ = await detect_server_country(server)
-            server.country_code = cc
-            server.country_name = cname
-        except Exception:
-            pass
-            
-    db.add(server)
-    db.commit()
-    db.refresh(server)
-
-    active_clients = db.query(Client).filter(Client.status == "active").all()
-    if active_clients:
-        from app.services.vpn_manager import generate_keys_for_client
-        for c in active_clients:
+    try:
+        # Sanitize API URL & Cert
+        api_url = (server_req.api_url or "").strip().strip('"').strip("'")
+        cert_sha256 = (server_req.cert_sha256 or "").strip() if server_req.cert_sha256 else None
+        
+        # If user pasted raw Outline JSON into api_url: {"apiUrl":"...", "certSha256":"..."}
+        if api_url.startswith("{") and "apiUrl" in api_url:
             try:
-                await generate_keys_for_client(c, [server_id], db)
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).error(f"Error generating keys for client {c.name} on server {server.name}: {e}")
+                parsed = json.loads(api_url)
+                api_url = parsed.get("apiUrl", api_url).strip()
+                if not cert_sha256 and parsed.get("certSha256"):
+                    cert_sha256 = parsed.get("certSha256").strip()
+            except Exception:
+                pass
 
-    return format_server_response(server)
+        if not api_url:
+            raise HTTPException(status_code=400, detail="API URL is required.")
+
+        # --- Pre-validate 3x-ui credentials BEFORE saving ---
+        if server_req.type == "3x-ui":
+            from app.services.three_xui import login_3xui_standalone
+
+            class _TempServer:
+                api_url = api_url
+                username = server_req.username or ""
+                auth_username = server_req.auth_username or ""
+                password = server_req.password or ""
+                auth_password = server_req.auth_password or ""
+                name = server_req.name or ""
+
+            api_base, err = await login_3xui_standalone(_TempServer())
+            if not api_base:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"3x-ui Panel login failed: {err}"
+                )
+
+        server_id = generate_id()
+        now = datetime.now(timezone.utc).isoformat()
+
+        server = Server(
+            id=server_id,
+            name=server_req.name.strip(),
+            api_url=api_url,
+            cert_sha256=cert_sha256,
+            created_at=now,
+            type=server_req.type,
+            auth_username=server_req.auth_username.strip() if server_req.auth_username else None,
+            auth_password=server_req.auth_password.strip() if server_req.auth_password else None,
+            username=server_req.username.strip() if server_req.username else None,
+            password=server_req.password.strip() if server_req.password else None,
+            inbound_id=server_req.inbound_id,
+            external_domain=server_req.external_domain.strip() if server_req.external_domain else None,
+            external_port=server_req.external_port,
+            is_active=server_req.is_active if server_req.is_active is not None else True,
+            country_code=server_req.country_code.strip().upper() if server_req.country_code else None,
+            country_name=server_req.country_name.strip() if server_req.country_name else None
+        )
+        
+        if not server.country_code:
+            try:
+                cc, cname, _ = await detect_server_country(server)
+                server.country_code = cc
+                server.country_name = cname
+            except Exception as geo_err:
+                logger.debug(f"Geo detection skipped: {geo_err}")
+                
+        db.add(server)
+        db.commit()
+        db.refresh(server)
+
+        # Safe key generation for active clients
+        active_clients = db.query(Client).filter(Client.status == "active").all()
+        if active_clients:
+            from app.services.vpn_manager import generate_keys_for_client
+            async def _safe_gen(c):
+                try:
+                    await generate_keys_for_client(c, [server_id], db)
+                except Exception as e:
+                    logger.error(f"Error generating keys for client {c.name} on server {server.name}: {e}")
+
+            await asyncio.gather(*[_safe_gen(c) for c in active_clients], return_exceptions=True)
+
+        return format_server_response(server)
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Failed to create server: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save server: {str(e)}")
 
 @router.put("/{server_id}", response_model=ServerResponse)
 async def update_server(server_id: str, server_req: ServerUpdate, db: Session = Depends(get_db)):
-    server = db.query(Server).filter(Server.id == server_id).first()
-    if not server:
-        raise HTTPException(status_code=404, detail="Server not found")
-    
-    if server_req.name is not None:
-        server.name = server_req.name
-    if server_req.api_url is not None:
-        server.api_url = server_req.api_url
-    if server_req.cert_sha256 is not None:
-        server.cert_sha256 = server_req.cert_sha256
-    if server_req.type is not None:
-        server.type = server_req.type
-    if server_req.auth_username is not None:
-        server.auth_username = server_req.auth_username
-    if server_req.auth_password is not None and server_req.auth_password.strip() and server_req.auth_password != "********":
-        server.auth_password = server_req.auth_password.strip()
-    if server_req.username is not None:
-        server.username = server_req.username
-    if server_req.password is not None and server_req.password.strip() and server_req.password != "********":
-        server.password = server_req.password.strip()
-    if server_req.inbound_id is not None:
-        server.inbound_id = server_req.inbound_id
-    if server_req.external_domain is not None:
-        server.external_domain = server_req.external_domain
-    if server_req.external_port is not None:
-        server.external_port = server_req.external_port
-    if server_req.is_active is not None:
-        server.is_active = server_req.is_active
-    if server_req.country_code is not None:
-        server.country_code = server_req.country_code
-    if server_req.country_name is not None:
-        server.country_name = server_req.country_name
+    try:
+        server = db.query(Server).filter(Server.id == server_id).first()
+        if not server:
+            raise HTTPException(status_code=404, detail="Server not found")
         
-    if not server.country_code:
-        try:
-            cc, cname, _ = await detect_server_country(server)
-            server.country_code = cc
-            server.country_name = cname
-        except Exception:
-            pass
-    
-    db.commit()
-    db.refresh(server)
-    
-    flag = get_flag_emoji(server.country_code)
-    # Refresh existing client keys access_url for this server
-    existing_keys = db.query(ClientKey).filter(ClientKey.server_id == server_id).all()
-    if existing_keys:
-        for k in existing_keys:
-            client = db.query(Client).filter(Client.id == k.client_id).first()
-            if client and server.type in ["hysteria2", "hysteria2_python"]:
-                raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
-                if ':' in raw_host_port:
-                    parsed_host, parsed_port = raw_host_port.split(':')[0], raw_host_port.split(':')[1]
-                else:
-                    parsed_host, parsed_port = raw_host_port, "10443"
-                host = server.external_domain or parsed_host
-                port = server.external_port or int(parsed_port)
-                k.access_url = f"hy2://{k.outline_key_id}@{host}:{port}/?security=tls&sni={host}#{flag} {server.name} - {client.name}"
-    # Invalidate sub cache so changes reflect instantly
-    from app.routers.sub import invalidate_sub_cache
-    invalidate_sub_cache()
-    
-    return format_server_response(server)
+        if server_req.name is not None:
+            server.name = server_req.name.strip()
+        if server_req.api_url is not None:
+            raw_url = server_req.api_url.strip().strip('"').strip("'")
+            if raw_url.startswith("{") and "apiUrl" in raw_url:
+                try:
+                    parsed = json.loads(raw_url)
+                    raw_url = parsed.get("apiUrl", raw_url).strip()
+                    if not server_req.cert_sha256 and parsed.get("certSha256"):
+                        server.cert_sha256 = parsed.get("certSha256").strip()
+                except Exception:
+                    pass
+            server.api_url = raw_url
+        if server_req.cert_sha256 is not None:
+            server.cert_sha256 = server_req.cert_sha256.strip() if server_req.cert_sha256 else None
+        if server_req.type is not None:
+            server.type = server_req.type
+        if server_req.auth_username is not None:
+            server.auth_username = server_req.auth_username.strip() if server_req.auth_username else None
+        if server_req.auth_password is not None and server_req.auth_password.strip() and server_req.auth_password != "********":
+            server.auth_password = server_req.auth_password.strip()
+        if server_req.username is not None:
+            server.username = server_req.username.strip() if server_req.username else None
+        if server_req.password is not None and server_req.password.strip() and server_req.password != "********":
+            server.password = server_req.password.strip()
+        if server_req.inbound_id is not None:
+            server.inbound_id = server_req.inbound_id
+        if server_req.external_domain is not None:
+            server.external_domain = server_req.external_domain.strip() if server_req.external_domain else None
+        if server_req.external_port is not None:
+            server.external_port = server_req.external_port
+        if server_req.is_active is not None:
+            server.is_active = server_req.is_active
+        if server_req.country_code is not None:
+            server.country_code = server_req.country_code.strip().upper() if server_req.country_code else None
+        if server_req.country_name is not None:
+            server.country_name = server_req.country_name.strip() if server_req.country_name else None
+            
+        if not server.country_code:
+            try:
+                cc, cname, _ = await detect_server_country(server)
+                server.country_code = cc
+                server.country_name = cname
+            except Exception:
+                pass
+        
+        db.commit()
+        db.refresh(server)
+        
+        flag = get_flag_emoji(server.country_code)
+        # Refresh existing client keys access_url for this server
+        existing_keys = db.query(ClientKey).filter(ClientKey.server_id == server_id).all()
+        if existing_keys:
+            for k in existing_keys:
+                client = db.query(Client).filter(Client.id == k.client_id).first()
+                if client and server.type in ["hysteria2", "hysteria2_python"]:
+                    raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
+                    if ':' in raw_host_port:
+                        parsed_host, parsed_port = raw_host_port.split(':')[0], raw_host_port.split(':')[1]
+                    else:
+                        parsed_host, parsed_port = raw_host_port, "10443"
+                    host = server.external_domain or parsed_host
+                    port = server.external_port or int(parsed_port)
+                    k.access_url = f"hy2://{k.outline_key_id}@{host}:{port}/?security=tls&sni={host}#{flag} {server.name} - {client.name}"
+                elif client and server.type == "outline":
+                    from app.services.outline import rewrite_outline_access_url
+                    if k.access_url and "ss://" in k.access_url:
+                        raw_acc = k.access_url.split("#")[0]
+                        new_raw = rewrite_outline_access_url(raw_acc, server)
+                        k.access_url = f"{new_raw}#{flag} {server.name} - {client.name}"
+            db.commit()
+
+        # Invalidate sub cache so changes reflect instantly
+        from app.routers.sub import invalidate_sub_cache
+        invalidate_sub_cache()
+        
+        return format_server_response(server)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Failed to update server: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update server: {str(e)}")
 
 @router.post("/{server_id}/toggle-active")
 async def toggle_server_active(server_id: str, db: Session = Depends(get_db)):
