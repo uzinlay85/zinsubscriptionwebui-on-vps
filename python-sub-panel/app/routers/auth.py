@@ -52,6 +52,33 @@ def record_failed_attempt(ip: str):
 def clear_failed_attempts(ip: str):
     _FAILED_ATTEMPTS.pop(ip, None)
 
+# Server-side dynamic session token store: session_token -> created_timestamp
+_ACTIVE_SESSIONS: Dict[str, float] = {}
+SESSION_MAX_AGE = 7 * 24 * 60 * 60  # 7 days
+
+def is_valid_session(token: str) -> bool:
+    if not token:
+        return False
+    if token in _ACTIVE_SESSIONS:
+        created = _ACTIVE_SESSIONS[token]
+        if time.time() - created < SESSION_MAX_AGE:
+            return True
+        else:
+            _ACTIVE_SESSIONS.pop(token, None)
+            return False
+    # Fallback for static AUTH_SECRET token
+    if AUTH_SECRET and AUTH_SECRET != "change_me" and timing_safe_compare(token, AUTH_SECRET):
+        return True
+    return False
+
+def create_session() -> str:
+    token = secrets.token_urlsafe(32)
+    _ACTIVE_SESSIONS[token] = time.time()
+    return token
+
+def revoke_session(token: str):
+    _ACTIVE_SESSIONS.pop(token, None)
+
 @router.post("/login")
 async def login(request: Request, response: Response, login_req: LoginRequest, db: Session = Depends(get_db)):
     client_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "unknown")
@@ -72,28 +99,35 @@ async def login(request: Request, response: Response, login_req: LoginRequest, d
     clear_failed_attempts(client_ip)
     
     is_https = request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
+    session_token = create_session()
     
     resp = JSONResponse(content={"ok": True, "message": "Login successful"})
     resp.set_cookie(
         key="admin_auth",
-        value=AUTH_SECRET,
+        value=session_token,
         httponly=True,
         secure=is_https,
         samesite="lax",
         path="/",
-        max_age=7 * 24 * 60 * 60
+        max_age=SESSION_MAX_AGE
     )
     return resp
 
 @router.post("/logout")
-async def logout():
+async def logout(request: Request):
+    token = request.cookies.get("admin_auth", "")
+    if token:
+        revoke_session(token)
     resp = JSONResponse(content={"ok": True, "message": "Logged out"})
     resp.delete_cookie(key="admin_auth", path="/")
     resp.delete_cookie(key="path_auth", path="/")
     return resp
 
 @router.get("/logout")
-async def logout_get():
+async def logout_get(request: Request):
+    token = request.cookies.get("admin_auth", "")
+    if token:
+        revoke_session(token)
     resp = RedirectResponse(url="/login", status_code=302)
     resp.delete_cookie(key="admin_auth", path="/")
     resp.delete_cookie(key="path_auth", path="/")

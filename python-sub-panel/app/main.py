@@ -11,14 +11,18 @@ from app.tasks import start_scheduler
 import os
 import secrets
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 app = FastAPI(title="Unified VPN Subscription Panel")
 
+ALLOWED_ORIGINS = [
+    origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "").split(",") if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS if ALLOWED_ORIGINS else ["*"],
+    allow_credentials=bool(ALLOWED_ORIGINS),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -62,13 +66,14 @@ async def security_and_auth_middleware(request: Request, call_next):
                 return response
             return RedirectResponse(url=f"/{ADMIN_SECRET_PATH}", status_code=302)
     
+    from app.routers.auth import is_valid_session
     admin_auth = request.cookies.get("admin_auth", "")
-    if admin_auth != AUTH_SECRET:
+    if not is_valid_session(admin_auth):
         if ADMIN_SECRET_PATH and path == f"/{ADMIN_SECRET_PATH}":
             return await call_next(request)
         return RedirectResponse(url="/login", status_code=302)
     
-    if path == "/login" and admin_auth == AUTH_SECRET:
+    if path == "/login" and is_valid_session(admin_auth):
         return RedirectResponse(url="/", status_code=302)
     
     response = await call_next(request)
@@ -84,10 +89,14 @@ async def startup_event():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 @app.get("/logout")
-async def logout_redirect():
+async def logout_redirect(request: Request):
+    from app.routers.auth import revoke_session
+    token = request.cookies.get("admin_auth", "")
+    if token:
+        revoke_session(token)
     resp = RedirectResponse(url="/login", status_code=302)
     resp.delete_cookie(key="admin_auth", path="/")
     resp.delete_cookie(key="path_auth", path="/")
@@ -144,10 +153,9 @@ async def client_portal_page(request: Request, token: str, db: Session = Depends
     days_left = None
     exp_dt = sub_router.safe_parse_iso(client.expiry_date)
     if exp_dt:
-        now = datetime.utcnow()
-        if exp_dt.tzinfo is not None:
-            from datetime import timezone
-            now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        if exp_dt.tzinfo is None:
+            now = now.replace(tzinfo=None)
         days_left = (exp_dt - now).days
 
     # Usage calculation
@@ -212,7 +220,7 @@ async def client_portal_page(request: Request, token: str, db: Session = Depends
         "sub_url_b64": sub_url_b64,
         "name_encoded": name_encoded,
         "nodes": node_list,
-        "current_year": datetime.utcnow().year
+        "current_year": datetime.now(timezone.utc).year
     })
 
 @app.get("/sub/{token}")

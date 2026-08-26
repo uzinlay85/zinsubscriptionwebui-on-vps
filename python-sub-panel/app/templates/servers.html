@@ -385,9 +385,11 @@
             document.getElementById('api_url').value = server.api_url;
             document.getElementById('cert_sha256').value = server.cert_sha256 || '';
             document.getElementById('auth_username').value = server.auth_username || '';
-            document.getElementById('auth_password').value = server.auth_password || '';
+            document.getElementById('auth_password').value = '';
+            document.getElementById('auth_password').placeholder = (server.auth_password) ? '•••••••• (leave blank to keep current)' : 'admin123';
             document.getElementById('username').value = server.username || '';
-            document.getElementById('password').value = server.password || '';
+            document.getElementById('password').value = '';
+            document.getElementById('password').placeholder = (server.password) ? '•••••••• (leave blank to keep current)' : 'Password';
             document.getElementById('inbound_id').value = server.inbound_id || '';
             document.getElementById('external_domain').value = server.external_domain || '';
             document.getElementById('external_port').value = server.external_port || '';

@@ -32,165 +32,172 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
         return
         
     now = datetime.now(timezone.utc).isoformat()
-    from app.services.geo import detect_server_country, get_flag_emoji
+    from app.services.geo import get_flag_emoji
 
-    # Step 1: Sequentially delete pre-existing keys for the target servers (both remote and local DB)
-    # This prevents concurrent DB session mutation conflicts during gather()
-    for server in servers:
-        old_keys = db.query(ClientKey).filter(
+    # Step 1: Query pre-existing keys for target servers without deleting them yet
+    old_keys_map = {}
+    for s in servers:
+        old_keys_map[s.id] = db.query(ClientKey).filter(
             ClientKey.client_id == client.id,
-            ClientKey.server_id == server.id
+            ClientKey.server_id == s.id
         ).all()
-        
-        deleted_uuids = set()
-        deleted_key_ids = set()
-        
-        for ok in old_keys:
-            if server.type == "outline" and ok.outline_key_id and ok.outline_key_id not in deleted_key_ids:
-                deleted_key_ids.add(ok.outline_key_id)
-                try:
-                    from app.services import outline
-                    await outline.delete_key(server, ok.outline_key_id)
-                except Exception as e:
-                    logger.error(f"Error deleting Outline key {ok.outline_key_id}: {e}")
-            elif server.type in ["hysteria2", "hysteria2_python"] and ok.outline_key_id and ok.outline_key_id not in deleted_key_ids:
-                deleted_key_ids.add(ok.outline_key_id)
-                try:
-                    from app.services import hysteria2
-                    if server.type == "hysteria2":
-                        del_res = await hysteria2.express_delete_user(server, ok.outline_key_id)
-                        if not del_res:
-                            await hysteria2.flask_delete_user(server, ok.outline_key_id)
-                    else:
-                        await hysteria2.flask_delete_user(server, ok.outline_key_id)
-                except Exception as e:
-                    logger.error(f"Error deleting Hysteria2 key {ok.outline_key_id}: {e}")
-            elif server.type == "3x-ui" and ok.uuid and ok.uuid not in deleted_uuids:
-                deleted_uuids.add(ok.uuid)
-                try:
-                    from app.services.three_xui import delete_3xui_client
-                    await delete_3xui_client(server, ok.uuid)
-                except Exception as e:
-                    logger.error(f"Error deleting 3x-ui client {ok.uuid}: {e}")
-            
-            db.delete(ok)
-            
-    # Commit all old key deletions to DB first with rollback safety
-    try:
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error committing old key deletions for client {client.name}: {e}")
-        raise e
 
     # Step 2: Concurrently create new keys for each server (pure async network operations)
-    async def _create_for_server(server: Server) -> list:
+    async def _create_for_server(server: Server) -> tuple:
         keys_to_add = []
         key_id = generate_id()
         flag = get_flag_emoji(server.country_code)
         
-        if server.type == "outline":
-            result = await outline.create_key(server, client.name)
-            if result:
-                raw_url = result.get("access_url", "")
-                access_url = f"{raw_url.split('#')[0]}#{flag} {server.name} - {client.name}" if raw_url else ""
-                client_key = ClientKey(
-                    id=key_id,
-                    client_id=client.id,
-                    server_id=server.id,
-                    outline_key_id=result.get("key_id", ""),
-                    access_url=access_url,
-                    created_at=now,
-                    uuid=None,
-                    last_seen_bytes=0
-                )
-                keys_to_add.append(client_key)
-        
-        elif server.type in ["hysteria2", "hysteria2_python"]:
-            rand_str = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
-            password = f"{client.name}_{rand_str}"
-            
-            added = False
-            if server.type == "hysteria2":
-                result = await hysteria2.express_create_user(server, client.name, password)
-                if result and result.get("password"):
-                    password = result.get("password")
-                    added = True
-                else:
-                    added = await hysteria2.flask_add_user(server, client.name, password)
-            else:
-                added = await hysteria2.flask_add_user(server, client.name, password)
-            
-            if added:
-                raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
-                if ':' in raw_host_port:
-                    parsed_host, parsed_port = raw_host_port.split(':')[0], raw_host_port.split(':')[1]
-                else:
-                    parsed_host, parsed_port = raw_host_port, "443"
-                    
-                host = server.external_domain or parsed_host
-                port = server.external_port or int(parsed_port)
-                access_url = f"hy2://{password}@{host}:{port}/?security=tls&sni={host}#{flag} {server.name} - {client.name}"
-                
-                client_key = ClientKey(
-                    id=key_id,
-                    client_id=client.id,
-                    server_id=server.id,
-                    outline_key_id=password,
-                    access_url=access_url,
-                    created_at=now,
-                    uuid=None,
-                    last_seen_bytes=0
-                )
-                keys_to_add.append(client_key)
-            else:
-                logger.error(f"Hysteria2: Failed to add client {client.name} to server {server.name}")
-        
-        elif server.type == "3x-ui":
-            client_uuid = generate_uuid()
-            sub_id = generate_sub_id()
-            
-            from app.services.three_xui import add_3xui_client_all_inbounds
-            inbound_keys = await add_3xui_client_all_inbounds(server, client, client_uuid, sub_id)
-            for ib_info in inbound_keys:
-                raw_access_url = ib_info.get("access_url", "")
-                ib_id = ib_info.get("inbound_id", "")
-                if raw_access_url:
-                    if "#" in raw_access_url:
-                        base_acc, rem = raw_access_url.split('#', 1)
-                        if flag not in rem:
-                            access_url = f"{base_acc}#{flag} {rem}"
-                        else:
-                            access_url = raw_access_url
-                    else:
-                        access_url = f"{raw_access_url}#{flag} {server.name} - {client.name}"
-
+        try:
+            if server.type == "outline":
+                result = await outline.create_key(server, client.name)
+                if result:
+                    raw_url = result.get("access_url", "")
+                    access_url = f"{raw_url.split('#')[0]}#{flag} {server.name} - {client.name}" if raw_url else ""
                     client_key = ClientKey(
-                        id=generate_id(),
+                        id=key_id,
                         client_id=client.id,
                         server_id=server.id,
-                        outline_key_id=f"{sub_id}:{ib_id}" if ib_id else sub_id,
+                        outline_key_id=result.get("key_id", ""),
                         access_url=access_url,
                         created_at=now,
-                        uuid=client_uuid,
+                        uuid=None,
                         last_seen_bytes=0
                     )
                     keys_to_add.append(client_key)
+            
+            elif server.type in ["hysteria2", "hysteria2_python"]:
+                rand_str = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+                password = f"{client.name}_{rand_str}"
+                
+                added = False
+                if server.type == "hysteria2":
+                    result = await hysteria2.express_create_user(server, client.name, password)
+                    if result and result.get("password"):
+                        password = result.get("password")
+                        added = True
+                    else:
+                        added = await hysteria2.flask_add_user(server, client.name, password)
+                else:
+                    added = await hysteria2.flask_add_user(server, client.name, password)
+                
+                if added:
+                    raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
+                    if ':' in raw_host_port:
+                        parsed_host, parsed_port = raw_host_port.split(':')[0], raw_host_port.split(':')[1]
+                    else:
+                        parsed_host, parsed_port = raw_host_port, "443"
+                        
+                    host = server.external_domain or parsed_host
+                    port = server.external_port or int(parsed_port)
+                    access_url = f"hy2://{password}@{host}:{port}/?security=tls&sni={host}#{flag} {server.name} - {client.name}"
                     
-        return keys_to_add
+                    client_key = ClientKey(
+                        id=key_id,
+                        client_id=client.id,
+                        server_id=server.id,
+                        outline_key_id=password,
+                        access_url=access_url,
+                        created_at=now,
+                        uuid=None,
+                        last_seen_bytes=0
+                    )
+                    keys_to_add.append(client_key)
+                else:
+                    logger.error(f"Hysteria2: Failed to add client {client.name} to server {server.name}")
+            
+            elif server.type == "3x-ui":
+                client_uuid = generate_uuid()
+                sub_id = generate_sub_id()
+                
+                from app.services.three_xui import add_3xui_client_all_inbounds
+                inbound_keys = await add_3xui_client_all_inbounds(server, client, client_uuid, sub_id)
+                for ib_info in inbound_keys:
+                    raw_access_url = ib_info.get("access_url", "")
+                    ib_id = ib_info.get("inbound_id", "")
+                    if raw_access_url:
+                        if "#" in raw_access_url:
+                            base_acc, rem = raw_access_url.split('#', 1)
+                            if flag not in rem:
+                                access_url = f"{base_acc}#{flag} {rem}"
+                            else:
+                                access_url = raw_access_url
+                        else:
+                            access_url = f"{raw_access_url}#{flag} {server.name} - {client.name}"
+
+                        client_key = ClientKey(
+                            id=generate_id(),
+                            client_id=client.id,
+                            server_id=server.id,
+                            outline_key_id=f"{sub_id}:{ib_id}" if ib_id else sub_id,
+                            access_url=access_url,
+                            created_at=now,
+                            uuid=client_uuid,
+                            last_seen_bytes=0
+                        )
+                        keys_to_add.append(client_key)
+        except Exception as e:
+            logger.error(f"Error creating key for server {server.name}: {e}")
+                        
+        return server, keys_to_add
 
     # Execute network calls concurrently
     results = await asyncio.gather(*[_create_for_server(s) for s in servers], return_exceptions=True)
     
-    # Sequentially add all created keys to the DB session on the main thread
+    # Step 3: For servers that succeeded, add new keys & safely revoke/delete old keys
     for res in results:
-        if isinstance(res, list):
-            for client_key in res:
-                db.add(client_key)
+        if isinstance(res, tuple):
+            server, new_keys = res
+            if new_keys:
+                # Add newly created keys
+                for nk in new_keys:
+                    db.add(nk)
+                
+                # Revoke and delete old keys for this server only after new keys exist
+                old_keys = old_keys_map.get(server.id, [])
+                deleted_uuids = set()
+                deleted_key_ids = set()
+                
+                for ok in old_keys:
+                    if server.type == "outline" and ok.outline_key_id and ok.outline_key_id not in deleted_key_ids:
+                        deleted_key_ids.add(ok.outline_key_id)
+                        try:
+                            from app.services import outline
+                            await outline.delete_key(server, ok.outline_key_id)
+                        except Exception as e:
+                            logger.error(f"Error revoking old Outline key {ok.outline_key_id}: {e}")
+                    elif server.type in ["hysteria2", "hysteria2_python"] and ok.outline_key_id and ok.outline_key_id not in deleted_key_ids:
+                        deleted_key_ids.add(ok.outline_key_id)
+                        try:
+                            from app.services import hysteria2
+                            if server.type == "hysteria2":
+                                del_res = await hysteria2.express_delete_user(server, ok.outline_key_id)
+                                if not del_res:
+                                    await hysteria2.flask_delete_user(server, ok.outline_key_id)
+                            else:
+                                await hysteria2.flask_delete_user(server, ok.outline_key_id)
+                        except Exception as e:
+                            logger.error(f"Error revoking old Hysteria2 key {ok.outline_key_id}: {e}")
+                    elif server.type == "3x-ui" and ok.uuid and ok.uuid not in deleted_uuids:
+                        deleted_uuids.add(ok.uuid)
+                        try:
+                            from app.services.three_xui import delete_3xui_client
+                            await delete_3xui_client(server, ok.uuid)
+                        except Exception as e:
+                            logger.error(f"Error revoking old 3x-ui client {ok.uuid}: {e}")
+                    
+                    db.delete(ok)
+            else:
+                logger.warning(f"Skipping old key deletion on server {server.name} because new key creation did not return keys.")
         elif isinstance(res, Exception):
-            logger.error(f"Error in _create_for_server: {res}")
+            logger.error(f"Exception during server key generation: {res}")
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to commit key changes for client {client.name}: {e}")
+        raise e
 
 async def delete_client_keys(client: Client, db: Session):
     keys = db.query(ClientKey).filter(ClientKey.client_id == client.id).all()

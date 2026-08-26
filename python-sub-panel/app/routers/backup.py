@@ -6,7 +6,7 @@ from app.schemas import BackupExportResponse
 from typing import List, Dict, Any
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import aiohttp
 import xml.etree.ElementTree as ET
 
@@ -20,7 +20,7 @@ async def export_backup(db: Session = Depends(get_db)):
     
     return {
         "version": "1.0",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "servers": [
             {
                 "id": s.id,
@@ -111,7 +111,11 @@ async def import_backup(file: UploadFile = File(...), db: Session = Depends(get_
             key = ClientKey(**k)
             db.add(key)
     
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database commit error during import: {e}")
     return {"ok": True}
 
 @router.post("/webdav")
@@ -125,7 +129,7 @@ async def webdav_backup(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="WebDAV URL is required")
     
     backup_data = await export_backup(db)
-    filename = f"outline_panel_backup_{datetime.utcnow().strftime('%Y-%m-%d_%H%M%S')}.json"
+    filename = f"outline_panel_backup_{datetime.now(timezone.utc).strftime('%Y-%m-%d_%H%M%S')}.json"
     
     url = webdav_url.rstrip("/") + "/" + filename
     
@@ -170,7 +174,7 @@ async def webdav_list(request: Request):
             for match in re.finditer(r'<d:displayname>([^<]+)</d:displayname>', text):
                 name = match.group(1)
                 if name.endswith('.json') or name.endswith('.zip'):
-                    files.append(name)
+                    files.append(os.path.basename(name))
             
             files.sort(reverse=True)
             return {"files": files}
@@ -181,11 +185,12 @@ async def webdav_restore(request: Request, db: Session = Depends(get_db)):
     webdav_url = body.get("webdav_url", "")
     webdav_username = body.get("webdav_username", "")
     webdav_password = body.get("webdav_password", "")
-    filename = body.get("filename", "")
+    raw_filename = body.get("filename", "")
     
-    if not all([webdav_url, filename]):
+    if not all([webdav_url, raw_filename]):
         raise HTTPException(status_code=400, detail="Missing required fields")
     
+    filename = os.path.basename(raw_filename)
     url = webdav_url.rstrip("/") + "/" + filename
     
     async with aiohttp.ClientSession() as session:
@@ -231,7 +236,12 @@ async def webdav_restore(request: Request, db: Session = Depends(get_db)):
             key = ClientKey(**k)
             db.add(key)
     
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database commit error during restore: {e}")
+        
     return {"ok": True}
 
 @router.delete("/webdav/delete")
@@ -240,11 +250,12 @@ async def webdav_delete(request: Request):
     webdav_url = body.get("webdav_url", "")
     webdav_username = body.get("webdav_username", "")
     webdav_password = body.get("webdav_password", "")
-    filename = body.get("filename", "")
+    raw_filename = body.get("filename", "")
     
-    if not all([webdav_url, filename]):
+    if not all([webdav_url, raw_filename]):
         raise HTTPException(status_code=400, detail="Missing required fields")
     
+    filename = os.path.basename(raw_filename)
     url = webdav_url.rstrip("/") + "/" + filename
     
     async with aiohttp.ClientSession() as session:

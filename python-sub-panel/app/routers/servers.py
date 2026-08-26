@@ -29,9 +29,9 @@ def format_server_response(s: Server, key_count: int = 0) -> dict:
         "created_at": s.created_at,
         "type": s.type,
         "auth_username": s.auth_username,
-        "auth_password": s.auth_password,
+        "auth_password": "********" if s.auth_password else None,
         "username": s.username,
-        "password": s.password,
+        "password": "********" if s.password else None,
         "inbound_id": s.inbound_id,
         "external_domain": s.external_domain,
         "external_port": s.external_port,
@@ -189,12 +189,12 @@ async def update_server(server_id: str, server_req: ServerUpdate, db: Session = 
         server.type = server_req.type
     if server_req.auth_username is not None:
         server.auth_username = server_req.auth_username
-    if server_req.auth_password is not None:
-        server.auth_password = server_req.auth_password
+    if server_req.auth_password is not None and server_req.auth_password.strip() and server_req.auth_password != "********":
+        server.auth_password = server_req.auth_password.strip()
     if server_req.username is not None:
         server.username = server_req.username
-    if server_req.password is not None:
-        server.password = server_req.password
+    if server_req.password is not None and server_req.password.strip() and server_req.password != "********":
+        server.password = server_req.password.strip()
     if server_req.inbound_id is not None:
         server.inbound_id = server_req.inbound_id
     if server_req.external_domain is not None:

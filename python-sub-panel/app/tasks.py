@@ -42,10 +42,10 @@ async def auto_backup_job():
         from app.routers.backup import export_backup
         import aiohttp
         import json
-        from datetime import datetime
+        from datetime import datetime, timezone
         
         backup_data = await export_backup(db)
-        filename = f"outline_panel_backup_{datetime.utcnow().strftime('%Y-%m-%d_%H%M%S')}.json"
+        filename = f"outline_panel_backup_{datetime.now(timezone.utc).strftime('%Y-%m-%d_%H%M%S')}.json"
         url = webdav_url.value.rstrip("/") + "/" + filename
         
         async with aiohttp.ClientSession() as session:
