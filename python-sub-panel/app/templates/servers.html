@@ -315,6 +315,7 @@
                     </td>
                     <td class="p-4 text-right">
                         <button onclick="syncServerKeys('${s.id}', '${escapeHtml(s.name)}', this)" class="text-emerald-400 hover:text-emerald-300 mr-3 text-sm font-medium">🔄 Sync Keys</button>
+                        <button onclick="deleteAllServerKeys('${s.id}', '${escapeHtml(s.name)}', this)" class="text-orange-400 hover:text-orange-300 mr-3 text-sm font-medium">🗑️ Delete Keys</button>
                         <button onclick="editServer('${s.id}')" class="text-blue-400 hover:text-blue-300 mr-3 text-sm">Edit</button>
                         <button onclick="deleteServer('${s.id}')" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
                     </td>
@@ -448,6 +449,34 @@
                 }
             } catch (e) {
                 showError(`Sync error: ${e.message}`);
+            } finally {
+                if (btnElement) {
+                    btnElement.innerHTML = originalText;
+                    btnElement.disabled = false;
+                }
+            }
+        }
+
+        async function deleteAllServerKeys(serverId, serverName, btnElement) {
+            if (!confirm(`⚠️ Delete ALL keys from server "${serverName}"?\n\nThis will:\n• Remove all client keys from the remote VPN server\n• Delete all key records from the database\n• Affected clients will lose access until keys are re-synced\n\nContinue?`)) return;
+
+            const originalText = btnElement ? btnElement.innerHTML : '🗑️ Delete Keys';
+            if (btnElement) {
+                btnElement.innerText = 'Deleting...';
+                btnElement.disabled = true;
+            }
+            try {
+                const resp = await fetch(`/api/servers/${serverId}/keys`, {
+                    method: 'DELETE'
+                });
+                const data = await resp.json();
+                if (resp.ok && data.ok) {
+                    showSuccess(`Deleted ${data.deleted_keys} key(s) from server "${serverName}" (${data.affected_clients} client(s) affected)`);
+                } else {
+                    showError(`Failed to delete keys: ${data.detail || 'Unknown error'}`);
+                }
+            } catch (e) {
+                showError(`Delete error: ${e.message}`);
             } finally {
                 if (btnElement) {
                     btnElement.innerHTML = originalText;

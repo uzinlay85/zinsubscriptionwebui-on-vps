@@ -343,3 +343,38 @@ async def sync_server_keys(server_id: str, request: Request, db: Session = Depen
         synced += 1
     
     return {"ok": True, "server_name": server.name, "synced": synced, "total_missing": len(target_clients)}
+
+@router.delete("/{server_id}/keys")
+async def delete_all_server_keys(server_id: str, db: Session = Depends(get_db)):
+    """Delete all client keys associated with this server (both remote and local DB)."""
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+    
+    from app.services.vpn_manager import delete_server_keys
+    
+    # Count keys before deletion
+    key_count = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
+    
+    # Get affected client IDs for cache invalidation
+    affected_clients = db.query(Client).join(
+        ClientKey, Client.id == ClientKey.client_id
+    ).filter(ClientKey.server_id == server_id).all()
+    
+    # Delete keys from remote server and local DB
+    await delete_server_keys(server, db)
+    
+    # Invalidate subscription cache for affected clients
+    try:
+        from app.routers.sub import invalidate_sub_cache
+        for client in affected_clients:
+            invalidate_sub_cache(client.sub_token)
+    except Exception:
+        pass
+    
+    return {
+        "ok": True,
+        "server_name": server.name,
+        "deleted_keys": key_count,
+        "affected_clients": len(affected_clients)
+    }
