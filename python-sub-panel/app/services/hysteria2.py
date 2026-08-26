@@ -151,7 +151,9 @@ async def flask_login(server: Server) -> Optional[Dict[str, Any]]:
                         if login_resp.status in [200, 302]:
                             fresh_csrf = csrf_token
                             res_html = await login_resp.text()
-                            csrf_match2 = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', res_html)
+                            csrf_match2 = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', res_html) or \
+                                          re.search(r'csrf_token.*?value=["\']([^"\']+)["\']', res_html) or \
+                                          re.search(r'value=["\']([a-f0-9]{32,64})["\']', res_html)
                             if csrf_match2:
                                 fresh_csrf = csrf_match2.group(1)
                             return {
@@ -181,7 +183,9 @@ async def flask_add_user(server: Server, username: str, password: str, limit_gb:
             ) as get_resp:
                 if get_resp.status == 200:
                     page_html = await get_resp.text()
-                    csrf_match = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', page_html)
+                    csrf_match = re.search(r'name=["\']csrf_token["\']\s+value=["\']([^"\']+)["\']', page_html) or \
+                                 re.search(r'csrf_token.*?value=["\']([^"\']+)["\']', page_html) or \
+                                 re.search(r'value=["\']([a-f0-9]{32,64})["\']', page_html)
                     if csrf_match:
                         fresh_csrf = csrf_match.group(1)
             
@@ -200,11 +204,18 @@ async def flask_add_user(server: Server, username: str, password: str, limit_gb:
                 allow_redirects=True
             ) as resp:
                 text = await resp.text()
-                # If 200/302 and either redirected to table or status success
-                if resp.status in [200, 302]:
+                # Verify that the new password actually appears in the resulting HTML (which means it's in the user table)
+                if password in text:
                     return True
-                return password in text or username in text
-    except Exception:
+                else:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Hysteria2 flask_add_user failed for {username}. HTTP {resp.status}. Response snippet: {text[:200]}")
+                    return False
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Hysteria2 flask_add_user exception: {e}")
         return False
 
 async def flask_delete_user(server: Server, user_pass: str) -> bool:
