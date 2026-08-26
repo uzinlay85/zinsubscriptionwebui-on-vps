@@ -48,6 +48,7 @@ class ClientKey(Base):
     # Canonical identifier returned by the remote provider (for example, Hysteria2 user ID).
     # Kept separate from outline_key_id for backward compatibility with existing records.
     remote_id = Column(String, nullable=True, index=True)
+    remote_username = Column(String, nullable=True)
     access_url = Column(String, nullable=False)
     created_at = Column(String, nullable=False)
     uuid = Column(String, nullable=True)

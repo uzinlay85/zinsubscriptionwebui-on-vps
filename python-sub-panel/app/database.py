@@ -59,6 +59,7 @@ def init_db():
         "ALTER TABLE client_keys ADD COLUMN is_online BOOLEAN DEFAULT 0;",
         "ALTER TABLE client_keys ADD COLUMN last_seen TEXT;",
         "ALTER TABLE client_keys ADD COLUMN remote_id TEXT;",
+        "ALTER TABLE client_keys ADD COLUMN remote_username TEXT;",
     ]
     with engine.connect() as conn:
         for stmt in migrations:

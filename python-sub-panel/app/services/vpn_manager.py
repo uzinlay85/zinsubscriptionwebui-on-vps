@@ -72,19 +72,23 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                 
                 added = False
                 remote_id = None
+                remote_username = client.name
                 if server.type == "hysteria2":
                     result = await hysteria2.express_create_user(server, client.name, password)
                     if result and result.get("password"):
                         password = result.get("password")
                         remote_id = result.get("user_id") or password
+                        remote_username = result.get("username") or client.name
                         added = True
                     else:
                         added = await hysteria2.flask_add_user(server, client.name, password)
                         # Flask fallback identifies users by password.
                         remote_id = password
+                        remote_username = client.name
                 else:
                     added = await hysteria2.flask_add_user(server, client.name, password)
                     remote_id = password
+                    remote_username = client.name
                 
                 if added:
                     raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
@@ -103,6 +107,7 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                         server_id=server.id,
                         outline_key_id=password,
                         remote_id=remote_id,
+                        remote_username=remote_username,
                         access_url=access_url,
                         created_at=now,
                         uuid=None,
@@ -341,7 +346,7 @@ async def unblock_client_keys(client: Client, db: Session):
                 updated = await hysteria2.express_update_user(
                     server,
                     remote_id,
-                    client.name,
+                    k.remote_username or client.name,
                     k.outline_key_id,
                     expiry_days=0,
                 )
@@ -353,6 +358,7 @@ async def unblock_client_keys(client: Client, db: Session):
                     updated = bool(updated_result)
                     if updated_result and updated_result.get("user_id"):
                         k.remote_id = str(updated_result["user_id"])
+                        k.remote_username = updated_result.get("username") or client.name
                 if not updated:
                     updated = await hysteria2.flask_add_user(
                         server, client.name, k.outline_key_id

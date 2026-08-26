@@ -477,24 +477,56 @@ async def sync_server_keys(server_id: str, request: Request, db: Session = Depen
         else:
             target_clients = db.query(Client).filter(Client.id.in_(client_ids), Client.status == "active").all()
 
-        keys_before = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
+        if not target_clients:
+            return {
+                "ok": True,
+                "server_name": server.name,
+                "synced": 0,
+                "created_keys": 0,
+                "total_clients": 0,
+                "failed_clients": [],
+                "warning": "No active clients were found. Create or activate a client before syncing keys."
+            }
+
+        successful_clients = []
+        failed_clients = []
         for client in target_clients:
-            await generate_keys_for_client(client, [server_id], db)
-        keys_after = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
+            try:
+                await generate_keys_for_client(client, [server_id], db)
+                local_key_count = db.query(ClientKey).filter(
+                    ClientKey.server_id == server_id,
+                    ClientKey.client_id == client.id,
+                ).count()
+                if local_key_count > 0:
+                    successful_clients.append(client.name)
+                else:
+                    failed_clients.append(client.name)
+            except Exception as client_err:
+                failed_clients.append(f"{client.name}: {client_err}")
+
+        keys_after = db.query(ClientKey).filter(
+            ClientKey.server_id == server_id,
+            ClientKey.client_id.in_([c.id for c in target_clients]),
+        ).count()
 
         warning_msg = None
-        if len(target_clients) > 0 and keys_after == 0:
+        if failed_clients:
             try:
-                warning_msg = await diagnose_server_failure(server)
+                diagnosis = await diagnose_server_failure(server)
             except Exception as diag_err:
-                warning_msg = f"Failed to generate keys for server '{server.name}': {diag_err}"
-        
+                diagnosis = f"Diagnosis failed: {diag_err}"
+            warning_msg = (
+                f"Key generation failed for {len(failed_clients)} client(s): "
+                f"{', '.join(failed_clients)}. {diagnosis}"
+            )
+
         return {
             "ok": True,
             "server_name": server.name,
-            "synced": len(target_clients),
+            "synced": len(successful_clients),
             "created_keys": keys_after,
             "total_clients": len(target_clients),
+            "failed_clients": failed_clients,
             "warning": warning_msg
         }
     except HTTPException:

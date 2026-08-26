@@ -454,8 +454,10 @@
                 if (resp.ok && data.ok) {
                     if (data.warning) {
                         showError(data.warning);
+                    } else if (data.created_keys > 0 && data.synced > 0) {
+                        showSuccess(`Successfully generated ${data.created_keys} key(s) for ${data.synced}/${data.total_clients} client(s) on server "${serverName}"!`);
                     } else {
-                        showSuccess(`Successfully generated ${data.created_keys} key(s) for ${data.total_clients} client(s) on server "${serverName}"!`);
+                        showError(`No keys were created for server "${serverName}". Check that an active client exists and review the server logs.`);
                     }
                     loadServers();
                 } else {
