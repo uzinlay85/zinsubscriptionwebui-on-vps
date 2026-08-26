@@ -84,7 +84,7 @@ class ClientKeyResponse(BaseModel):
     access_url: str
     created_at: str
     uuid: Optional[str] = None
-    last_seen_bytes: int
+    last_seen_bytes: int = 0
     server_name: Optional[str] = None
     server_type: Optional[str] = None
     is_online: Optional[bool] = False
