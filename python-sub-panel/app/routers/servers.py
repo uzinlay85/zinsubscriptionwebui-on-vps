@@ -332,23 +332,55 @@ async def diagnose_server_failure(server: Server) -> str:
         async with aiohttp.ClientSession() as session:
             if server.type == "outline":
                 test_url = f"{api_url}/access-keys"
-                async with session.get(test_url, timeout=aiohttp.ClientTimeout(total=5), ssl=False) as resp:
-                    if resp.status in [200, 201]:
-                        return f"Outline server '{server.name}' connected OK, but client key creation failed."
-                    elif resp.status in [401, 403]:
-                        return f"Outline server '{server.name}' returned HTTP {resp.status} Unauthorized. Secret key token in API URL is invalid or expired."
-                    elif resp.status == 404:
-                        return f"Outline server '{server.name}' returned HTTP 404 Not Found. Please check secret URL path in API URL."
-                    else:
-                        return f"Outline server '{server.name}' returned HTTP {resp.status} on access-keys endpoint."
+                try:
+                    async with session.post(
+                        test_url,
+                        json={"name": "test_diag"},
+                        timeout=aiohttp.ClientTimeout(total=5),
+                        ssl=False
+                    ) as resp:
+                        text = await resp.text()
+                        if resp.status in [200, 201]:
+                            try:
+                                data = await resp.json()
+                                kid = data.get("id")
+                                if kid:
+                                    await session.delete(f"{test_url}/{kid}")
+                            except Exception:
+                                pass
+                            return f"Outline server '{server.name}' test key creation OK."
+                        elif resp.status in [401, 403]:
+                            return f"Outline server '{server.name}' HTTP {resp.status} Unauthorized. Invalid or expired secret key token in API URL."
+                        else:
+                            return f"Outline server '{server.name}' POST /access-keys HTTP {resp.status}: {text[:150]}"
+                except Exception as ex:
+                    return f"Outline server '{server.name}' POST /access-keys error: {ex}"
             
             elif server.type in ["hysteria2", "hysteria2_python"]:
                 from app.services import hysteria2
                 auth = await hysteria2.flask_login(server)
                 if not auth:
-                    return f"Hysteria2 Panel Login Failed for '{server.name}'. Incorrect Panel Admin Password (current: '{server.auth_password or 'default'}')."
+                    return f"Hysteria2 Panel Login Failed for '{server.name}'. Incorrect Panel Admin Password ('{server.auth_password or 'default'}')."
                 else:
-                    return f"Hysteria2 Panel Login OK for '{server.name}', but adding user failed. Check panel permissions."
+                    base_url = auth.get("working_base_url") or api_url
+                    try:
+                        async with session.post(
+                            f"{base_url}/add",
+                            data={
+                                "csrf_token": auth.get("csrf_token", ""),
+                                "user_name": "test_diag",
+                                "user_pass": "test_pass_12345",
+                                "limit_gb": "0",
+                                "days": "0"
+                            },
+                            timeout=aiohttp.ClientTimeout(total=5),
+                            ssl=False,
+                            allow_redirects=True
+                        ) as h_resp:
+                            h_text = await h_resp.text()
+                            return f"Hysteria2 Login OK, but POST /add HTTP {h_resp.status}: {h_text[:150]}"
+                    except Exception as ex:
+                        return f"Hysteria2 Login OK, but POST /add error: {ex}"
             
             elif server.type == "3x-ui":
                 from app.services import three_xui
