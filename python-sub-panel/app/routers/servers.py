@@ -392,32 +392,19 @@ async def diagnose_server_failure(server: Server) -> str:
     try:
         if server.type == "outline":
             from app.services import outline
-            base_url = outline.get_outline_base_url(server)
-            test_url = f"{base_url}/access-keys"
-            async with aiohttp.ClientSession() as session:
-                try:
-                    async with session.post(
-                        test_url,
-                        json={"name": "test_diag"},
-                        timeout=aiohttp.ClientTimeout(total=5),
-                        ssl=False
-                    ) as resp:
-                        text = await resp.text()
-                        if resp.status in [200, 201]:
-                            try:
-                                data = await resp.json()
-                                kid = data.get("id")
-                                if kid:
-                                    await session.delete(f"{test_url}/{kid}", ssl=False)
-                            except Exception:
-                                pass
-                            return f"Outline server '{server.name}' test key creation OK."
-                        elif resp.status in [401, 403]:
-                            return f"Outline server '{server.name}' HTTP {resp.status} Unauthorized. Invalid or expired secret key token in API URL."
-                        else:
-                            return f"Outline server '{server.name}' POST /access-keys HTTP {resp.status}: {text[:150]}"
-                except Exception as ex:
-                    return f"Outline server '{server.name}' POST /access-keys error: {ex}"
+            # Exercise the exact adapter used by real client provisioning. The old
+            # diagnostic accepted any HTTP 200 response, including an HTML login
+            # page, so it could report OK while create_key() still failed.
+            result = await outline.create_key(server, "__diagnostic_key__")
+            if result and result.get("key_id") and result.get("access_url"):
+                deleted = await outline.delete_key(server, result["key_id"])
+                suffix = "" if deleted else " (cleanup failed; remove the diagnostic key manually)"
+                return f"Outline server '{server.name}' real key creation OK{suffix}."
+            return (
+                f"Outline server '{server.name}' real key creation failed: "
+                "the API did not return a usable key id and access URL. "
+                "Check the Outline management API URL/token and container logs."
+            )
         
         elif server.type in ["hysteria2", "hysteria2_python"]:
             from app.services import hysteria2
