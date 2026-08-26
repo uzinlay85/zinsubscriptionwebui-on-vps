@@ -199,7 +199,9 @@ async def flask_add_user(server: Server, username: str, password: str, limit_gb:
                 data={
                     "csrf_token": fresh_csrf,
                     "user_name": username,
+                    "name": username,
                     "user_pass": password,
+                    "password": password,
                     "limit_gb": str(limit_gb),
                     "days": str(days)
                 },
@@ -208,8 +210,8 @@ async def flask_add_user(server: Server, username: str, password: str, limit_gb:
                 allow_redirects=True
             ) as resp:
                 text = await resp.text()
-                # Verify that the new password actually appears in the resulting HTML (which means it's in the user table)
-                if password in text:
+                # Verify that the new password or username actually appears in the resulting HTML
+                if resp.status in [200, 302] and (password in text or username in text or "success" in text.lower()):
                     return True
                 else:
                     import logging

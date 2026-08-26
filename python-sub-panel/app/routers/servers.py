@@ -14,10 +14,12 @@ router = APIRouter()
 
 from app.services.geo import detect_server_country, get_flag_emoji
 
+from sqlalchemy import func
+
 def generate_id():
     return str(uuid.uuid4())
 
-def format_server_response(s: Server) -> dict:
+def format_server_response(s: Server, key_count: int = 0) -> dict:
     flag = get_flag_emoji(s.country_code)
     return {
         "id": s.id,
@@ -36,13 +38,19 @@ def format_server_response(s: Server) -> dict:
         "is_active": s.is_active if s.is_active is not None else True,
         "country_code": s.country_code,
         "country_name": s.country_name,
-        "flag_emoji": flag
+        "flag_emoji": flag,
+        "total_keys": key_count
     }
 
 @router.get("", response_model=List[ServerResponse])
 @router.get("/", response_model=List[ServerResponse])
 async def list_servers(db: Session = Depends(get_db)):
     servers = db.query(Server).order_by(Server.created_at.desc()).all()
+    key_counts = dict(
+        db.query(ClientKey.server_id, func.count(ClientKey.id))
+        .group_by(ClientKey.server_id)
+        .all()
+    )
     # Auto-resolve country for any servers that don't have it yet
     for s in servers:
         if not s.country_code:
@@ -53,7 +61,7 @@ async def list_servers(db: Session = Depends(get_db)):
             except Exception:
                 pass
     db.commit()
-    return [format_server_response(s) for s in servers]
+    return [format_server_response(s, key_counts.get(s.id, 0)) for s in servers]
 
 @router.get("/status", response_model=List[ServerStatusResponse])
 @router.get("/status/", response_model=List[ServerStatusResponse])

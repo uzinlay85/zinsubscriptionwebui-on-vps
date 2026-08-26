@@ -293,6 +293,7 @@
                             <div>
                                 <div class="font-semibold text-white flex items-center gap-2">
                                     <span>${escapeHtml(s.name)}</span>
+                                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30" title="${s.total_keys || 0} active keys generated for clients on this server">🔑 ${s.total_keys || 0} keys</span>
                                     ${s.is_active === false ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] uppercase font-bold">Maintenance</span>' : ''}
                                 </div>
                                 <div class="text-xs text-zinc-400 font-normal">

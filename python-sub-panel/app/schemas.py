@@ -40,6 +40,7 @@ class ServerResponse(ServerBase):
     id: str
     created_at: str
     flag_emoji: Optional[str] = "🌐"
+    total_keys: Optional[int] = 0
 
 class ClientBase(BaseModel):
     name: str
