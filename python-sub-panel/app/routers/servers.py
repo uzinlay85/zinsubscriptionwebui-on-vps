@@ -358,29 +358,15 @@ async def diagnose_server_failure(server: Server) -> str:
             
             elif server.type in ["hysteria2", "hysteria2_python"]:
                 from app.services import hysteria2
-                auth = await hysteria2.flask_login(server)
-                if not auth:
-                    return f"Hysteria2 Panel Login Failed for '{server.name}'. Incorrect Panel Admin Password ('{server.auth_password or 'default'}')."
-                else:
-                    base_url = auth.get("working_base_url") or api_url
+                ok = await hysteria2.flask_add_user(server, "test_diag", "test_pass_12345")
+                if ok:
                     try:
-                        async with session.post(
-                            f"{base_url}/add",
-                            data={
-                                "csrf_token": auth.get("csrf_token", ""),
-                                "user_name": "test_diag",
-                                "user_pass": "test_pass_12345",
-                                "limit_gb": "0",
-                                "days": "0"
-                            },
-                            timeout=aiohttp.ClientTimeout(total=5),
-                            ssl=False,
-                            allow_redirects=True
-                        ) as h_resp:
-                            h_text = await h_resp.text()
-                            return f"Hysteria2 Login OK, but POST /add HTTP {h_resp.status}: {h_text[:150]}"
-                    except Exception as ex:
-                        return f"Hysteria2 Login OK, but POST /add error: {ex}"
+                        await hysteria2.flask_delete_user(server, "test_pass_12345")
+                    except Exception:
+                        pass
+                    return f"Hysteria2 server '{server.name}' test user creation OK."
+                else:
+                    return f"Hysteria2 server '{server.name}' user creation failed. Please check Panel Admin Password (current: '{server.auth_password or 'default'}')."
             
             elif server.type == "3x-ui":
                 from app.services import three_xui
