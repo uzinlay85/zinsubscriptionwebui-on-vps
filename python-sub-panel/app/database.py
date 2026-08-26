@@ -30,6 +30,8 @@ def init_db():
         "ALTER TABLE servers ADD COLUMN is_active BOOLEAN DEFAULT 1;",
         "ALTER TABLE servers ADD COLUMN country_code TEXT;",
         "ALTER TABLE servers ADD COLUMN country_name TEXT;",
+        "ALTER TABLE client_keys ADD COLUMN is_online BOOLEAN DEFAULT 0;",
+        "ALTER TABLE client_keys ADD COLUMN last_seen TEXT;",
     ]
     with engine.connect() as conn:
         for stmt in migrations:

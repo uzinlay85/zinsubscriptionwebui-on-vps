@@ -49,6 +49,8 @@ class ClientKey(Base):
     created_at = Column(String, nullable=False)
     uuid = Column(String, nullable=True)
     last_seen_bytes = Column(BigInteger, nullable=False, default=0)
+    is_online = Column(Boolean, nullable=True, default=False)
+    last_seen = Column(String, nullable=True)
 
 class Setting(Base):
     __tablename__ = "settings"

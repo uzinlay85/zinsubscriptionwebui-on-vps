@@ -372,15 +372,24 @@ async def sync_all_usage(db: Session):
                     user_metric = metrics.get(k.outline_key_id)
                 elif k.uuid and k.uuid in metrics:
                     user_metric = metrics.get(k.uuid)
-                
+            is_online = False
+            last_seen_str = None
             if isinstance(user_metric, dict):
                 current_bytes = int(user_metric.get("bytes", 0) or 0)
-                if user_metric.get("is_online"):
+                is_online = bool(user_metric.get("is_online", False))
+                last_seen_str = user_metric.get("last_seen")
+                if is_online:
                     client.last_seen = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-                elif user_metric.get("last_seen"):
-                    client.last_seen = user_metric.get("last_seen")
+                    last_seen_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                elif last_seen_str:
+                    client.last_seen = last_seen_str
             else:
                 current_bytes = int(user_metric or 0)
+            
+            # Save key-level status and last active time
+            k.is_online = is_online
+            if last_seen_str:
+                k.last_seen = last_seen_str
             
             # Initial baseline capture for brand new key or reset key
             if k.last_seen_bytes is None or k.last_seen_bytes <= 0:

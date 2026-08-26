@@ -238,6 +238,8 @@ async def get_client(client_id: str, db: Session = Depends(get_db)):
             "last_seen_bytes": k.last_seen_bytes,
             "server_name": server.name if server else None,
             "server_type": server.type if server else None,
+            "is_online": getattr(k, "is_online", False) or False,
+            "last_seen": getattr(k, "last_seen", None),
             "flag_emoji": flg,
             "country_name": getattr(server, "country_name", None) if server else None
         })

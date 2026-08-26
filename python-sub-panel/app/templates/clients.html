@@ -522,6 +522,17 @@
                                     <span class="text-xl select-none" title="${escapeHtml(k.country_name || 'Global')}">${k.flag_emoji || '🌐'}</span>
                                     <span class="font-semibold text-white">${escapeHtml(k.server_name || 'Server')}</span>
                                     <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">${k.server_type || 'vpn'}</span>
+                                    ${k.is_online ? `
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                            Online
+                                        </span>
+                                    ` : `
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-zinc-500/10 text-zinc-400 border border-white/5">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-zinc-500"></span>
+                                            Offline
+                                        </span>
+                                    `}
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <button onclick="regenerateSingleKey('${clientId}', '${k.server_id}')" class="px-2.5 py-1 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 rounded-lg text-xs font-medium border border-amber-500/20 transition-colors flex items-center gap-1" title="Delete and re-create key for this server only">
@@ -534,6 +545,14 @@
                             </div>
                             <div class="p-2.5 bg-black/40 rounded-lg font-mono text-xs text-zinc-300 break-all select-all border border-white/5">
                                 ${escapeHtml(k.access_url || 'No access URL')}
+                            </div>
+                            <div class="flex items-center justify-between text-[11px] text-zinc-400 px-1 pt-0.5">
+                                <div>Last Active: <span class="text-zinc-300 font-medium">${k.last_seen || 'Never'}</span></div>
+                                <div>Data Usage: <span class="text-zinc-300 font-medium">
+                                    ${k.last_seen_bytes >= 1024 * 1024 * 1024 
+                                        ? (k.last_seen_bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB' 
+                                        : (k.last_seen_bytes / (1024 * 1024)).toFixed(2) + ' MB'}
+                                </span></div>
                             </div>
                         </div>
                     `).join('');

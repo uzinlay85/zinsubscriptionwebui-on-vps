@@ -86,6 +86,10 @@ class ClientKeyResponse(BaseModel):
     last_seen_bytes: int
     server_name: Optional[str] = None
     server_type: Optional[str] = None
+    is_online: Optional[bool] = False
+    last_seen: Optional[str] = None
+    flag_emoji: Optional[str] = None
+    country_name: Optional[str] = None
 
 class ClientDetailResponse(ClientResponse):
     keys: List[ClientKeyResponse] = []
