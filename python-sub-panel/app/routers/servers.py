@@ -141,16 +141,20 @@ async def create_server(server_req: ServerCreate, db: Session = Depends(get_db))
         # --- Pre-validate 3x-ui credentials BEFORE saving ---
         if server_req.type == "3x-ui":
             from app.services.three_xui import login_3xui_standalone
+            from types import SimpleNamespace
 
-            class _TempServer:
-                api_url = api_url
-                username = server_req.username or ""
-                auth_username = server_req.auth_username or ""
-                password = server_req.password or ""
-                auth_password = server_req.auth_password or ""
-                name = server_req.name or ""
+            temp_server = SimpleNamespace(
+                api_url=api_url,
+                username=server_req.username or "",
+                auth_username=server_req.auth_username or "",
+                password=server_req.password or "",
+                auth_password=server_req.auth_password or "",
+                name=server_req.name or "",
+                external_domain=server_req.external_domain,
+                external_port=server_req.external_port
+            )
 
-            api_base, err = await login_3xui_standalone(_TempServer())
+            api_base, err = await login_3xui_standalone(temp_server)
             if not api_base:
                 raise HTTPException(
                     status_code=400,

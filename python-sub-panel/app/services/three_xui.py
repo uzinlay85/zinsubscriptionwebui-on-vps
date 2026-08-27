@@ -56,19 +56,11 @@ def get_base_urls(server: Server) -> List[str]:
     return [raw]
 
 
-def get_ssl_setting(server: Server) -> bool:
+def get_ssl_setting(server: Any) -> bool:
     """
     Determine SSL verification setting.
-    Returns True for domain HTTPS URLs, False for raw IP addresses or HTTP URLs.
+    Always returns False to seamlessly support self-signed certificates on 3x-ui panels.
     """
-    if not server.api_url:
-        return False
-    # If using HTTPS and host is a domain name (not raw IPv4)
-    if server.api_url.startswith("https://"):
-        host_part = server.api_url.replace("https://", "").split("/")[0].split(":")[0]
-        # Check if host_part is not purely numbers and dots (IP)
-        if not host_part.replace(".", "").isdigit():
-            return True
     return False
 
 
