@@ -534,6 +534,11 @@
                     method: 'DELETE'
                 });
                 const data = await resp.json();
+                if (resp.status === 401 || data.detail === 'Authentication required') {
+                    showError('Admin session expired. Please log in again.');
+                    window.setTimeout(() => { window.location.href = '/login'; }, 800);
+                    return;
+                }
                 if (resp.ok && data.ok) {
                     showSuccess(`Deleted ${data.deleted_keys} key(s) from server "${serverName}" (${data.affected_clients} client(s) affected)`);
                     loadServers();

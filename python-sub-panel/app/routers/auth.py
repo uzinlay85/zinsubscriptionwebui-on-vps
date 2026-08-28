@@ -8,12 +8,15 @@ from typing import Dict, List
 import os
 import secrets
 import time
+import base64
+import hmac
+import hashlib
 
 router = APIRouter()
 
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "securepassword123")
-AUTH_SECRET = os.getenv("AUTH_SECRET", "change_me")
+AUTH_SECRET = os.getenv("AUTH_SECRET", "change_me_default_vpn_secret_key_12345")
 
 # In-memory rate limiting: IP -> list of failed attempt timestamps
 _FAILED_ATTEMPTS: Dict[str, List[float]] = {}
@@ -52,9 +55,19 @@ def record_failed_attempt(ip: str):
 def clear_failed_attempts(ip: str):
     _FAILED_ATTEMPTS.pop(ip, None)
 
-# Server-side dynamic session token store: session_token -> created_timestamp
+# Dynamic session token store: session_token -> created_timestamp
 _ACTIVE_SESSIONS: Dict[str, float] = {}
 SESSION_MAX_AGE = 7 * 24 * 60 * 60  # 7 days
+
+def create_session(username: str = "admin") -> str:
+    timestamp_str = str(int(time.time()))
+    rand_nonce = secrets.token_hex(8)
+    payload = f"{username}:{timestamp_str}:{rand_nonce}"
+    signature = hmac.new(AUTH_SECRET.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    token_raw = f"{payload}:{signature}"
+    token = base64.urlsafe_b64encode(token_raw.encode("utf-8")).decode("utf-8")
+    _ACTIVE_SESSIONS[token] = float(timestamp_str)
+    return token
 
 def is_valid_session(token: str) -> bool:
     if not token:
@@ -66,12 +79,23 @@ def is_valid_session(token: str) -> bool:
         else:
             _ACTIVE_SESSIONS.pop(token, None)
             return False
+    # Validate cryptographic HMAC signature if server restarted
+    try:
+        raw_bytes = base64.urlsafe_b64decode(token.encode("utf-8"))
+        raw = raw_bytes.decode("utf-8")
+        parts = raw.split(":")
+        if len(parts) == 4:
+            username, timestamp_str, rand_nonce, sig = parts[0], parts[1], parts[2], parts[3]
+            ts = float(timestamp_str)
+            if time.time() - ts < SESSION_MAX_AGE:
+                payload = f"{username}:{timestamp_str}:{rand_nonce}"
+                expected_sig = hmac.new(AUTH_SECRET.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+                if secrets.compare_digest(sig, expected_sig):
+                    _ACTIVE_SESSIONS[token] = ts
+                    return True
+    except Exception:
+        pass
     return False
-
-def create_session() -> str:
-    token = secrets.token_urlsafe(32)
-    _ACTIVE_SESSIONS[token] = time.time()
-    return token
 
 def revoke_session(token: str):
     _ACTIVE_SESSIONS.pop(token, None)
@@ -96,7 +120,7 @@ async def login(request: Request, response: Response, login_req: LoginRequest, d
     clear_failed_attempts(client_ip)
     
     is_https = request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
-    session_token = create_session()
+    session_token = create_session(login_req.username)
     
     resp = JSONResponse(content={"ok": True, "message": "Login successful"})
     resp.set_cookie(
