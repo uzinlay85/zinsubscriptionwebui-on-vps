@@ -280,14 +280,8 @@ async def update_server(server_id: str, server_req: ServerUpdate, db: Session = 
             for k in existing_keys:
                 client = db.query(Client).filter(Client.id == k.client_id).first()
                 if client and server.type in ["hysteria2", "hysteria2_python"]:
-                    raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
-                    if ':' in raw_host_port:
-                        parsed_host, parsed_port = raw_host_port.split(':')[0], raw_host_port.split(':')[1]
-                    else:
-                        parsed_host, parsed_port = raw_host_port, "10443"
-                    host = server.external_domain or parsed_host
-                    port = server.external_port or int(parsed_port)
-                    k.access_url = f"hy2://{k.outline_key_id}@{host}:{port}/?security=tls&sni={host}#{flag} {server.name} - {client.name}"
+                    from app.services.hysteria2 import build_hysteria2_access_url
+                    k.access_url = build_hysteria2_access_url(server, client.name, k.outline_key_id, flag)
                 elif client and server.type == "outline":
                     from app.services.outline import rewrite_outline_access_url
                     if k.access_url and "ss://" in k.access_url:

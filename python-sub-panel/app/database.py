@@ -73,6 +73,31 @@ def init_db():
             except Exception as e:
                 logger.debug(f"Migration note on '{stmt}': {e}")
 
+    # Auto-fix any existing Hysteria2 keys that were stored with port 443 by mistake
+    try:
+        from app.models import Server, ClientKey, Client
+        from app.services.hysteria2 import build_hysteria2_access_url
+        from app.services.geo import get_flag_emoji
+        db = SessionLocal()
+        try:
+            hy2_servers = db.query(Server).filter(Server.type.in_(["hysteria2", "hysteria2_python"])).all()
+            for s in hy2_servers:
+                keys = db.query(ClientKey).filter(ClientKey.server_id == s.id).all()
+                for k in keys:
+                    if k.access_url and (":443/" in k.access_url or ":5000/" in k.access_url or ":80/" in k.access_url):
+                        client = db.query(Client).filter(Client.id == k.client_id).first()
+                        c_name = client.name if client else "client"
+                        flg = get_flag_emoji(s.country_code)
+                        k.access_url = build_hysteria2_access_url(s, c_name, k.outline_key_id, flg)
+            db.commit()
+        except Exception as fix_err:
+            db.rollback()
+            logger.debug(f"Auto-fix hy2 keys note: {fix_err}")
+        finally:
+            db.close()
+    except Exception:
+        pass
+
 def get_db():
     db = SessionLocal()
     try:

@@ -8,6 +8,40 @@ from app.models import Client, ClientKey, Server
 
 logger = logging.getLogger(__name__)
 
+def get_hysteria2_host_port(server: Server) -> tuple[str, int]:
+    """
+    Extract public host and UDP port for Hysteria2 client access URLs.
+    If external_domain / external_port are explicitly set, they take priority.
+    Otherwise, extracts host from api_url and defaults the Hysteria 2 UDP port to 10443
+    (since web API is on 80/443/5000, while Hysteria2 VPN listens on 10443).
+    """
+    raw_host_port = (server.api_url or "").replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
+    if ':' in raw_host_port:
+        parsed_host, parsed_port_str = raw_host_port.split(':')[0], raw_host_port.split(':')[1]
+        try:
+            parsed_port = int(parsed_port_str)
+        except ValueError:
+            parsed_port = 10443
+    else:
+        parsed_host = raw_host_port
+        parsed_port = 10443
+
+    host = (server.external_domain or "").strip() or parsed_host
+    if server.external_port:
+        port = int(server.external_port)
+    else:
+        # Standard web ports (443, 80, 5000, 8000) mean api_url pointed to the WebUI;
+        # Hysteria2 VPN itself runs on UDP port 10443.
+        if parsed_port in (80, 443, 5000, 8000):
+            port = 10443
+        else:
+            port = parsed_port
+    return host, port
+
+def build_hysteria2_access_url(server: Server, client_name: str, password: str, flag_emoji: str = "🌐") -> str:
+    host, port = get_hysteria2_host_port(server)
+    return f"hy2://{password}@{host}:{port}/?security=tls&sni={host}#{flag_emoji} {server.name} - {client_name}"
+
 def get_auth_headers(server: Server) -> Dict[str, str]:
     headers = {}
     username = server.auth_username or server.username or "admin"

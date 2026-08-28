@@ -205,10 +205,16 @@ async def client_portal_page(request: Request, token: str, db: Session = Depends
         s = server_map.get(k.server_id)
         if s:
             flg = get_flag_emoji(s.country_code)
+            if s.type in ["hysteria2", "hysteria2_python"]:
+                from app.services.hysteria2 import build_hysteria2_access_url
+                pwd = k.outline_key_id or f"{client.name}_key"
+                node_url = build_hysteria2_access_url(s, client.name, pwd, flg)
+            else:
+                node_url = k.access_url
             node_list.append({
                 "name": f"{flg} {s.name} - {client.name}",
                 "type": s.type,
-                "url": k.access_url,
+                "url": node_url,
                 "flag_emoji": flg,
                 "country_name": s.country_name or "Global"
             })

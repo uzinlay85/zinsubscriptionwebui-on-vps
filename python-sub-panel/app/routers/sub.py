@@ -162,20 +162,11 @@ async def get_subscription(request: Request, token: str, db: Session = Depends(g
             if url and url.strip():
                 nodes.append(format_node_with_flag(url.strip(), server, client.name))
         elif server.type in ["hysteria2", "hysteria2_python"]:
-            if k.access_url and k.access_url.strip():
-                nodes.append(format_node_with_flag(k.access_url.strip(), server, client.name))
-            else:
-                raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
-                if ':' in raw_host_port:
-                    parsed_host, parsed_port = raw_host_port.split(':')[0], raw_host_port.split(':')[1]
-                else:
-                    parsed_host, parsed_port = raw_host_port, "10443"
-                host = server.external_domain or parsed_host
-                port = server.external_port or int(parsed_port)
-                pwd = k.outline_key_id or f"{client.name}_key"
-                flg = get_flag_emoji(getattr(server, "country_code", None))
-                fallback_url = f"hy2://{pwd}@{host}:{port}/?security=tls&sni={host}#{flg} {server.name} - {client.name}"
-                nodes.append(fallback_url)
+            from app.services.hysteria2 import build_hysteria2_access_url
+            flg = get_flag_emoji(getattr(server, "country_code", None))
+            pwd = k.outline_key_id or f"{client.name}_key"
+            hy2_url = build_hysteria2_access_url(server, client.name, pwd, flg)
+            nodes.append(hy2_url)
         elif server.type == "3x-ui":
             if k.access_url.startswith("3x-ui-sub:"):
                 sub_id = k.access_url.replace("3x-ui-sub:", "")

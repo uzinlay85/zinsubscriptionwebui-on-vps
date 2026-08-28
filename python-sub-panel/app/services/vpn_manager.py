@@ -91,15 +91,7 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                     remote_username = client.name
                 
                 if added:
-                    raw_host_port = server.api_url.replace('https://', '').replace('http://', '').rstrip('/').split('/')[0]
-                    if ':' in raw_host_port:
-                        parsed_host, parsed_port = raw_host_port.split(':')[0], raw_host_port.split(':')[1]
-                    else:
-                        parsed_host, parsed_port = raw_host_port, "443"
-                        
-                    host = server.external_domain or parsed_host
-                    port = server.external_port or int(parsed_port)
-                    access_url = f"hy2://{password}@{host}:{port}/?security=tls&sni={host}#{flag} {server.name} - {client.name}"
+                    access_url = hysteria2.build_hysteria2_access_url(server, client.name, password, flag)
                     
                     client_key = ClientKey(
                         id=key_id,
