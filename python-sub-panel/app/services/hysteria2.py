@@ -380,36 +380,191 @@ async def flask_add_user(server: Server, username: str, password: str, limit_gb:
         logger.error(f"Hysteria2 flask_add_user exception: {e}")
         return False
 
-async def flask_delete_user(server: Server, user_pass: str) -> bool:
+async def flask_delete_user(server: Server, user_pass: str, username: Optional[str] = None) -> bool:
+    if not user_pass and not username:
+        return False
     try:
         async with aiohttp.ClientSession() as session:
             auth = await flask_login_session(session, server)
             base_url = (auth.get("working_base_url") if auth else None) or server.api_url.rstrip("/")
             csrf = auth.get("csrf_token", "") if auth else ""
-            headers = {"X-CSRFToken": csrf} if csrf else {}
+            
+            # Step 1: Inspect HTML page and execute exact form or link from the user's row
+            try:
+                async with session.get(
+                    base_url,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    ssl=False
+                ) as resp:
+                    if resp.status == 200:
+                        html = await resp.text()
+                        
+                        # Extract fresh CSRF token if present
+                        csrf_match = re.search(r'name=["\'](?:csrf_token|_csrf_token|csrf)["\']\s+value=["\']([^"\']+)["\']', html) or \
+                                     re.search(r'csrf_token.*?value=["\']([^"\']+)["\']', html) or \
+                                     re.search(r'value=["\']([a-f0-9]{32,64})["\']', html)
+                        if csrf_match:
+                            csrf = csrf_match.group(1)
 
-            for endpoint in ["/delete", "/delete_user", "/del_user", "/user/delete"]:
-                try:
-                    async with session.post(
-                        f"{base_url}{endpoint}",
-                        data={
-                            "csrf_token": csrf,
-                            "user_pass": user_pass,
-                            "password": user_pass,
-                            "username": user_pass.split("_")[0] if "_" in user_pass else user_pass
-                        },
-                        headers=headers,
-                        timeout=aiohttp.ClientTimeout(total=8),
-                        ssl=False,
-                        allow_redirects=False
-                    ) as resp:
-                        if resp.status in [200, 204, 302]:
-                            return True
-                except Exception:
-                    continue
-    except Exception:
-        pass
+                        rows = re.findall(r'<tr>(.*?)</tr>', html, re.DOTALL)
+                        for row in rows:
+                            target_match = False
+                            if user_pass and user_pass in row:
+                                target_match = True
+                            elif username and (f"<b>{username}</b>" in row or f">{username}<" in row):
+                                target_match = True
+
+                            if target_match:
+                                # Find form in row
+                                form_match = re.search(r'<form\s+([^>]*?)>(.*?)</form>', row, re.DOTALL | re.IGNORECASE)
+                                if form_match:
+                                    form_attrs, form_body = form_match.group(1), form_match.group(2)
+                                    action_match = re.search(r'action=["\']([^"\']*)["\']', form_attrs, re.IGNORECASE)
+                                    action = action_match.group(1) if action_match else "/delete"
+                                    method_match = re.search(r'method=["\']([^"\']*)["\']', form_attrs, re.IGNORECASE)
+                                    method = (method_match.group(1) if method_match else "POST").upper()
+                                    
+                                    form_url = action if action.startswith("http") else f"{base_url.rstrip('/')}/{action.lstrip('/')}"
+                                    
+                                    # Extract all input fields
+                                    form_data = {}
+                                    input_matches = re.findall(r'<input\s+([^>]*?)>', form_body, re.IGNORECASE)
+                                    for inp in input_matches:
+                                        n_m = re.search(r'name=["\']([^"\']+)["\']', inp, re.IGNORECASE)
+                                        v_m = re.search(r'value=["\']([^"\']*)["\']', inp, re.IGNORECASE)
+                                        if n_m:
+                                            form_data[n_m.group(1)] = v_m.group(1) if v_m else ""
+                                    
+                                    if csrf and "csrf_token" not in form_data:
+                                        form_data["csrf_token"] = csrf
+                                    if user_pass and "user_pass" not in form_data and "password" not in form_data:
+                                        form_data["user_pass"] = user_pass
+                                        form_data["password"] = user_pass
+                                    
+                                    headers = {"X-CSRFToken": csrf, "X-CSRF-Token": csrf} if csrf else {}
+                                    try:
+                                        if method == "GET":
+                                            async with session.get(form_url, params=form_data, headers=headers, timeout=aiohttp.ClientTimeout(total=8), ssl=False, allow_redirects=True) as r:
+                                                if r.status in [200, 204, 302]:
+                                                    return True
+                                        else:
+                                            async with session.post(form_url, data=form_data, headers=headers, timeout=aiohttp.ClientTimeout(total=8), ssl=False, allow_redirects=True) as r:
+                                                if r.status in [200, 204, 302]:
+                                                    return True
+                                    except Exception:
+                                        pass
+
+                                # Find link in row
+                                link_matches = re.findall(r'<a\s+[^>]*?href=["\']([^"\']+)["\']', row, re.IGNORECASE)
+                                for link in link_matches:
+                                    if any(keyword in link.lower() for keyword in ["del", "remove", "delete"]):
+                                        link_url = link if link.startswith("http") else f"{base_url.rstrip('/')}/{link.lstrip('/')}"
+                                        try:
+                                            async with session.get(link_url, timeout=aiohttp.ClientTimeout(total=8), ssl=False, allow_redirects=True) as r:
+                                                if r.status in [200, 204, 302]:
+                                                    return True
+                                        except Exception:
+                                            pass
+            except Exception as ex:
+                logger.debug(f"flask_delete_user page parsing failed: {ex}")
+
+            # Step 2: Fallback direct API / form endpoints
+            headers = {"X-CSRFToken": csrf, "X-CSRF-Token": csrf} if csrf else {}
+            u_name = username or (user_pass.split("_")[0] if user_pass and "_" in user_pass else user_pass)
+            
+            payload_variants = [
+                {"user_pass": user_pass, "password": user_pass, "username": u_name, "name": u_name, "user_name": u_name, "csrf_token": csrf},
+                {"user_pass": user_pass, "csrf_token": csrf},
+                {"password": user_pass, "csrf_token": csrf},
+                {"username": u_name, "csrf_token": csrf},
+                {"name": u_name, "csrf_token": csrf},
+            ]
+            
+            for endpoint in ["/delete", "/delete_user", "/del_user", "/user/delete", "/api/delete_user", "/api/users/delete"]:
+                for p_data in payload_variants:
+                    try:
+                        async with session.post(
+                            f"{base_url}{endpoint}",
+                            data=p_data,
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=5),
+                            ssl=False,
+                            allow_redirects=True
+                        ) as resp:
+                            if resp.status in [200, 204, 302]:
+                                return True
+                    except Exception:
+                        continue
+            
+            # Step 3: Path parameter variants
+            for id_val in filter(None, [user_pass, u_name]):
+                for endpoint_prefix in ["/delete/", "/delete_user/", "/del_user/", "/user/delete/"]:
+                    try:
+                        async with session.post(
+                            f"{base_url}{endpoint_prefix}{id_val}",
+                            data={"csrf_token": csrf},
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=5),
+                            ssl=False,
+                            allow_redirects=True
+                        ) as resp:
+                            if resp.status in [200, 204, 302]:
+                                return True
+                    except Exception:
+                        pass
+                    try:
+                        async with session.get(
+                            f"{base_url}{endpoint_prefix}{id_val}",
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=5),
+                            ssl=False,
+                            allow_redirects=True
+                        ) as resp:
+                            if resp.status in [200, 204, 302]:
+                                return True
+                    except Exception:
+                        pass
+    except Exception as e:
+        logger.error(f"Hysteria2 flask_delete_user exception for {user_pass}/{username}: {e}")
     return False
+
+async def delete_all_remote_users(server: Server) -> int:
+    """
+    Purge ALL remote users from the Hysteria2 server (both Express API and Flask WebUI).
+    Returns count of successfully deleted remote users.
+    """
+    deleted_count = 0
+    # 1. Try Express fetch & delete
+    try:
+        express_users = await express_fetch_users(server)
+        for u in express_users:
+            uid = str(u.get("id", "") or u.get("username", "") or u.get("password", ""))
+            uname = str(u.get("username", ""))
+            if uid:
+                if await express_delete_user(server, uid):
+                    deleted_count += 1
+                elif uname and await express_delete_user(server, uname):
+                    deleted_count += 1
+                elif u.get("password"):
+                    await flask_delete_user(server, str(u.get("password")), uname)
+    except Exception as e:
+        logger.debug(f"express delete_all_remote_users error: {e}")
+
+    # 2. Try Flask WebUI fetch & delete
+    try:
+        flask_users = await flask_fetch_users(server)
+        for fu in flask_users:
+            pwd = fu.get("password", "")
+            uname = fu.get("username", "")
+            if pwd or uname:
+                if await flask_delete_user(server, pwd, uname):
+                    deleted_count += 1
+                if uname:
+                    await express_delete_user(server, uname)
+    except Exception as e:
+        logger.debug(f"flask delete_all_remote_users error: {e}")
+
+    return deleted_count
 
 def parse_bytes_from_str(val_str: str, unit_str: str) -> int:
     try:

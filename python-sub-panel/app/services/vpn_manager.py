@@ -67,6 +67,19 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                     keys_to_add.append(client_key)
             
             elif server.type in ["hysteria2", "hysteria2_python"]:
+                # Pre-clean any existing user with client.name or previous password on remote Hysteria2 server
+                try:
+                    old_keys_for_server = old_keys_map.get(server.id, [])
+                    for ok in old_keys_for_server:
+                        if ok.outline_key_id:
+                            await hysteria2.express_delete_user(server, ok.remote_id or ok.outline_key_id)
+                            await hysteria2.flask_delete_user(server, ok.outline_key_id, ok.remote_username or client.name)
+                    # Also purge by username directly to guarantee no duplicate
+                    await hysteria2.express_delete_user(server, client.name)
+                    await hysteria2.flask_delete_user(server, "", client.name)
+                except Exception as purge_err:
+                    logger.debug(f"Pre-creation purge note for {client.name}: {purge_err}")
+
                 rand_str = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
                 password = f"{client.name}_{rand_str}"
                 
@@ -82,7 +95,6 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                         added = True
                     else:
                         added = await hysteria2.flask_add_user(server, client.name, password)
-                        # Flask fallback identifies users by password.
                         remote_id = password
                         remote_username = client.name
                 else:
@@ -171,13 +183,12 @@ async def generate_keys_for_client(client: Client, server_ids: list, db: Session
                     elif server.type in ["hysteria2", "hysteria2_python"] and ok.outline_key_id and ok.outline_key_id not in deleted_key_ids:
                         deleted_key_ids.add(ok.outline_key_id)
                         try:
-                            if server.type == "hysteria2":
-                                remote_id = ok.remote_id or ok.outline_key_id
-                                del_res = await hysteria2.express_delete_user(server, remote_id)
-                                if not del_res:
-                                    await hysteria2.flask_delete_user(server, ok.outline_key_id)
-                            else:
-                                await hysteria2.flask_delete_user(server, ok.remote_id or ok.outline_key_id)
+                            remote_id = ok.remote_id or ok.outline_key_id
+                            del_res = await hysteria2.express_delete_user(server, str(remote_id))
+                            if not del_res and ok.outline_key_id:
+                                del_res = await hysteria2.express_delete_user(server, str(ok.outline_key_id))
+                            if not del_res:
+                                await hysteria2.flask_delete_user(server, ok.outline_key_id, ok.remote_username or client.name)
                         except Exception as e:
                             logger.error(f"Error revoking old Hysteria2 key {ok.outline_key_id}: {e}")
                     elif server.type == "3x-ui" and ok.uuid and ok.uuid not in deleted_uuids:
@@ -225,12 +236,13 @@ async def delete_client_keys(client: Client, db: Session):
         elif server.type in ["hysteria2", "hysteria2_python"] and k.outline_key_id and k.outline_key_id not in deleted_key_ids:
             deleted_key_ids.add(k.outline_key_id)
             try:
-                if server.type == "hysteria2":
-                    del_res = await hysteria2.express_delete_user(server, k.outline_key_id)
-                    if not del_res:
-                        await hysteria2.flask_delete_user(server, k.outline_key_id)
-                else:
-                    await hysteria2.flask_delete_user(server, k.outline_key_id)
+                remote_id = k.remote_id or k.outline_key_id
+                username = k.remote_username or client.name
+                del_res = await hysteria2.express_delete_user(server, str(remote_id))
+                if not del_res and username != str(remote_id):
+                    del_res = await hysteria2.express_delete_user(server, username)
+                if not del_res:
+                    await hysteria2.flask_delete_user(server, k.outline_key_id, username)
             except Exception:
                 pass
         elif server.type == "3x-ui" and k.uuid and k.uuid not in deleted_uuids:
@@ -251,6 +263,13 @@ async def delete_client_keys(client: Client, db: Session):
         pass
 
 async def delete_server_keys(server: Server, db: Session):
+    # 1. For Hysteria2, purge ALL users from the remote server first
+    if server.type in ["hysteria2", "hysteria2_python"]:
+        try:
+            await hysteria2.delete_all_remote_users(server)
+        except Exception as e:
+            logger.error(f"Error purging all remote Hysteria2 users on {server.name}: {e}")
+
     keys = db.query(ClientKey).filter(ClientKey.server_id == server.id).all()
     
     deleted_uuids = set()
@@ -269,14 +288,11 @@ async def delete_server_keys(server: Server, db: Session):
             if delete_key not in deleted_key_ids:
                 deleted_key_ids.add(delete_key)
                 try:
-                    if server.type == "hysteria2":
-                        deleted = await hysteria2.express_delete_user(server, str(remote_id))
-                        if not deleted and k.outline_key_id and str(k.outline_key_id) != str(remote_id):
-                            deleted = await hysteria2.express_delete_user(server, str(k.outline_key_id))
-                        if not deleted:
-                            await hysteria2.flask_delete_user(server, k.remote_username or k.outline_key_id)
-                    else:
-                        await hysteria2.flask_delete_user(server, k.remote_username or k.outline_key_id)
+                    del_ok = await hysteria2.express_delete_user(server, str(remote_id))
+                    if not del_ok and k.outline_key_id and str(k.outline_key_id) != str(remote_id):
+                        del_ok = await hysteria2.express_delete_user(server, str(k.outline_key_id))
+                    if not del_ok:
+                        await hysteria2.flask_delete_user(server, k.outline_key_id, k.remote_username)
                 except Exception as e:
                     logger.error(f"Hysteria2 server delete failed for {server.name}: {e}")
         elif server.type == "3x-ui" and k.uuid and k.uuid not in deleted_uuids:
