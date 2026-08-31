@@ -4,15 +4,19 @@ import json
 import base64
 import re
 import urllib.parse
+import uuid
+import secrets
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List, Tuple
 import aiohttp
+from sqlalchemy.orm import Session
 from cryptography.hazmat.primitives.asymmetric import x25519
-from app.models import Server, Client
+from app.models import Server, Client, ClientKey
 
 logger = logging.getLogger(__name__)
 
-# Production-ready API request timeouts (15s total, 5s connect)
-DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=15, connect=5)
+# Production-ready fast API request timeouts (8s total, 3s connect)
+DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=8, connect=3)
 
 
 def derive_x25519_public_key(priv_key_str: str) -> str:
@@ -615,31 +619,23 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
 
                 added = False
 
-                # Candidate addClient endpoints
+                # Candidate addClient endpoints (direct and fallback)
                 add_endpoints = [
                     "panel/api/inbounds/addClient",
                     "panel/inbound/addClient",
-                    "xui/inbound/addClient",
-                    "xui/API/inbounds/addClient",
                     f"panel/api/inbounds/{ib_id_int}/addClient",
-                    f"panel/inbound/{ib_id_int}/addClient",
-                ]
-
-                # Payload variants (stringified JSON settings vs nested dict)
-                payload_variants = [
-                    {"id": ib_id_int, "settings": json.dumps({"clients": [c_data]})},
-                    {"id": ib_id_int, "settings": {"clients": [c_data]}},
-                    {"clients": [c_data]},
                 ]
 
                 for ep in add_endpoints:
                     if added:
                         break
                     add_client_url = build_url(api_base, ep)
-                    for payload in payload_variants:
+                    for payload in [
+                        {"id": ib_id_int, "settings": json.dumps({"clients": [c_data]})},
+                        {"id": ib_id_int, "settings": {"clients": [c_data]}},
+                    ]:
                         if added:
                             break
-                        # 1. Try JSON POST
                         try:
                             json_headers = dict(headers)
                             json_headers["Content-Type"] = "application/json"
@@ -658,42 +654,10 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                                         res = {}
                                     if res.get("success"):
                                         added = True
-                                        logger.info(f"3x-ui: Client added to inbound {ib_id_int} via {ep} (JSON) on {server.name}")
+                                        logger.info(f"3x-ui: Client added to inbound {ib_id_int} via {ep} on {server.name}")
                                         break
-                                    elif res.get("msg") and "duplicate" in res.get("msg", "").lower():
-                                        # Clean up duplicate and retry
-                                        for del_ep in [f"panel/api/inbounds/{ib_id_int}/delClient/{client_uuid}", f"panel/inbound/{ib_id_int}/delClient/{client_uuid}"]:
-                                            try:
-                                                await session.post(build_url(api_base, del_ep), headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify)
-                                            except Exception:
-                                                pass
                         except Exception as e:
-                            logger.debug(f"3x-ui addClient {ep} json error: {e}")
-
-                        # 2. Try Form-urlencoded POST (Gin c.ShouldBind compatibility)
-                        if not added:
-                            try:
-                                form_headers = dict(headers)
-                                form_headers["Content-Type"] = "application/x-www-form-urlencoded"
-                                async with session.post(
-                                    add_client_url,
-                                    data={"id": str(ib_id_int), "settings": json.dumps({"clients": [c_data]})},
-                                    headers=form_headers,
-                                    timeout=DEFAULT_TIMEOUT,
-                                    ssl=ssl_verify
-                                ) as form_resp:
-                                    form_text = await form_resp.text()
-                                    if form_resp.status == 200:
-                                        try:
-                                            fres = json.loads(form_text)
-                                        except Exception:
-                                            fres = {}
-                                        if fres.get("success"):
-                                            added = True
-                                            logger.info(f"3x-ui: Client added to inbound {ib_id_int} via {ep} (Form) on {server.name}")
-                                            break
-                            except Exception as e:
-                                logger.debug(f"3x-ui addClient {ep} form error: {e}")
+                            logger.debug(f"3x-ui addClient {ep} error: {e}")
 
                 # Method 3: Inbound update fallback (/panel/api/inbounds/update/{id} or /panel/inbound/update/{id})
                 if not added:
@@ -1069,6 +1033,231 @@ async def delete_all_3xui_clients(server: Server) -> int:
     except Exception as e:
         logger.error(f"3x-ui delete_all_3xui_clients error: {e}")
     return deleted_count
+
+
+async def sync_3xui_server_all_clients(server: Server, clients: List[Client], db: Session) -> Dict[str, Any]:
+    """
+    High-performance batch key generation for 3X-UI servers.
+    Populates all inbounds with active clients in a single API update per inbound (< 1 second).
+    """
+    ext_host, ext_port = parse_server_host_port(server)
+    ssl_verify = get_ssl_setting(server)
+    
+    created_count = 0
+    
+    try:
+        jar = aiohttp.CookieJar(unsafe=True)
+        fast_timeout = aiohttp.ClientTimeout(total=8, connect=3)
+        async with aiohttp.ClientSession(cookie_jar=jar) as session:
+            api_base, headers = await login_3xui(session, server, timeout=fast_timeout)
+            if not api_base:
+                return {
+                    "ok": False,
+                    "created_keys": 0,
+                    "failed_clients": [c.name for c in clients],
+                    "error": f"Cannot login to 3x-ui server '{server.name}'. Check credentials."
+                }
+            
+            # Fetch inbounds list
+            inbound_list = []
+            for list_ep in ["panel/api/inbounds/list", "panel/inbound/list", "xui/inbound/list"]:
+                try:
+                    async with session.get(build_url(api_base, list_ep), headers=headers, timeout=fast_timeout, ssl=ssl_verify) as l_resp:
+                        if l_resp.status == 200:
+                            lj = await l_resp.json()
+                            if lj.get("success"):
+                                inbound_list = lj.get("obj", [])
+                                break
+                except Exception:
+                    pass
+            
+            if not inbound_list:
+                return {
+                    "ok": False,
+                    "created_keys": 0,
+                    "failed_clients": [c.name for c in clients],
+                    "error": f"No inbounds found on 3x-ui server '{server.name}'."
+                }
+            
+            now = datetime.now(timezone.utc)
+            
+            for inb in inbound_list:
+                ib_id = inb.get("id")
+                if ib_id is None:
+                    continue
+                try:
+                    ib_id_int = int(ib_id)
+                except Exception:
+                    ib_id_int = 1
+                
+                # Fetch full inbound object
+                full_inb = inb
+                for get_ep in [f"panel/api/inbounds/get/{ib_id_int}", f"panel/inbound/get/{ib_id_int}"]:
+                    try:
+                        async with session.get(build_url(api_base, get_ep), headers=headers, timeout=fast_timeout, ssl=ssl_verify) as g_resp:
+                            if g_resp.status == 200:
+                                gj = await g_resp.json()
+                                if gj.get("success") and gj.get("obj"):
+                                    full_inb = gj.get("obj")
+                                    break
+                    except Exception:
+                        pass
+                
+                stream_raw = full_inb.get("streamSettings", "{}")
+                try:
+                    stream = json.loads(stream_raw) if isinstance(stream_raw, str) else (stream_raw or {})
+                except Exception:
+                    stream = {}
+                
+                protocol = (full_inb.get("protocol") or "vless").lower()
+                security = stream.get("security", "none")
+                
+                inb_settings_raw = full_inb.get("settings", "{}")
+                try:
+                    inb_settings = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else (inb_settings_raw or {})
+                except Exception:
+                    inb_settings = {}
+                
+                existing_clients = inb_settings.get("clients", [])
+                
+                # Prepare all client objects for this inbound
+                new_inbound_clients = []
+                client_keys_to_save = []
+                
+                for client in clients:
+                    client_uuid = str(uuid.uuid4())
+                    sub_id = secrets.token_hex(8)
+                    client_email = f"{client.name}_{ib_id_int}" if len(inbound_list) > 1 else client.name
+                    total_bytes = int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0
+                    
+                    if protocol == "vless":
+                        c_data = {
+                            "id": client_uuid,
+                            "flow": "xtls-rprx-vision" if security == "reality" else "",
+                            "email": client_email,
+                            "limitIp": 0,
+                            "totalGB": total_bytes,
+                            "expiryTime": 0,
+                            "enable": True,
+                            "subId": sub_id
+                        }
+                    elif protocol == "vmess":
+                        c_data = {
+                            "id": client_uuid,
+                            "alterId": 0,
+                            "email": client_email,
+                            "limitIp": 0,
+                            "totalGB": total_bytes,
+                            "expiryTime": 0,
+                            "enable": True,
+                            "subId": sub_id
+                        }
+                    elif protocol in ["hysteria", "hysteria2", "hy2", "tuic"]:
+                        c_data = {
+                            "auth": client_uuid,
+                            "password": client_uuid,
+                            "id": client_uuid,
+                            "email": client_email,
+                            "limitIp": 0,
+                            "totalGB": total_bytes,
+                            "expiryTime": 0,
+                            "enable": True,
+                            "subId": sub_id
+                        }
+                    elif protocol in ["trojan", "shadowsocks", "ss"]:
+                        c_data = {
+                            "password": client_uuid,
+                            "email": client_email,
+                            "limitIp": 0,
+                            "totalGB": total_bytes,
+                            "expiryTime": 0,
+                            "enable": True,
+                            "subId": sub_id
+                        }
+                    else:
+                        c_data = {
+                            "id": client_uuid,
+                            "password": client_uuid,
+                            "email": client_email,
+                            "limitIp": 0,
+                            "totalGB": total_bytes,
+                            "expiryTime": 0,
+                            "enable": True,
+                            "subId": sub_id
+                        }
+                    
+                    new_inbound_clients.append(c_data)
+                    
+                    access_url = generate_inbound_access_url(
+                        full_inb, server, client, client_uuid, sub_id, ext_host, ext_port
+                    )
+                    
+                    key_id = str(uuid.uuid4())
+                    client_keys_to_save.append(ClientKey(
+                        id=key_id,
+                        client_id=client.id,
+                        server_id=server.id,
+                        outline_key_id=f"{sub_id}:{ib_id_int}",
+                        access_url=access_url or "",
+                        created_at=now,
+                        uuid=client_uuid,
+                        last_seen_bytes=0
+                    ))
+                
+                # Clean up existing clients and merge with new clients
+                managed_emails = {f"{c.name}_{ib_id_int}" for c in clients} | {c.name for c in clients}
+                retained_clients = [
+                    cl for cl in existing_clients
+                    if cl.get("email") not in managed_emails
+                ]
+                inb_settings["clients"] = retained_clients + new_inbound_clients
+                full_inb["settings"] = json.dumps(inb_settings)
+                
+                # Apply update to 3X-UI in one single request
+                updated = False
+                for upd_ep in [f"panel/api/inbounds/update/{ib_id_int}", f"panel/inbound/update/{ib_id_int}"]:
+                    try:
+                        json_headers = dict(headers)
+                        json_headers["Content-Type"] = "application/json"
+                        async with session.post(build_url(api_base, upd_ep), json=full_inb, headers=json_headers, timeout=fast_timeout, ssl=ssl_verify) as u_resp:
+                            if u_resp.status == 200:
+                                uj = await u_resp.json()
+                                if uj.get("success"):
+                                    updated = True
+                                    logger.info(f"3x-ui: Updated inbound {ib_id_int} with {len(new_inbound_clients)} client(s) on {server.name}")
+                                    break
+                    except Exception as upd_err:
+                        logger.debug(f"3x-ui update inbound {ib_id_int} error: {upd_err}")
+                
+                # Save keys
+                for k in client_keys_to_save:
+                    # Remove any existing key for same client and server/inbound
+                    existing_k = db.query(ClientKey).filter(
+                        ClientKey.client_id == k.client_id,
+                        ClientKey.server_id == k.server_id,
+                        ClientKey.outline_key_id == k.outline_key_id
+                    ).first()
+                    if existing_k:
+                        db.delete(existing_k)
+                    db.add(k)
+                    created_count += 1
+            
+            db.commit()
+            return {
+                "ok": True,
+                "created_keys": created_count,
+                "total_clients": len(clients),
+                "failed_clients": []
+            }
+            
+    except Exception as e:
+        logger.exception(f"3x-ui batch sync error for {server.name}: {e}")
+        return {
+            "ok": False,
+            "created_keys": created_count,
+            "failed_clients": [c.name for c in clients],
+            "error": str(e)
+        }
 
 
 

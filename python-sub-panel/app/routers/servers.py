@@ -488,6 +488,24 @@ async def sync_server_keys(server_id: str, request: Request, db: Session = Depen
                 "warning": "No active clients were found. Create or activate a client before syncing keys."
             }
 
+        # Fast path for 3X-UI servers: batch update all inbounds in a single transaction
+        if server.type == "3x-ui":
+            from app.services.three_xui import sync_3xui_server_all_clients
+            batch_res = await sync_3xui_server_all_clients(server, target_clients, db)
+            keys_after = db.query(ClientKey).filter(
+                ClientKey.server_id == server_id,
+                ClientKey.client_id.in_([c.id for c in target_clients]),
+            ).count()
+            return {
+                "ok": batch_res.get("ok", False),
+                "server_name": server.name,
+                "synced": len(target_clients) if batch_res.get("ok") else 0,
+                "created_keys": keys_after,
+                "total_clients": len(target_clients),
+                "failed_clients": batch_res.get("failed_clients", []),
+                "warning": batch_res.get("error")
+            }
+
         successful_clients = []
         failed_clients = []
         for client in target_clients:
@@ -547,6 +565,21 @@ async def rebuild_server_keys(server_id: str, db: Session = Depends(get_db)):
         from app.services.vpn_manager import delete_server_keys, generate_keys_for_client
         await delete_server_keys(server, db)
         active_clients = db.query(Client).filter(Client.status == "active").all()
+        
+        # Fast path for 3X-UI servers: batch update all inbounds in a single transaction
+        if server.type == "3x-ui":
+            from app.services.three_xui import sync_3xui_server_all_clients
+            batch_res = await sync_3xui_server_all_clients(server, active_clients, db)
+            keys_after = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
+            return {
+                "ok": batch_res.get("ok", False),
+                "server_name": server.name,
+                "created_keys": keys_after,
+                "total_clients": len(active_clients),
+                "failed_clients": batch_res.get("failed_clients", []),
+                "warning": batch_res.get("error")
+            }
+
         failed_clients = []
         for client in active_clients:
             try:
