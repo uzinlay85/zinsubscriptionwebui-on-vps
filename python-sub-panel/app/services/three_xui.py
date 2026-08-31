@@ -538,172 +538,178 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                             except Exception:
                                 pass
 
-                # Build client data payload (tgId MUST BE integer 0, NOT empty string "")
-                # Use unique email per inbound to avoid 3x-ui "Duplicate email" rejection
+                # Build client data payload strictly matching protocol schema
                 client_email = f"{client.name}_{ib_id_int}" if len(target_inbounds) > 1 else client.name
-                c_data = {
-                    "id": client_uuid,
-                    "password": client_uuid,  # For Trojan / Shadowsocks
-                    "email": client_email,
-                    "limitIp": 0,
-                    "totalGB": int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0,
-                    "expiryTime": 0,
-                    "enable": True,
-                    "subId": sub_id,
-                    "tgId": 0,
-                    "reset": 0
-                }
-                if protocol == "vmess":
-                    c_data["alterId"] = 0
+                total_bytes = int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0
+
                 if protocol == "vless":
-                    c_data["flow"] = "xtls-rprx-vision" if security == "reality" else ""
+                    c_data = {
+                        "id": client_uuid,
+                        "flow": "xtls-rprx-vision" if security == "reality" else "",
+                        "email": client_email,
+                        "limitIp": 0,
+                        "totalGB": total_bytes,
+                        "expiryTime": 0,
+                        "enable": True,
+                        "subId": sub_id,
+                        "tgId": "",
+                        "reset": 0
+                    }
+                elif protocol == "vmess":
+                    c_data = {
+                        "id": client_uuid,
+                        "alterId": 0,
+                        "email": client_email,
+                        "limitIp": 0,
+                        "totalGB": total_bytes,
+                        "expiryTime": 0,
+                        "enable": True,
+                        "subId": sub_id,
+                        "tgId": "",
+                        "reset": 0
+                    }
+                else:  # trojan / shadowsocks
+                    c_data = {
+                        "password": client_uuid,
+                        "email": client_email,
+                        "limitIp": 0,
+                        "totalGB": total_bytes,
+                        "expiryTime": 0,
+                        "enable": True,
+                        "subId": sub_id,
+                        "tgId": "",
+                        "reset": 0
+                    }
 
                 added = False
 
-                # Method 1: POST /panel/api/inbounds/addClient
-                add_client_url = build_url(api_base, "panel/api/inbounds/addClient")
-                for payload in [
+                # Candidate addClient endpoints
+                add_endpoints = [
+                    "panel/api/inbounds/addClient",
+                    "panel/inbound/addClient",
+                    "xui/inbound/addClient",
+                    f"panel/api/inbounds/{ib_id_int}/addClient",
+                    f"panel/inbound/{ib_id_int}/addClient",
+                ]
+
+                # Payload variants (stringified JSON settings vs nested dict)
+                payload_variants = [
                     {"id": ib_id_int, "settings": json.dumps({"clients": [c_data]})},
                     {"id": ib_id_int, "settings": {"clients": [c_data]}},
-                ]:
+                    {"clients": [c_data]},
+                ]
+
+                for ep in add_endpoints:
                     if added:
                         break
-                    try:
-                        async with session.post(
-                            add_client_url,
-                            json=payload,
-                            headers=headers,
-                            timeout=DEFAULT_TIMEOUT,
-                            ssl=ssl_verify
-                        ) as add_resp:
-                            resp_text = await add_resp.text()
-                            if add_resp.status == 200:
-                                try:
-                                    res = json.loads(resp_text)
-                                except Exception:
-                                    res = {}
-                                if res.get("success"):
-                                    added = True
-                                    logger.info(f"3x-ui: Client added to inbound {ib_id_int} on {server.name}")
-                                    break
-                                else:
-                                    logger.warning(f"3x-ui addClient inbound {ib_id_int} rejected: {res.get('msg', resp_text[:200])}")
-                                    # If duplicate rejection, force delete and retry
-                                    if res.get("msg") and "duplicate" in res.get("msg", "").lower():
-                                        get_inb_url = build_url(api_base, f"panel/api/inbounds/get/{ib_id_int}")
-                                        try:
-                                            async with session.get(get_inb_url, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as g_resp:
-                                                if g_resp.status == 200:
-                                                    g_json = await g_resp.json()
-                                                    if g_json.get("success"):
-                                                        inb_obj = g_json.get("obj", {})
-                                                        s_raw = inb_obj.get("settings", "{}")
-                                                        s_data = json.loads(s_raw) if isinstance(s_raw, str) else (s_raw or {})
-                                                        for cl in s_data.get("clients", []):
-                                                            if cl.get("email") in (client.name, client_email, f"{client.name}_{ib_id_int}") or cl.get("id") == client_uuid:
-                                                                c_uuid = cl.get("id") or cl.get("password")
-                                                                if c_uuid:
-                                                                    del_url = build_url(api_base, f"panel/api/inbounds/{ib_id_int}/delClient/{c_uuid}")
-                                                                    await session.post(del_url, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify)
-                                                        # Retry add
-                                                        async with session.post(add_client_url, json={"id": ib_id_int, "settings": json.dumps({"clients": [c_data]})}, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as retry_resp:
-                                                            if retry_resp.status == 200:
-                                                                ret_json = await retry_resp.json()
-                                                                if ret_json.get("success"):
-                                                                    added = True
-                                                                    logger.info(f"3x-ui: Client added after duplicate cleanup on inbound {ib_id_int}")
-                                                                    break
-                                        except Exception as dup_err:
-                                            logger.debug(f"3x-ui duplicate resolution error: {dup_err}")
-                            else:
-                                logger.warning(f"3x-ui addClient inbound {ib_id_int} HTTP {add_resp.status}: {resp_text[:200]}")
-                    except Exception as e:
-                        logger.debug(f"3x-ui addClient inbound {ib_id_int} error: {e}")
-
-                # Method 2: POST /panel/api/inbounds/{id}/addClient
-                if not added:
-                    add_client_path_url = build_url(api_base, f"panel/api/inbounds/{ib_id_int}/addClient")
-                    for payload in [{"clients": [c_data]}, {"settings": json.dumps({"clients": [c_data]})}]:
+                    add_client_url = build_url(api_base, ep)
+                    for payload in payload_variants:
+                        if added:
+                            break
                         try:
+                            # 1. Try JSON POST
                             async with session.post(
-                                add_client_path_url,
+                                add_client_url,
                                 json=payload,
                                 headers=headers,
                                 timeout=DEFAULT_TIMEOUT,
                                 ssl=ssl_verify
-                            ) as add_resp2:
-                                resp_text2 = await add_resp2.text()
-                                if add_resp2.status == 200:
+                            ) as add_resp:
+                                resp_text = await add_resp.text()
+                                if add_resp.status == 200:
                                     try:
-                                        res2 = json.loads(resp_text2)
+                                        res = json.loads(resp_text)
                                     except Exception:
-                                        res2 = {}
-                                    if res2.get("success"):
+                                        res = {}
+                                    if res.get("success"):
                                         added = True
-                                        logger.info(f"3x-ui: Client added via /{ib_id_int}/addClient on {server.name}")
+                                        logger.info(f"3x-ui: Client added to inbound {ib_id_int} via {ep} on {server.name}")
                                         break
-                                    else:
-                                        logger.warning(f"3x-ui /{ib_id_int}/addClient rejected: {res2.get('msg', resp_text2[:200])}")
-                                else:
-                                    logger.warning(f"3x-ui /{ib_id_int}/addClient HTTP {add_resp2.status}: {resp_text2[:200]}")
+                                    elif res.get("msg") and "duplicate" in res.get("msg", "").lower():
+                                        # Clean up duplicate and retry
+                                        for del_ep in [f"panel/api/inbounds/{ib_id_int}/delClient/{client_uuid}", f"panel/inbound/{ib_id_int}/delClient/{client_uuid}"]:
+                                            try:
+                                                await session.post(build_url(api_base, del_ep), headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify)
+                                            except Exception:
+                                                pass
                         except Exception as e:
-                            logger.debug(f"3x-ui /{ib_id_int}/addClient error: {e}")
+                            logger.debug(f"3x-ui addClient {ep} error: {e}")
+
+                # Method 3: Inbound update fallback (/panel/api/inbounds/update/{id} or /panel/inbound/update/{id})
+                if not added:
+                    for get_ep, upd_ep in [
+                        (f"panel/api/inbounds/get/{ib_id_int}", f"panel/api/inbounds/update/{ib_id_int}"),
+                        (f"panel/inbound/get/{ib_id_int}", f"panel/inbound/update/{ib_id_int}"),
+                    ]:
                         if added:
                             break
+                        get_inb_url = build_url(api_base, get_ep)
+                        update_inb_url = build_url(api_base, upd_ep)
+                        try:
+                            async with session.get(
+                                get_inb_url,
+                                headers=headers,
+                                timeout=DEFAULT_TIMEOUT,
+                                ssl=ssl_verify
+                            ) as get_resp2:
+                                if get_resp2.status == 200:
+                                    gdata2 = await get_resp2.json()
+                                    if gdata2.get("success"):
+                                        inb_obj = gdata2.get("obj", {})
+                                        inb_settings_raw = inb_obj.get("settings", "{}")
+                                        try:
+                                            inb_settings = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else (inb_settings_raw or {})
+                                        except Exception:
+                                            inb_settings = {}
 
-                # Method 3: Inbound update fallback (/panel/api/inbounds/update/{id})
-                if not added:
-                    get_inb_url = build_url(api_base, f"panel/api/inbounds/get/{ib_id_int}")
-                    update_inb_url = build_url(api_base, f"panel/api/inbounds/update/{ib_id_int}")
-                    try:
-                        async with session.get(
-                            get_inb_url,
-                            headers=headers,
-                            timeout=DEFAULT_TIMEOUT,
-                            ssl=ssl_verify
-                        ) as get_resp2:
-                            if get_resp2.status == 200:
-                                gdata2 = await get_resp2.json()
-                                if gdata2.get("success"):
-                                    inb_obj = gdata2.get("obj", {})
-                                    inb_settings_raw = inb_obj.get("settings", "{}")
-                                    try:
-                                        inb_settings = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else (inb_settings_raw or {})
-                                    except Exception:
-                                        inb_settings = {}
+                                        existing_clients = inb_settings.get("clients", [])
+                                        existing_clients = [cl for cl in existing_clients if cl.get("email") != client.name and cl.get("email") != client_email and cl.get("id") != client_uuid]
+                                        existing_clients.append(c_data)
+                                        inb_settings["clients"] = existing_clients
+                                        inb_obj["settings"] = json.dumps(inb_settings)
 
-                                    existing_clients = inb_settings.get("clients", [])
-                                    existing_clients = [cl for cl in existing_clients if cl.get("email") != client.name and cl.get("email") != client_email and cl.get("id") != client_uuid]
-                                    existing_clients.append(c_data)
-                                    inb_settings["clients"] = existing_clients
-                                    inb_obj["settings"] = json.dumps(inb_settings)
+                                        # Try JSON update
+                                        async with session.post(
+                                            update_inb_url,
+                                            json=inb_obj,
+                                            headers=headers,
+                                            timeout=DEFAULT_TIMEOUT,
+                                            ssl=ssl_verify
+                                        ) as update_resp:
+                                            if update_resp.status == 200:
+                                                ures = await update_resp.json()
+                                                if ures.get("success"):
+                                                    added = True
+                                                    logger.info(f"3x-ui: Client added via inbound update for {server.name} (inbound {ib_id_int})")
+                                                    break
+                        except Exception as e:
+                            logger.error(f"3x-ui inbound update fallback error for inbound {ib_id_int}: {e}")
 
-                                    async with session.post(
-                                        update_inb_url,
-                                        json=inb_obj,
-                                        headers=headers,
-                                        timeout=DEFAULT_TIMEOUT,
-                                        ssl=ssl_verify
-                                    ) as update_resp:
-                                        if update_resp.status == 200:
-                                            ures = await update_resp.json()
-                                            if ures.get("success"):
-                                                added = True
-                                                logger.info(f"3x-ui: Client added via inbound update for {server.name} (inbound {ib_id_int})")
-                    except Exception as e:
-                        logger.error(f"3x-ui inbound update fallback error for inbound {ib_id_int}: {e}")
+                # Fetch full inbound object for accurate reality/stream settings when building URL
+                full_inbound = target_inbound
+                if added:
+                    for get_ep in [f"panel/api/inbounds/get/{ib_id_int}", f"panel/inbound/get/{ib_id_int}"]:
+                        try:
+                            async with session.get(build_url(api_base, get_ep), headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as g_resp:
+                                if g_resp.status == 200:
+                                    g_json = await g_resp.json()
+                                    if g_json.get("success") and g_json.get("obj"):
+                                        full_inbound = g_json.get("obj")
+                                        break
+                        except Exception:
+                            pass
 
                 # Generate access URL for this inbound only if it was successfully added
                 if added:
                     access_url = generate_inbound_access_url(
-                        target_inbound, server, client, client_uuid, sub_id, ext_host, ext_port
+                        full_inbound, server, client, client_uuid, sub_id, ext_host, ext_port
                     )
                     if access_url:
                         generated_keys.append({
                             "access_url": access_url,
                             "inbound_id": ib_id_int,
-                            "inbound_remark": target_inbound.get("remark", ""),
-                            "protocol": target_inbound.get("protocol", "vless"),
+                            "inbound_remark": full_inbound.get("remark", ""),
+                            "protocol": full_inbound.get("protocol", "vless"),
                             "uuid": client_uuid,
                             "sub_id": sub_id
                         })
@@ -962,15 +968,21 @@ async def delete_all_3xui_clients(server: Server) -> int:
                                 for cl in clients:
                                     cl_uuid = cl.get("id") or cl.get("password")
                                     if cl_uuid:
-                                        del_url = build_url(api_base, f"panel/api/inbounds/{ib_id_int}/delClient/{cl_uuid}")
-                                        try:
-                                            async with session.post(del_url, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as del_r:
-                                                if del_r.status == 200:
-                                                    rjson = await del_r.json()
-                                                    if rjson.get("success"):
-                                                        deleted_count += 1
-                                        except Exception:
-                                            pass
+                                        for del_ep in [
+                                            f"panel/api/inbounds/{ib_id_int}/delClient/{cl_uuid}",
+                                            f"panel/inbound/{ib_id_int}/delClient/{cl_uuid}",
+                                            f"xui/inbound/{ib_id_int}/delClient/{cl_uuid}"
+                                        ]:
+                                            del_url = build_url(api_base, del_ep)
+                                            try:
+                                                async with session.post(del_url, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as del_r:
+                                                    if del_r.status == 200:
+                                                        rjson = await del_r.json()
+                                                        if rjson.get("success"):
+                                                            deleted_count += 1
+                                                            break
+                                            except Exception:
+                                                pass
             except Exception as ex:
                 logger.error(f"3x-ui delete_all_3xui_clients list error: {ex}")
     except Exception as e:
