@@ -262,6 +262,41 @@ async def delete_client_keys(client: Client, db: Session):
     except Exception:
         pass
 
+async def delete_single_client_key(key: ClientKey, client: Client, db: Session):
+    server = db.query(Server).filter(Server.id == key.server_id).first()
+    if server:
+        if server.type == "outline" and key.outline_key_id:
+            try:
+                await outline.delete_key(server, key.outline_key_id)
+            except Exception as e:
+                logger.error(f"Error revoking Outline key {key.outline_key_id}: {e}")
+        elif server.type in ["hysteria2", "hysteria2_python"] and key.outline_key_id:
+            try:
+                remote_id = key.remote_id or key.outline_key_id
+                username = key.remote_username or client.name
+                del_res = await hysteria2.express_delete_user(server, str(remote_id))
+                if not del_res and username != str(remote_id):
+                    del_res = await hysteria2.express_delete_user(server, username)
+                if not del_res:
+                    await hysteria2.flask_delete_user(server, key.outline_key_id, username)
+            except Exception as e:
+                logger.error(f"Error revoking Hysteria2 key {key.outline_key_id}: {e}")
+        elif server.type == "3x-ui":
+            if key.uuid:
+                try:
+                    from app.services.three_xui import delete_3xui_client
+                    await delete_3xui_client(server, key.uuid)
+                except Exception as e:
+                    logger.error(f"Error revoking 3x-ui client {key.uuid}: {e}")
+    
+    db.delete(key)
+    db.commit()
+    try:
+        from app.routers.sub import invalidate_sub_cache
+        invalidate_sub_cache(client.sub_token)
+    except Exception:
+        pass
+
 async def delete_server_keys(server: Server, db: Session):
     # 1. For Hysteria2, purge ALL users from the remote server first
     if server.type in ["hysteria2", "hysteria2_python"]:

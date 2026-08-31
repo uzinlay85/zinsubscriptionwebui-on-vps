@@ -427,3 +427,26 @@ async def regenerate_single_key(client_id: str, server_id: str, db: Session = De
         import logging
         logging.getLogger(__name__).exception(f"Error regenerating key: {e}")
         return JSONResponse(status_code=500, content={"ok": False, "detail": f"Regeneration Error: {str(e)}"})
+
+@router.delete("/{client_id}/keys/{key_id}")
+async def delete_client_key_endpoint(client_id: str, key_id: str, db: Session = Depends(get_db)):
+    try:
+        client = db.query(Client).filter(Client.id == client_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+            
+        key = db.query(ClientKey).filter(ClientKey.id == key_id, ClientKey.client_id == client_id).first()
+        if not key:
+            raise HTTPException(status_code=404, detail="Key not found")
+            
+        from app.services.vpn_manager import delete_single_client_key
+        await delete_single_client_key(key, client, db)
+        
+        return {"ok": True, "detail": "Key deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).exception(f"Error deleting key: {e}")
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Key Deletion Error: {str(e)}"})

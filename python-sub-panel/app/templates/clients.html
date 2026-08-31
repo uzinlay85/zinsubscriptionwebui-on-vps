@@ -536,12 +536,15 @@
                                         </span>
                                     `}
                                 </div>
-                                <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-1.5">
                                     <button onclick="regenerateSingleKey('${clientId}', '${k.server_id}')" class="px-2.5 py-1 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 rounded-lg text-xs font-medium border border-amber-500/20 transition-colors flex items-center gap-1" title="Delete and re-create key for this server only">
                                         🔄 Re-generate
                                     </button>
-                                    <button onclick="copyKeyUrl('${escapeHtml(k.access_url || '')}')" class="px-3 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-lg text-xs font-medium border border-emerald-500/20 transition-colors">
+                                    <button onclick="copyKeyUrl('${escapeHtml(k.access_url || '')}')" class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-lg text-xs font-medium border border-emerald-500/20 transition-colors">
                                         📋 Copy Key
+                                    </button>
+                                    <button onclick="deleteSingleKey('${clientId}', '${k.id}', '${escapeHtml(k.server_name || 'Server')}')" class="px-2 py-1 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg text-xs font-medium border border-red-500/20 transition-colors flex items-center gap-1" title="Delete this key">
+                                        🗑️ Delete
                                     </button>
                                 </div>
                             </div>
@@ -568,6 +571,25 @@
 
         function closeKeysModal() {
             document.getElementById('keysModal').classList.add('hidden');
+        }
+
+        async function deleteSingleKey(clientId, keyId, serverName) {
+            if (!confirm(`Are you sure you want to delete this key for "${serverName}"?`)) {
+                return;
+            }
+            try {
+                showSuccess('Deleting key...');
+                const resp = await fetch(`/api/clients/${clientId}/keys/${keyId}`, { method: 'DELETE' });
+                if (resp.ok) {
+                    showSuccess('Key deleted successfully!');
+                    viewKeys(clientId);
+                } else {
+                    const errData = await resp.json().catch(() => ({}));
+                    showError(errData.detail || 'Failed to delete key');
+                }
+            } catch (err) {
+                showError('Failed to delete key');
+            }
         }
 
         async function regenerateSingleKey(clientId, serverId) {
