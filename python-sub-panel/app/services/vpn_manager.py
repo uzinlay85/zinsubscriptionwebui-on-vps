@@ -269,6 +269,13 @@ async def delete_server_keys(server: Server, db: Session):
             await hysteria2.delete_all_remote_users(server)
         except Exception as e:
             logger.error(f"Error purging all remote Hysteria2 users on {server.name}: {e}")
+    # 2. For 3x-ui, purge all clients from all inbounds on the remote server
+    elif server.type == "3x-ui":
+        try:
+            from app.services.three_xui import delete_all_3xui_clients
+            await delete_all_3xui_clients(server)
+        except Exception as e:
+            logger.error(f"Error purging all remote 3x-ui clients on {server.name}: {e}")
 
     keys = db.query(ClientKey).filter(ClientKey.server_id == server.id).all()
     

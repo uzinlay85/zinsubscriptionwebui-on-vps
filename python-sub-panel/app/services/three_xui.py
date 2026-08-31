@@ -518,6 +518,26 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                 protocol = (target_inbound.get("protocol") or "vless").lower()
                 security = stream.get("security", "none")
 
+                # Pre-clean any existing client with matching email, subId, or UUID in this inbound
+                inb_settings_raw = target_inbound.get("settings", "{}")
+                try:
+                    inb_settings = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else (inb_settings_raw or {})
+                except Exception:
+                    inb_settings = {}
+
+                existing_clients = inb_settings.get("clients", [])
+                for cl in existing_clients:
+                    cl_email = cl.get("email", "")
+                    cl_id = cl.get("id") or cl.get("password")
+                    if cl_email in (client.name, client_email, f"{client.name}_{ib_id_int}") or cl_id == client_uuid:
+                        if cl_id:
+                            del_url = build_url(api_base, f"panel/api/inbounds/{ib_id_int}/delClient/{cl_id}")
+                            try:
+                                async with session.post(del_url, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as del_resp:
+                                    logger.info(f"3x-ui: Cleaned up prior client {cl_email} ({cl_id}) on inbound {ib_id_int}")
+                            except Exception:
+                                pass
+
                 # Build client data payload (tgId MUST BE integer 0, NOT empty string "")
                 # Use unique email per inbound to avoid 3x-ui "Duplicate email" rejection
                 client_email = f"{client.name}_{ib_id_int}" if len(target_inbounds) > 1 else client.name
@@ -533,8 +553,10 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                     "tgId": 0,
                     "reset": 0
                 }
-                if protocol == "vless" and security == "reality":
-                    c_data["flow"] = "xtls-rprx-vision"
+                if protocol == "vmess":
+                    c_data["alterId"] = 0
+                if protocol == "vless":
+                    c_data["flow"] = "xtls-rprx-vision" if security == "reality" else ""
 
                 added = False
 
@@ -566,6 +588,33 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                                     break
                                 else:
                                     logger.warning(f"3x-ui addClient inbound {ib_id_int} rejected: {res.get('msg', resp_text[:200])}")
+                                    # If duplicate rejection, force delete and retry
+                                    if res.get("msg") and "duplicate" in res.get("msg", "").lower():
+                                        get_inb_url = build_url(api_base, f"panel/api/inbounds/get/{ib_id_int}")
+                                        try:
+                                            async with session.get(get_inb_url, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as g_resp:
+                                                if g_resp.status == 200:
+                                                    g_json = await g_resp.json()
+                                                    if g_json.get("success"):
+                                                        inb_obj = g_json.get("obj", {})
+                                                        s_raw = inb_obj.get("settings", "{}")
+                                                        s_data = json.loads(s_raw) if isinstance(s_raw, str) else (s_raw or {})
+                                                        for cl in s_data.get("clients", []):
+                                                            if cl.get("email") in (client.name, client_email, f"{client.name}_{ib_id_int}") or cl.get("id") == client_uuid:
+                                                                c_uuid = cl.get("id") or cl.get("password")
+                                                                if c_uuid:
+                                                                    del_url = build_url(api_base, f"panel/api/inbounds/{ib_id_int}/delClient/{c_uuid}")
+                                                                    await session.post(del_url, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify)
+                                                        # Retry add
+                                                        async with session.post(add_client_url, json={"id": ib_id_int, "settings": json.dumps({"clients": [c_data]})}, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as retry_resp:
+                                                            if retry_resp.status == 200:
+                                                                ret_json = await retry_resp.json()
+                                                                if ret_json.get("success"):
+                                                                    added = True
+                                                                    logger.info(f"3x-ui: Client added after duplicate cleanup on inbound {ib_id_int}")
+                                                                    break
+                                        except Exception as dup_err:
+                                            logger.debug(f"3x-ui duplicate resolution error: {dup_err}")
                             else:
                                 logger.warning(f"3x-ui addClient inbound {ib_id_int} HTTP {add_resp.status}: {resp_text[:200]}")
                     except Exception as e:
@@ -874,6 +923,59 @@ async def set_3xui_client_enabled(server: Server, client_uuid: str, enabled: boo
     except Exception as e:
         logger.error(f"3x-ui set_enabled root error: {e}")
     return False
+
+
+async def delete_all_3xui_clients(server: Server) -> int:
+    """Purge all clients from all inbounds on the 3x-ui server."""
+    ssl_verify = get_ssl_setting(server)
+    deleted_count = 0
+    try:
+        jar = aiohttp.CookieJar(unsafe=True)
+        async with aiohttp.ClientSession(cookie_jar=jar) as session:
+            api_base, headers = await login_3xui(session, server)
+            if not api_base:
+                return 0
+
+            list_url = build_url(api_base, "panel/api/inbounds/list")
+            try:
+                async with session.get(list_url, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as list_resp:
+                    if list_resp.status == 200:
+                        ldata = await list_resp.json()
+                        if ldata.get("success"):
+                            inbounds = ldata.get("obj", [])
+                            for inb in inbounds:
+                                ib_id = inb.get("id")
+                                if ib_id is None:
+                                    continue
+                                try:
+                                    ib_id_int = int(ib_id)
+                                except Exception:
+                                    ib_id_int = 1
+                                
+                                settings_raw = inb.get("settings", "{}")
+                                try:
+                                    settings = json.loads(settings_raw) if isinstance(settings_raw, str) else (settings_raw or {})
+                                except Exception:
+                                    settings = {}
+                                
+                                clients = settings.get("clients", [])
+                                for cl in clients:
+                                    cl_uuid = cl.get("id") or cl.get("password")
+                                    if cl_uuid:
+                                        del_url = build_url(api_base, f"panel/api/inbounds/{ib_id_int}/delClient/{cl_uuid}")
+                                        try:
+                                            async with session.post(del_url, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as del_r:
+                                                if del_r.status == 200:
+                                                    rjson = await del_r.json()
+                                                    if rjson.get("success"):
+                                                        deleted_count += 1
+                                        except Exception:
+                                            pass
+            except Exception as ex:
+                logger.error(f"3x-ui delete_all_3xui_clients list error: {ex}")
+    except Exception as e:
+        logger.error(f"3x-ui delete_all_3xui_clients error: {e}")
+    return deleted_count
 
 
 

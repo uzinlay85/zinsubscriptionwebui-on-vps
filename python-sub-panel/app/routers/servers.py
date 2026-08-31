@@ -524,70 +524,89 @@ async def sync_server_keys(server_id: str, request: Request, db: Session = Depen
 @router.post("/{server_id}/rebuild-keys")
 async def rebuild_server_keys(server_id: str, db: Session = Depends(get_db)):
     """Delete all keys for a server, then recreate them for active clients."""
-    server = db.query(Server).filter(Server.id == server_id).first()
-    if not server:
-        raise HTTPException(status_code=404, detail="Server not found")
+    try:
+        server = db.query(Server).filter(Server.id == server_id).first()
+        if not server:
+            raise HTTPException(status_code=404, detail="Server not found")
 
-    from app.services.vpn_manager import delete_server_keys, generate_keys_for_client
-    await delete_server_keys(server, db)
-    active_clients = db.query(Client).filter(Client.status == "active").all()
-    failed_clients = []
-    for client in active_clients:
-        try:
-            await generate_keys_for_client(client, [server_id], db)
-            count = db.query(ClientKey).filter(
-                ClientKey.server_id == server_id,
-                ClientKey.client_id == client.id,
-            ).count()
-            if count == 0:
-                failed_clients.append(client.name)
-        except Exception as e:
-            failed_clients.append(f"{client.name}: {e}")
+        from app.services.vpn_manager import delete_server_keys, generate_keys_for_client
+        await delete_server_keys(server, db)
+        active_clients = db.query(Client).filter(Client.status == "active").all()
+        failed_clients = []
+        for client in active_clients:
+            try:
+                await generate_keys_for_client(client, [server_id], db)
+                count = db.query(ClientKey).filter(
+                    ClientKey.server_id == server_id,
+                    ClientKey.client_id == client.id,
+                ).count()
+                if count == 0:
+                    failed_clients.append(client.name)
+            except Exception as e:
+                failed_clients.append(f"{client.name}: {e}")
 
-    created_keys = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
-    return {
-        "ok": True,
-        "server_name": server.name,
-        "created_keys": created_keys,
-        "total_clients": len(active_clients),
-        "failed_clients": failed_clients,
-        "warning": (
-            f"Key regeneration failed for {len(failed_clients)} client(s)."
-            if failed_clients else None
-        ),
-    }
+        created_keys = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
+        warning_msg = None
+        if failed_clients:
+            try:
+                diag = await diagnose_server_failure(server)
+            except Exception as d_err:
+                diag = str(d_err)
+            warning_msg = f"Key regeneration failed for {len(failed_clients)} client(s): {', '.join(failed_clients)}. {diag}"
+
+        return {
+            "ok": True,
+            "server_name": server.name,
+            "created_keys": created_keys,
+            "total_clients": len(active_clients),
+            "failed_clients": failed_clients,
+            "warning": warning_msg
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception(f"Error in rebuild_server_keys: {e}")
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Rebuild Error: {str(e)}"})
 
 @router.delete("/{server_id}/keys")
 async def delete_all_server_keys(server_id: str, db: Session = Depends(get_db)):
     """Delete all client keys associated with this server (both remote and local DB)."""
-    server = db.query(Server).filter(Server.id == server_id).first()
-    if not server:
-        raise HTTPException(status_code=404, detail="Server not found")
-    
-    from app.services.vpn_manager import delete_server_keys
-    
-    # Count keys before deletion
-    key_count = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
-    
-    # Get affected client IDs for cache invalidation
-    affected_clients = db.query(Client).join(
-        ClientKey, Client.id == ClientKey.client_id
-    ).filter(ClientKey.server_id == server_id).all()
-    
-    # Delete keys from remote server and local DB
-    await delete_server_keys(server, db)
-    
-    # Invalidate subscription cache for affected clients
     try:
-        from app.routers.sub import invalidate_sub_cache
-        for client in affected_clients:
-            invalidate_sub_cache(client.sub_token)
-    except Exception:
-        pass
-    
-    return {
-        "ok": True,
-        "server_name": server.name,
-        "deleted_keys": key_count,
-        "affected_clients": len(affected_clients)
-    }
+        server = db.query(Server).filter(Server.id == server_id).first()
+        if not server:
+            raise HTTPException(status_code=404, detail="Server not found")
+        
+        from app.services.vpn_manager import delete_server_keys
+        
+        # Count keys before deletion
+        key_count = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
+        
+        # Get affected client IDs for cache invalidation
+        affected_clients = db.query(Client).join(
+            ClientKey, Client.id == ClientKey.client_id
+        ).filter(ClientKey.server_id == server_id).all()
+        
+        # Delete keys from remote server and local DB
+        await delete_server_keys(server, db)
+        
+        # Invalidate subscription cache for affected clients
+        try:
+            from app.routers.sub import invalidate_sub_cache
+            for client in affected_clients:
+                invalidate_sub_cache(client.sub_token)
+        except Exception:
+            pass
+        
+        return {
+            "ok": True,
+            "server_name": server.name,
+            "deleted_keys": key_count,
+            "affected_clients": len(affected_clients)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception(f"Error in delete_all_server_keys: {e}")
+        return JSONResponse(status_code=500, content={"ok": False, "detail": f"Delete Keys Error: {str(e)}"})

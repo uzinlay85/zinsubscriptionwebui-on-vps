@@ -500,7 +500,13 @@
             }
             try {
                 const resp = await fetch(`/api/servers/${serverId}/rebuild-keys`, { method: 'POST' });
-                const data = await resp.json();
+                let data;
+                try {
+                    data = await resp.json();
+                } catch(e) {
+                    showError(`Server response (${resp.status}): Unable to process server request.`);
+                    return;
+                }
                 if (resp.status === 401 || data.detail === 'Authentication required') {
                     showError('Admin session expired. Please log in again.');
                     window.setTimeout(() => { window.location.href = '/login'; }, 800);
@@ -533,7 +539,13 @@
                 const resp = await fetch(`/api/servers/${serverId}/keys`, {
                     method: 'DELETE'
                 });
-                const data = await resp.json();
+                let data;
+                try {
+                    data = await resp.json();
+                } catch(e) {
+                    showError(`Server response (${resp.status}): Unable to process delete request.`);
+                    return;
+                }
                 if (resp.status === 401 || data.detail === 'Authentication required') {
                     showError('Admin session expired. Please log in again.');
                     window.setTimeout(() => { window.location.href = '/login'; }, 800);
