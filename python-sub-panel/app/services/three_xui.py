@@ -413,7 +413,6 @@ def generate_inbound_access_url(
                 "tls": security if security != "none" else "",
                 "sni": sni if security == "tls" else ""
             }
-            return "vmess://" + base64.b64encode(json.dumps(vmess_dic).encode()).decode()
         elif protocol == "trojan":
             return f"trojan://{client_uuid}@{ext_host}:{inbound_port}?type={net}&security={security}&sni={sni}&path={path_enc}#{node_title}"
         elif protocol in ["shadowsocks", "ss"]:
@@ -426,6 +425,15 @@ def generate_inbound_access_url(
             password = ss_settings.get("password") or client_uuid
             user_info = base64.b64encode(f"{method}:{password}".encode()).decode()
             return f"ss://{user_info}@{ext_host}:{inbound_port}#{node_title}"
+        elif protocol in ["hysteria", "hysteria2", "hy2"]:
+            tls_settings = stream.get("tlsSettings", {})
+            sni_val = tls_settings.get("serverName") or sni or ext_host
+            insecure_val = "1" if not server.ssl_verify else "0"
+            return f"hy2://{client_uuid}@{ext_host}:{inbound_port}/?insecure={insecure_val}&sni={sni_val}#{node_title}"
+        elif protocol == "tuic":
+            tls_settings = stream.get("tlsSettings", {})
+            sni_val = tls_settings.get("serverName") or sni or ext_host
+            return f"tuic://{client_uuid}:{client_uuid}@{ext_host}:{inbound_port}?congestion_control=bbr&sni={sni_val}#{node_title}"
         else:
             return f"vless://{client_uuid}@{ext_host}:{inbound_port}?type={net}&security={security}#{node_title}"
     except Exception as e:
@@ -518,6 +526,10 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                 protocol = (target_inbound.get("protocol") or "vless").lower()
                 security = stream.get("security", "none")
 
+                # Build client email and traffic limits
+                client_email = f"{client.name}_{ib_id_int}" if len(target_inbounds) > 1 else client.name
+                total_bytes = int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0
+
                 # Pre-clean any existing client with matching email, subId, or UUID in this inbound
                 inb_settings_raw = target_inbound.get("settings", "{}")
                 try:
@@ -528,20 +540,23 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                 existing_clients = inb_settings.get("clients", [])
                 for cl in existing_clients:
                     cl_email = cl.get("email", "")
-                    cl_id = cl.get("id") or cl.get("password")
+                    cl_id = cl.get("id") or cl.get("password") or cl.get("auth")
                     if cl_email in (client.name, client_email, f"{client.name}_{ib_id_int}") or cl_id == client_uuid:
                         if cl_id:
-                            del_url = build_url(api_base, f"panel/api/inbounds/{ib_id_int}/delClient/{cl_id}")
-                            try:
-                                async with session.post(del_url, headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as del_resp:
-                                    logger.info(f"3x-ui: Cleaned up prior client {cl_email} ({cl_id}) on inbound {ib_id_int}")
-                            except Exception:
-                                pass
+                            for del_ep in [
+                                f"panel/api/inbounds/{ib_id_int}/delClient/{cl_id}",
+                                f"panel/inbound/{ib_id_int}/delClient/{cl_id}",
+                                f"xui/inbound/{ib_id_int}/delClient/{cl_id}"
+                            ]:
+                                try:
+                                    async with session.post(build_url(api_base, del_ep), headers=headers, timeout=DEFAULT_TIMEOUT, ssl=ssl_verify) as del_resp:
+                                        if del_resp.status == 200:
+                                            logger.info(f"3x-ui: Cleaned up prior client {cl_email} ({cl_id}) on inbound {ib_id_int}")
+                                            break
+                                except Exception:
+                                    pass
 
                 # Build client data payload strictly matching protocol schema
-                client_email = f"{client.name}_{ib_id_int}" if len(target_inbounds) > 1 else client.name
-                total_bytes = int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0
-
                 if protocol == "vless":
                     c_data = {
                         "id": client_uuid,
@@ -551,9 +566,7 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                         "totalGB": total_bytes,
                         "expiryTime": 0,
                         "enable": True,
-                        "subId": sub_id,
-                        "tgId": "",
-                        "reset": 0
+                        "subId": sub_id
                     }
                 elif protocol == "vmess":
                     c_data = {
@@ -564,11 +577,21 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                         "totalGB": total_bytes,
                         "expiryTime": 0,
                         "enable": True,
-                        "subId": sub_id,
-                        "tgId": "",
-                        "reset": 0
+                        "subId": sub_id
                     }
-                else:  # trojan / shadowsocks
+                elif protocol in ["hysteria", "hysteria2", "hy2", "tuic"]:
+                    c_data = {
+                        "auth": client_uuid,
+                        "password": client_uuid,
+                        "id": client_uuid,
+                        "email": client_email,
+                        "limitIp": 0,
+                        "totalGB": total_bytes,
+                        "expiryTime": 0,
+                        "enable": True,
+                        "subId": sub_id
+                    }
+                elif protocol in ["trojan", "shadowsocks", "ss"]:
                     c_data = {
                         "password": client_uuid,
                         "email": client_email,
@@ -576,9 +599,18 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                         "totalGB": total_bytes,
                         "expiryTime": 0,
                         "enable": True,
-                        "subId": sub_id,
-                        "tgId": "",
-                        "reset": 0
+                        "subId": sub_id
+                    }
+                else:
+                    c_data = {
+                        "id": client_uuid,
+                        "password": client_uuid,
+                        "email": client_email,
+                        "limitIp": 0,
+                        "totalGB": total_bytes,
+                        "expiryTime": 0,
+                        "enable": True,
+                        "subId": sub_id
                     }
 
                 added = False
