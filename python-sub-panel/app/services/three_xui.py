@@ -12,6 +12,7 @@ import aiohttp
 from sqlalchemy.orm import Session
 from cryptography.hazmat.primitives.asymmetric import x25519
 from app.models import Server, Client, ClientKey
+from app.services.geo import get_flag_emoji
 
 logger = logging.getLogger(__name__)
 
@@ -336,7 +337,7 @@ def generate_inbound_access_url(
                 sid = ""
 
             # 5. SpiderX (spx)
-            spx = real_settings.get("spiderX") or real.get("spiderX") or real.get("spx") or ""
+            spx = real.get("spiderX") or real_settings.get("spiderX") or real.get("spx") or real_settings.get("spx") or ""
 
         # Parse externalProxy for Nginx / reverse proxy TLS settings
         ext_proxy_list = stream.get("externalProxy", [])
@@ -363,12 +364,13 @@ def generate_inbound_access_url(
                 elif isinstance(val_alpn, str):
                     alpn = val_alpn
 
-        # Format node display name with remark
+        # Format node display name with remark and flag
+        flag = get_flag_emoji(server.country_code)
         if inbound_remark:
             node_tag = f"[{inbound_remark}]"
         else:
             node_tag = f"[{protocol.upper()}-{inbound_port}]"
-        node_title = f"{server.name} {node_tag} - {client.name}"
+        node_title = f"{flag} {server.name} {node_tag} - {client.name}" if flag else f"{server.name} {node_tag} - {client.name}"
 
         path_enc = urllib.parse.quote(path, safe="")
         alpn_enc = urllib.parse.quote(alpn, safe="")
@@ -394,7 +396,7 @@ def generate_inbound_access_url(
 
         if protocol == "vless":
             if security == "reality":
-                spx_part = f"&spx={urllib.parse.quote(spx)}" if spx else ""
+                spx_part = f"&spx={urllib.parse.quote(spx, safe='')}" if spx else ""
                 path_part = f"&path={path_enc}" if path else ""
                 return f"vless://{client_uuid}@{ext_host}:{inbound_port}?encryption=none&flow=xtls-rprx-vision&fp={fp}&pbk={pbk}&security=reality&sid={sid}&sni={sni}&type={net}{spx_part}{path_part}{extra_query}#{node_title}"
             elif security == "tls":
@@ -417,6 +419,7 @@ def generate_inbound_access_url(
                 "tls": security if security != "none" else "",
                 "sni": sni if security == "tls" else ""
             }
+            return "vmess://" + base64.b64encode(json.dumps(vmess_dic).encode()).decode()
         elif protocol == "trojan":
             return f"trojan://{client_uuid}@{ext_host}:{inbound_port}?type={net}&security={security}&sni={sni}&path={path_enc}#{node_title}"
         elif protocol in ["shadowsocks", "ss"]:
@@ -431,9 +434,48 @@ def generate_inbound_access_url(
             return f"ss://{user_info}@{ext_host}:{inbound_port}#{node_title}"
         elif protocol in ["hysteria", "hysteria2", "hy2"]:
             tls_settings = stream.get("tlsSettings", {})
-            sni_val = tls_settings.get("serverName") or sni or ext_host
-            insecure_val = "1" if not server.ssl_verify else "0"
-            return f"hy2://{client_uuid}@{ext_host}:{inbound_port}/?insecure={insecure_val}&sni={sni_val}#{node_title}"
+            sni_val = tls_settings.get("serverName") or tls_settings.get("sni") or sni or ext_host
+            
+            alpn_val = "h3"
+            tls_alpn = tls_settings.get("alpn")
+            if tls_alpn:
+                if isinstance(tls_alpn, list):
+                    alpn_val = ",".join(tls_alpn)
+                elif isinstance(tls_alpn, str):
+                    alpn_val = tls_alpn
+
+            inb_settings_raw = target_inbound.get("settings", "{}")
+            try:
+                inb_settings = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else (inb_settings_raw or {})
+            except Exception:
+                inb_settings = {}
+
+            hy_stream = stream.get("hysteriaSettings") or stream.get("hysteria2Settings") or {}
+            
+            # mport
+            mport_val = hy_stream.get("ports") or hy_stream.get("mport") or inb_settings.get("ports") or inb_settings.get("mport") or target_inbound.get("ports") or ""
+            
+            # obfs & obfs-password
+            obfs_type = hy_stream.get("obfs") or hy_stream.get("obfsType") or inb_settings.get("obfs") or inb_settings.get("obfsType") or stream.get("obfs") or inb_settings.get("obfs_type") or ""
+            obfs_pwd = hy_stream.get("obfsPassword") or hy_stream.get("obfs-password") or inb_settings.get("obfsPassword") or inb_settings.get("obfs-password") or stream.get("obfsPassword") or inb_settings.get("obfs_password") or ""
+
+            query_parts = []
+            if alpn_val:
+                query_parts.append(f"alpn={urllib.parse.quote(alpn_val)}")
+            if mport_val:
+                query_parts.append(f"mport={urllib.parse.quote(str(mport_val))}")
+            if obfs_type:
+                query_parts.append(f"obfs={urllib.parse.quote(str(obfs_type))}")
+            if obfs_pwd:
+                query_parts.append(f"obfs-password={urllib.parse.quote(str(obfs_pwd))}")
+            query_parts.append(f"security={security or 'tls'}")
+            if sni_val:
+                query_parts.append(f"sni={urllib.parse.quote(sni_val)}")
+            if not server.ssl_verify:
+                query_parts.append("insecure=1")
+
+            q_str = "&".join(query_parts)
+            return f"hysteria2://{client_uuid}@{ext_host}:{inbound_port}?{q_str}#{node_title}"
         elif protocol == "tuic":
             tls_settings = stream.get("tlsSettings", {})
             sni_val = tls_settings.get("serverName") or sni or ext_host
