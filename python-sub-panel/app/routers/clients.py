@@ -368,7 +368,14 @@ async def sync_keys(client_id: str, force: bool = False, db: Session = Depends(g
             return {"ok": True, "synced": len(all_server_ids)}
         
         existing_keys = db.query(ClientKey).filter(ClientKey.client_id == client_id).all()
-        invalid_keys = [k for k in existing_keys if not k.access_url or k.access_url.startswith("3x-ui-sub:") or "security=none" in k.access_url]
+        invalid_keys = [
+            k for k in existing_keys 
+            if not k.access_url or 
+               k.access_url.strip() == "" or 
+               k.access_url == "No access URL" or 
+               k.access_url.startswith("3x-ui-sub:") or 
+               "security=none" in k.access_url
+        ]
         
         for ik in invalid_keys:
             server = db.query(Server).filter(Server.id == ik.server_id).first()

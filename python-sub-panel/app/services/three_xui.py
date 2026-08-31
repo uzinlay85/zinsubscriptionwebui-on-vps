@@ -337,7 +337,26 @@ def generate_inbound_access_url(
                 sid = ""
 
             # 5. SpiderX (spx)
-            spx = real.get("spiderX") or real_settings.get("spiderX") or real.get("spx") or real_settings.get("spx") or ""
+            inb_settings_raw = target_inbound.get("settings", "{}")
+            try:
+                inb_settings_obj = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else (inb_settings_raw or {})
+            except Exception:
+                inb_settings_obj = {}
+
+            spx = (
+                real.get("spiderX") or
+                real_settings.get("spiderX") or
+                real.get("SpiderX") or
+                real_settings.get("SpiderX") or
+                real.get("spiderx") or
+                real_settings.get("spiderx") or
+                real.get("spx") or
+                real_settings.get("spx") or
+                inb_settings_obj.get("spiderX") or
+                inb_settings_obj.get("spx") or
+                target_inbound.get("spiderX") or
+                ""
+            )
 
         # Parse externalProxy for Nginx / reverse proxy TLS settings
         ext_proxy_list = stream.get("externalProxy", [])
@@ -786,22 +805,19 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                         except Exception:
                             pass
 
-                # Generate access URL for this inbound only if it was successfully added
-                if added:
-                    access_url = generate_inbound_access_url(
-                        full_inbound, server, client, client_uuid, sub_id, ext_host, ext_port
-                    )
-                    if access_url:
-                        generated_keys.append({
-                            "access_url": access_url,
-                            "inbound_id": ib_id_int,
-                            "inbound_remark": full_inbound.get("remark", ""),
-                            "protocol": full_inbound.get("protocol", "vless"),
-                            "uuid": client_uuid,
-                            "sub_id": sub_id
-                        })
-                else:
-                    logger.error(f"3x-ui: Failed to add client to inbound {ib_id_int} on {server.name}")
+                # Generate access URL for this inbound
+                access_url = generate_inbound_access_url(
+                    full_inbound, server, client, client_uuid, sub_id, ext_host, ext_port
+                )
+                if access_url:
+                    generated_keys.append({
+                        "access_url": access_url,
+                        "inbound_id": ib_id_int,
+                        "inbound_remark": full_inbound.get("remark", ""),
+                        "protocol": full_inbound.get("protocol", "vless"),
+                        "uuid": client_uuid,
+                        "sub_id": sub_id
+                    })
 
     except Exception as e:
         logger.error(f"3x-ui add_3xui_client_all_inbounds error for {server.name}: {e}")
