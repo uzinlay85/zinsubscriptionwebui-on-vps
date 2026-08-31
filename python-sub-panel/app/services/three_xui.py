@@ -471,6 +471,25 @@ def generate_inbound_access_url(
 
             hy_stream = stream.get("hysteriaSettings") or stream.get("hysteria2Settings") or {}
             
+            # Check for existing client auth/password in 3x-ui inbound settings
+            ib_id_val = str(target_inbound.get("id", ""))
+            candidate_emails = {
+                client.name,
+                f"{client.name}_{ib_id_val}",
+                f"{client.name}_{inbound_port}",
+                f"{client.name}_1",
+                f"{client.name}_2",
+                f"{client.name}_3"
+            }
+            existing_auth = None
+            for cl in inb_settings.get("clients", []):
+                if cl.get("email") in candidate_emails:
+                    existing_auth = cl.get("auth") or cl.get("password") or cl.get("id")
+                    if existing_auth:
+                        break
+            
+            auth_to_use = existing_auth or client_uuid
+            
             # mport
             mport_val = hy_stream.get("ports") or hy_stream.get("mport") or inb_settings.get("ports") or inb_settings.get("mport") or target_inbound.get("ports") or ""
             
@@ -478,9 +497,16 @@ def generate_inbound_access_url(
             obfs_type = hy_stream.get("obfs") or hy_stream.get("obfsType") or inb_settings.get("obfs") or inb_settings.get("obfsType") or stream.get("obfs") or inb_settings.get("obfs_type") or ""
             obfs_pwd = hy_stream.get("obfsPassword") or hy_stream.get("obfs-password") or inb_settings.get("obfsPassword") or inb_settings.get("obfs-password") or stream.get("obfsPassword") or inb_settings.get("obfs_password") or ""
 
+            # Fingerprint
+            fp_val = tls_settings.get("fingerprint") or real_settings.get("fingerprint") if 'real_settings' in locals() else "chrome"
+            if not fp_val:
+                fp_val = "chrome"
+
             query_parts = []
             if alpn_val:
                 query_parts.append(f"alpn={urllib.parse.quote(alpn_val)}")
+            if fp_val:
+                query_parts.append(f"fp={urllib.parse.quote(fp_val)}")
             if mport_val:
                 query_parts.append(f"mport={urllib.parse.quote(str(mport_val))}")
             if obfs_type:
@@ -494,7 +520,7 @@ def generate_inbound_access_url(
                 query_parts.append("insecure=1")
 
             q_str = "&".join(query_parts)
-            return f"hysteria2://{client_uuid}@{ext_host}:{inbound_port}?{q_str}#{node_title}"
+            return f"hysteria2://{auth_to_use}@{ext_host}:{inbound_port}?{q_str}#{node_title}"
         elif protocol == "tuic":
             tls_settings = stream.get("tlsSettings", {})
             sni_val = tls_settings.get("serverName") or sni or ext_host
