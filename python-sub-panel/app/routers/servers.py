@@ -424,12 +424,27 @@ async def diagnose_server_failure(server: Server) -> str:
                 return f"Hysteria2 server '{server.name}' user creation failed. Please verify API URL '{server.api_url}' and Admin Password (current: '{server.auth_password or server.password or 'admin123'}')."
         
         elif server.type == "3x-ui":
-            from app.services.three_xui import login_3xui_standalone
-            api_base, err = await login_3xui_standalone(server)
-            if not api_base:
-                return f"3x-ui Login Failed for '{server.name}': {err}"
-            else:
-                return f"3x-ui Login OK for '{server.name}', but adding client to inbounds failed. Check inbounds configuration."
+            from app.services.three_xui import login_3xui, build_url, get_ssl_setting
+            jar = aiohttp.CookieJar(unsafe=True)
+            async with aiohttp.ClientSession(cookie_jar=jar) as session:
+                api_base, headers = await login_3xui(session, server)
+                if not api_base:
+                    return f"3x-ui Login Failed for '{server.name}'. Check username/password/API URL."
+                
+                inb_res = "No inbounds found in list."
+                for list_ep in ["panel/api/inbounds/list", "panel/inbound/list", "xui/inbound/list"]:
+                    try:
+                        async with session.get(build_url(api_base, list_ep), headers=headers, timeout=aiohttp.ClientTimeout(total=5), ssl=get_ssl_setting(server)) as lr:
+                            if lr.status == 200:
+                                lj = await lr.json()
+                                if lj.get("success"):
+                                    inbounds = lj.get("obj", [])
+                                    inb_info = [f"ID {i.get('id')} ({i.get('protocol')}/{i.get('port')})" for i in inbounds]
+                                    inb_res = f"Discovered {len(inbounds)} inbound(s): {', '.join(inb_info)}"
+                                    break
+                    except Exception as ex:
+                        inb_res = f"Inbound fetch error: {ex}"
+                return f"3x-ui Login OK for '{server.name}'. {inb_res}"
 
         return f"Unable to generate keys on server '{server.name}'."
 

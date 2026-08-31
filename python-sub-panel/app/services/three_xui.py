@@ -588,6 +588,7 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                     "panel/api/inbounds/addClient",
                     "panel/inbound/addClient",
                     "xui/inbound/addClient",
+                    "xui/API/inbounds/addClient",
                     f"panel/api/inbounds/{ib_id_int}/addClient",
                     f"panel/inbound/{ib_id_int}/addClient",
                 ]
@@ -606,12 +607,14 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                     for payload in payload_variants:
                         if added:
                             break
+                        # 1. Try JSON POST
                         try:
-                            # 1. Try JSON POST
+                            json_headers = dict(headers)
+                            json_headers["Content-Type"] = "application/json"
                             async with session.post(
                                 add_client_url,
                                 json=payload,
-                                headers=headers,
+                                headers=json_headers,
                                 timeout=DEFAULT_TIMEOUT,
                                 ssl=ssl_verify
                             ) as add_resp:
@@ -623,7 +626,7 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                                         res = {}
                                     if res.get("success"):
                                         added = True
-                                        logger.info(f"3x-ui: Client added to inbound {ib_id_int} via {ep} on {server.name}")
+                                        logger.info(f"3x-ui: Client added to inbound {ib_id_int} via {ep} (JSON) on {server.name}")
                                         break
                                     elif res.get("msg") and "duplicate" in res.get("msg", "").lower():
                                         # Clean up duplicate and retry
@@ -633,7 +636,32 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                                             except Exception:
                                                 pass
                         except Exception as e:
-                            logger.debug(f"3x-ui addClient {ep} error: {e}")
+                            logger.debug(f"3x-ui addClient {ep} json error: {e}")
+
+                        # 2. Try Form-urlencoded POST (Gin c.ShouldBind compatibility)
+                        if not added:
+                            try:
+                                form_headers = dict(headers)
+                                form_headers["Content-Type"] = "application/x-www-form-urlencoded"
+                                async with session.post(
+                                    add_client_url,
+                                    data={"id": str(ib_id_int), "settings": json.dumps({"clients": [c_data]})},
+                                    headers=form_headers,
+                                    timeout=DEFAULT_TIMEOUT,
+                                    ssl=ssl_verify
+                                ) as form_resp:
+                                    form_text = await form_resp.text()
+                                    if form_resp.status == 200:
+                                        try:
+                                            fres = json.loads(form_text)
+                                        except Exception:
+                                            fres = {}
+                                        if fres.get("success"):
+                                            added = True
+                                            logger.info(f"3x-ui: Client added to inbound {ib_id_int} via {ep} (Form) on {server.name}")
+                                            break
+                            except Exception as e:
+                                logger.debug(f"3x-ui addClient {ep} form error: {e}")
 
                 # Method 3: Inbound update fallback (/panel/api/inbounds/update/{id} or /panel/inbound/update/{id})
                 if not added:
@@ -669,10 +697,12 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                                         inb_obj["settings"] = json.dumps(inb_settings)
 
                                         # Try JSON update
+                                        json_headers = dict(headers)
+                                        json_headers["Content-Type"] = "application/json"
                                         async with session.post(
                                             update_inb_url,
                                             json=inb_obj,
-                                            headers=headers,
+                                            headers=json_headers,
                                             timeout=DEFAULT_TIMEOUT,
                                             ssl=ssl_verify
                                         ) as update_resp:
@@ -680,8 +710,27 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
                                                 ures = await update_resp.json()
                                                 if ures.get("success"):
                                                     added = True
-                                                    logger.info(f"3x-ui: Client added via inbound update for {server.name} (inbound {ib_id_int})")
+                                                    logger.info(f"3x-ui: Client added via inbound update (JSON) for {server.name} (inbound {ib_id_int})")
                                                     break
+
+                                        # Try Form-urlencoded update
+                                        if not added:
+                                            form_headers = dict(headers)
+                                            form_headers["Content-Type"] = "application/x-www-form-urlencoded"
+                                            form_data = {k: str(v) if not isinstance(v, str) else v for k, v in inb_obj.items()}
+                                            async with session.post(
+                                                update_inb_url,
+                                                data=form_data,
+                                                headers=form_headers,
+                                                timeout=DEFAULT_TIMEOUT,
+                                                ssl=ssl_verify
+                                            ) as form_upd_resp:
+                                                if form_upd_resp.status == 200:
+                                                    fures = await form_upd_resp.json()
+                                                    if fures.get("success"):
+                                                        added = True
+                                                        logger.info(f"3x-ui: Client added via inbound update (Form) for {server.name} (inbound {ib_id_int})")
+                                                        break
                         except Exception as e:
                             logger.error(f"3x-ui inbound update fallback error for inbound {ib_id_int}: {e}")
 
