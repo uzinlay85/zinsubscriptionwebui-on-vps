@@ -405,18 +405,20 @@
         }
 
         async function deleteServer(id) {
-            if (!confirm('Are you sure you want to delete this server?')) return;
+            if (!confirm('Are you sure you want to delete this server and all its keys?')) return;
             
             try {
+                showSuccess('Deleting server and clearing keys...');
                 const resp = await fetch(`/api/servers/${id}`, { method: 'DELETE' });
+                const data = await resp.json().catch(() => ({}));
                 if (resp.ok) {
-                    showSuccess('Server deleted successfully');
+                    showSuccess(data.detail || 'Server deleted successfully');
                     loadServers();
                 } else {
-                    showError('Failed to delete server');
+                    showError(data.detail || 'Failed to delete server');
                 }
             } catch (err) {
-                showError('Failed to delete server');
+                showError('Failed to delete server: ' + err.message);
             }
         }
 

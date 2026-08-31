@@ -314,37 +314,25 @@ async def delete_server_keys(server: Server, db: Session):
 
     keys = db.query(ClientKey).filter(ClientKey.server_id == server.id).all()
     
-    deleted_uuids = set()
-    deleted_key_ids = set()
+    # Run remote key cleanups in parallel with graceful exception handling
+    tasks = []
+    if server.type == "outline":
+        unique_key_ids = list(set([k.outline_key_id for k in keys if k.outline_key_id]))
+        for kid in unique_key_ids:
+            tasks.append(outline.delete_key(server, kid))
+    elif server.type == "3x-ui":
+        unique_uuids = list(set([k.uuid for k in keys if k.uuid]))
+        from app.services.three_xui import delete_3xui_client
+        for u in unique_uuids:
+            tasks.append(delete_3xui_client(server, u))
+    
+    if tasks:
+        try:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        except Exception as e:
+            logger.warning(f"Error during parallel key deletions for {server.name}: {e}")
     
     for k in keys:
-        if server.type == "outline" and k.outline_key_id and k.outline_key_id not in deleted_key_ids:
-            deleted_key_ids.add(k.outline_key_id)
-            try:
-                await outline.delete_key(server, k.outline_key_id)
-            except Exception:
-                pass
-        elif server.type in ["hysteria2", "hysteria2_python"] and (k.remote_id or k.outline_key_id):
-            remote_id = k.remote_id or k.outline_key_id
-            delete_key = (server.id, str(remote_id))
-            if delete_key not in deleted_key_ids:
-                deleted_key_ids.add(delete_key)
-                try:
-                    del_ok = await hysteria2.express_delete_user(server, str(remote_id))
-                    if not del_ok and k.outline_key_id and str(k.outline_key_id) != str(remote_id):
-                        del_ok = await hysteria2.express_delete_user(server, str(k.outline_key_id))
-                    if not del_ok:
-                        await hysteria2.flask_delete_user(server, k.outline_key_id, k.remote_username)
-                except Exception as e:
-                    logger.error(f"Hysteria2 server delete failed for {server.name}: {e}")
-        elif server.type == "3x-ui" and k.uuid and k.uuid not in deleted_uuids:
-            deleted_uuids.add(k.uuid)
-            try:
-                from app.services.three_xui import delete_3xui_client
-                await delete_3xui_client(server, k.uuid)
-            except Exception:
-                pass
-        
         db.delete(k)
     
     db.commit()

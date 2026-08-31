@@ -325,16 +325,34 @@ async def delete_server(server_id: str, db: Session = Depends(get_db)):
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
     
-    from app.services.vpn_manager import delete_server_keys
-    await delete_server_keys(server, db)
+    server_name = server.name
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # 1. Attempt remote key cleanup with strict timeout so offline servers never hang
+    try:
+        from app.services.vpn_manager import delete_server_keys
+        await asyncio.wait_for(delete_server_keys(server, db), timeout=4.0)
+    except Exception as e:
+        logger.warning(f"Remote key cleanup on server '{server_name}' timed out or failed (server likely offline): {e}")
+
+    # 2. Guarantee local database deletion regardless of remote status
+    try:
+        db.query(ClientKey).filter(ClientKey.server_id == server_id).delete(synchronize_session=False)
+        db.delete(server)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete server '{server_id}' from database: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error deleting server: {e}")
     
-    db.delete(server)
-    db.commit()
+    try:
+        from app.routers.sub import invalidate_sub_cache
+        invalidate_sub_cache()
+    except Exception:
+        pass
     
-    from app.routers.sub import invalidate_sub_cache
-    invalidate_sub_cache()
-    
-    return {"ok": True}
+    return {"ok": True, "detail": f"Server '{server_name}' deleted successfully"}
 
 @router.get("/{server_id}/orphans")
 async def get_orphans(server_id: str, db: Session = Depends(get_db)):
