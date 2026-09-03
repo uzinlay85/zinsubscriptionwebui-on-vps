@@ -627,7 +627,8 @@ def generate_inbound_access_url(
                     if existing_pwd:
                         break
 
-            password = existing_pwd or inb_settings.get("password") or client_uuid
+            # In multi-client Shadowsocks, prioritize the client's assigned password/UUID
+            password = client_uuid or existing_pwd or inb_settings.get("password") or ""
             user_info = base64.b64encode(f"{method}:{password}".encode()).decode()
             
             ss_params = []
