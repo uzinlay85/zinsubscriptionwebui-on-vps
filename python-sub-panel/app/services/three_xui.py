@@ -609,9 +609,53 @@ def generate_inbound_access_url(
 
         elif protocol in ["shadowsocks", "ss"]:
             method = inb_settings.get("method", "aes-256-gcm")
-            password = inb_settings.get("password") or client_uuid
+            
+            # Check for existing client-specific password in 3x-ui inbound settings
+            ib_id_val = str(target_inbound.get("id", ""))
+            candidate_emails = {
+                client.name,
+                f"{client.name}_{ib_id_val}",
+                f"{client.name}_{inbound_port}",
+                f"{client.name}_1",
+                f"{client.name}_2",
+                f"{client.name}_3"
+            }
+            existing_pwd = None
+            for cl in inb_settings.get("clients", []):
+                if cl.get("email") in candidate_emails:
+                    existing_pwd = cl.get("password") or cl.get("id")
+                    if existing_pwd:
+                        break
+
+            password = existing_pwd or inb_settings.get("password") or client_uuid
             user_info = base64.b64encode(f"{method}:{password}".encode()).decode()
-            return f"ss://{user_info}@{ext_host}:{inbound_port}#{node_title}"
+            
+            ss_params = []
+            if net:
+                ss_params.append(f"type={net}")
+            if net == "ws":
+                if path:
+                    ss_params.append(f"path={urllib.parse.quote(path, safe='')}")
+                if host_header:
+                    ss_params.append(f"host={urllib.parse.quote(host_header, safe='')}")
+            elif net == "grpc":
+                if path:
+                    ss_params.append(f"serviceName={urllib.parse.quote(path, safe='')}")
+                if grpc_mode:
+                    ss_params.append(f"mode={grpc_mode}")
+            elif net in ["http", "h2", "xhttp", "splithttp"]:
+                if path:
+                    ss_params.append(f"path={urllib.parse.quote(path, safe='')}")
+                if host_header:
+                    ss_params.append(f"host={urllib.parse.quote(host_header, safe='')}")
+
+            if security and security != "none":
+                ss_params.append(f"security={security}")
+                if sni:
+                    ss_params.append(f"sni={urllib.parse.quote(sni, safe='')}")
+
+            q_str = f"?{'&'.join(ss_params)}" if ss_params else ""
+            return f"ss://{user_info}@{ext_host}:{inbound_port}{q_str}#{node_title}"
 
         elif protocol in ["hysteria", "hysteria2", "hy2"]:
             tls_settings = stream.get("tlsSettings", {})
