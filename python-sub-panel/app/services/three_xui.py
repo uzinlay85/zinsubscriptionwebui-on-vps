@@ -257,11 +257,14 @@ def generate_inbound_access_url(
     ext_host: str,
     ext_port: int
 ) -> Optional[str]:
-    """Build standardized node access URL for a specific 3x-ui inbound."""
+    """
+    Build standardized node access URL for a specific 3x-ui inbound matching 1:1 official 3x-ui panel export.
+    Supports VLESS (TCP, WS, gRPC, XHTTP/SplitHTTP, HTTP/H2, KCP, QUIC), VMess, Trojan, Shadowsocks, Hysteria2, TUIC.
+    """
     try:
-        protocol = target_inbound.get("protocol", "vless").lower()
+        protocol = (target_inbound.get("protocol") or "vless").lower()
         inbound_port = target_inbound.get("port") or ext_port
-        inbound_remark = target_inbound.get("remark", "").strip()
+        inbound_remark = (target_inbound.get("remark") or "").strip()
 
         stream_raw = target_inbound.get("streamSettings", "{}")
         try:
@@ -269,56 +272,126 @@ def generate_inbound_access_url(
         except Exception:
             stream = {}
 
+        inb_settings_raw = target_inbound.get("settings", "{}")
+        try:
+            inb_settings = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else (inb_settings_raw or {})
+        except Exception:
+            inb_settings = {}
+
         net = stream.get("network", "tcp")
         security = stream.get("security", "none")
         path = ""
+        host_header = ""
         sni = ext_host
         pbk = ""
         fp = "chrome"
         sid = ""
-        alpn = "http/1.1"
-        host_header = ext_host
+        alpn = ""
         spx = ""
+        header_type = "none"
+        seed = ""
+        quic_security = "none"
+        quic_key = ""
+        grpc_mode = ""
+        xhttp_mode = "auto"
+        x_padding_bytes = ""
+        extra_json = ""
 
-        if net == "ws":
+        # -------------------------------------------------------------
+        # 1. Transport Settings (network: tcp, ws, grpc, xhttp, http, kcp, quic)
+        # -------------------------------------------------------------
+        if net == "tcp":
+            tcp_settings = stream.get("tcpSettings", {})
+            header_obj = tcp_settings.get("header", {})
+            header_type = header_obj.get("type", "none")
+            if header_type == "http":
+                req = header_obj.get("request", {})
+                paths = req.get("path", [])
+                if isinstance(paths, list) and paths:
+                    path = paths[0]
+                elif isinstance(paths, str):
+                    path = paths
+                req_headers = req.get("headers", {})
+                hosts = req_headers.get("Host") or req_headers.get("host") or []
+                if isinstance(hosts, list) and hosts:
+                    host_header = hosts[0]
+                elif isinstance(hosts, str):
+                    host_header = hosts
+
+        elif net == "ws":
             ws_settings = stream.get("wsSettings", {})
             path = ws_settings.get("path", "/")
             ws_headers = ws_settings.get("headers", {})
-            host_header = ws_headers.get("Host") or ws_headers.get("host") or ext_host
+            host_header = ws_headers.get("Host") or ws_headers.get("host") or ""
+
         elif net == "grpc":
-            path = stream.get("grpcSettings", {}).get("serviceName", "")
-        elif net == "xhttp":
-            xhttp_settings = stream.get("xhttpSettings", {})
+            grpc_settings = stream.get("grpcSettings", {})
+            path = grpc_settings.get("serviceName", "")
+            if grpc_settings.get("multiMode"):
+                grpc_mode = "multi"
+
+        elif net in ["xhttp", "splithttp"]:
+            xhttp_settings = stream.get("xhttpSettings") or stream.get("splithttpSettings") or {}
             path = xhttp_settings.get("path", "/")
-            host_header = xhttp_settings.get("host") or ext_host
+            host_header = xhttp_settings.get("host", "")
+            xhttp_mode = xhttp_settings.get("mode", "auto")
+            x_padding_bytes = xhttp_settings.get("xPaddingBytes") or xhttp_settings.get("x_padding_bytes") or ""
+            extra_dict = {}
+            if xhttp_mode:
+                extra_dict["mode"] = xhttp_mode
+            if x_padding_bytes:
+                extra_dict["xPaddingBytes"] = x_padding_bytes
+            if extra_dict:
+                extra_json = json.dumps(extra_dict, separators=(',', ':'))
+
         elif net in ["http", "h2"]:
             http_settings = stream.get("httpSettings", {})
             path = http_settings.get("path", "/")
-            host_header = http_settings.get("host") or http_settings.get("headers", {}).get("Host") or http_settings.get("headers", {}).get("host") or ext_host
+            hosts = http_settings.get("host") or http_settings.get("headers", {}).get("Host") or http_settings.get("headers", {}).get("host") or []
+            if isinstance(hosts, list) and hosts:
+                host_header = hosts[0]
+            elif isinstance(hosts, str):
+                host_header = hosts
 
+        elif net == "kcp":
+            kcp_settings = stream.get("kcpSettings", {})
+            header_type = kcp_settings.get("header", {}).get("type", "none")
+            seed = kcp_settings.get("seed", "")
+
+        elif net == "quic":
+            quic_settings = stream.get("quicSettings", {})
+            quic_security = quic_settings.get("security", "none")
+            quic_key = quic_settings.get("key", "")
+            header_type = quic_settings.get("header", {}).get("type", "none")
+
+        # -------------------------------------------------------------
+        # 2. Security Settings (tls, reality, none)
+        # -------------------------------------------------------------
         if security == "tls":
             tls_settings = stream.get("tlsSettings", {})
             original_domain = parse_server_host_port(server)[0]
-            sni = original_domain
+            sni = tls_settings.get("serverName") or tls_settings.get("sni") or original_domain
+            fp = tls_settings.get("fingerprint") or "chrome"
             tls_alpn = tls_settings.get("alpn")
             if tls_alpn:
                 if isinstance(tls_alpn, list):
                     alpn = ",".join(tls_alpn)
                 elif isinstance(tls_alpn, str):
                     alpn = tls_alpn
+
         elif security == "reality":
             real = stream.get("realitySettings", {})
             real_settings = real.get("settings", {}) if isinstance(real.get("settings"), dict) else {}
 
-            # 1. Public Key (pbk)
+            # Public Key (pbk)
             pbk = real_settings.get("publicKey") or real.get("publicKey") or ""
             if not pbk and real.get("privateKey"):
                 pbk = derive_x25519_public_key(real.get("privateKey"))
 
-            # 2. Fingerprint (fp)
+            # Fingerprint (fp)
             fp = real_settings.get("fingerprint") or real.get("fingerprint") or "chrome"
 
-            # 3. Server Names / SNI
+            # SNI / serverNames
             snis = real.get("serverNames", [])
             if isinstance(snis, list) and snis:
                 sni = snis[0]
@@ -327,7 +400,7 @@ def generate_inbound_access_url(
             else:
                 sni = real_settings.get("serverName") or (real.get("dest", "").split(":")[0] if ":" in real.get("dest", "") else real.get("dest", "")) or ext_host
 
-            # 4. Short IDs (sid)
+            # Short IDs (sid)
             sids = real.get("shortIds", [])
             if isinstance(sids, list) and sids:
                 sid = sids[0]
@@ -336,13 +409,7 @@ def generate_inbound_access_url(
             else:
                 sid = ""
 
-            # 5. SpiderX (spx)
-            inb_settings_raw = target_inbound.get("settings", "{}")
-            try:
-                inb_settings_obj = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else (inb_settings_raw or {})
-            except Exception:
-                inb_settings_obj = {}
-
+            # SpiderX (spx)
             spx = (
                 real.get("spiderX") or
                 real_settings.get("spiderX") or
@@ -352,8 +419,8 @@ def generate_inbound_access_url(
                 real_settings.get("spiderx") or
                 real.get("spx") or
                 real_settings.get("spx") or
-                inb_settings_obj.get("spiderX") or
-                inb_settings_obj.get("spx") or
+                inb_settings.get("spiderX") or
+                inb_settings.get("spx") or
                 target_inbound.get("spiderX") or
                 ""
             )
@@ -391,38 +458,112 @@ def generate_inbound_access_url(
             node_tag = f"[{protocol.upper()}-{inbound_port}]"
         node_title = f"{flag} {server.name} {node_tag} - {client.name}" if flag else f"{server.name} {node_tag} - {client.name}"
 
-        path_enc = urllib.parse.quote(path, safe="")
-        alpn_enc = urllib.parse.quote(alpn, safe="")
-
-        # Build extra_query for xhttp transport type
-        extra_query = ""
-        if net == "xhttp":
-            xhttp_settings = stream.get("xhttpSettings", {})
-            mode = xhttp_settings.get("mode", "auto")
-            x_padding_bytes = xhttp_settings.get("xPaddingBytes") or xhttp_settings.get("x_padding_bytes") or ""
-            
-            extra_query += f"&mode={mode}"
-            if x_padding_bytes:
-                extra_query += f"&x_padding_bytes={urllib.parse.quote(x_padding_bytes)}"
-                
-            # Build extra json object
-            extra_dict = {"mode": mode}
-            if x_padding_bytes:
-                extra_dict["xPaddingBytes"] = x_padding_bytes
-            
-            extra_json = json.dumps(extra_dict, separators=(',', ':'))
-            extra_query += f"&extra={urllib.parse.quote(extra_json)}"
-
+        # -------------------------------------------------------------
+        # 3. Protocol-Specific URL Construction (1:1 with 3x-ui standard)
+        # -------------------------------------------------------------
         if protocol == "vless":
-            if security == "reality":
-                spx_part = f"&spx={urllib.parse.quote(spx, safe='')}" if spx else ""
-                path_part = f"&path={path_enc}" if path else ""
-                return f"vless://{client_uuid}@{ext_host}:{inbound_port}?encryption=none&flow=xtls-rprx-vision&fp={fp}&pbk={pbk}&security=reality&sid={sid}&sni={sni}&type={net}{spx_part}{path_part}{extra_query}#{node_title}"
-            elif security == "tls":
-                return f"vless://{client_uuid}@{ext_host}:{inbound_port}?alpn={alpn_enc}&encryption=none&fp={fp}&host={host_header}&path={path_enc}&security=tls&sni={sni}&type={net}{extra_query}#{node_title}"
+            params = []
+            
+            # Transport network
+            params.append(f"type={net}")
+            
+            # Security
+            if security and security != "none":
+                params.append(f"security={security}")
             else:
-                return f"vless://{client_uuid}@{ext_host}:{inbound_port}?type={net}&security=none&path={path_enc}&host={host_header}{extra_query}#{node_title}"
+                params.append("security=none")
+            
+            # Transport specific parameters
+            if net == "tcp":
+                if header_type and header_type != "none":
+                    params.append(f"headerType={header_type}")
+                    if header_type == "http":
+                        if path:
+                            params.append(f"path={urllib.parse.quote(path, safe='')}")
+                        if host_header:
+                            params.append(f"host={urllib.parse.quote(host_header, safe='')}")
+            elif net == "ws":
+                if path:
+                    params.append(f"path={urllib.parse.quote(path, safe='')}")
+                if host_header:
+                    params.append(f"host={urllib.parse.quote(host_header, safe='')}")
+            elif net == "grpc":
+                if path:
+                    params.append(f"serviceName={urllib.parse.quote(path, safe='')}")
+                if grpc_mode:
+                    params.append(f"mode={grpc_mode}")
+            elif net in ["xhttp", "splithttp"]:
+                if path:
+                    params.append(f"path={urllib.parse.quote(path, safe='')}")
+                if host_header is not None:
+                    params.append(f"host={urllib.parse.quote(host_header, safe='')}")
+                if xhttp_mode:
+                    params.append(f"mode={xhttp_mode}")
+                if x_padding_bytes:
+                    params.append(f"x_padding_bytes={urllib.parse.quote(x_padding_bytes, safe='')}")
+                if extra_json:
+                    params.append(f"extra={urllib.parse.quote(extra_json, safe='')}")
+            elif net in ["http", "h2"]:
+                if path:
+                    params.append(f"path={urllib.parse.quote(path, safe='')}")
+                if host_header:
+                    params.append(f"host={urllib.parse.quote(host_header, safe='')}")
+            elif net == "kcp":
+                if header_type and header_type != "none":
+                    params.append(f"headerType={header_type}")
+                if seed:
+                    params.append(f"seed={urllib.parse.quote(seed, safe='')}")
+            elif net == "quic":
+                if quic_security and quic_security != "none":
+                    params.append(f"quicSecurity={quic_security}")
+                if quic_key:
+                    params.append(f"key={urllib.parse.quote(quic_key, safe='')}")
+                if header_type and header_type != "none":
+                    params.append(f"headerType={header_type}")
+
+            # Security specific parameters
+            if security == "reality":
+                params.insert(0, "encryption=none")  # encryption=none at beginning matching 3x-ui
+                if pbk:
+                    params.append(f"pbk={urllib.parse.quote(pbk, safe='')}")
+                if fp:
+                    params.append(f"fp={fp}")
+                if sni:
+                    params.append(f"sni={urllib.parse.quote(sni, safe='')}")
+                if sid:
+                    params.append(f"sid={urllib.parse.quote(sid, safe='')}")
+                if spx:
+                    params.append(f"spx={urllib.parse.quote(spx, safe='')}")
+                # FLOW: Strictly only for TCP transport!
+                if net == "tcp":
+                    params.append("flow=xtls-rprx-vision")
+            elif security == "tls":
+                params.insert(0, "encryption=none")
+                if sni:
+                    params.append(f"sni={urllib.parse.quote(sni, safe='')}")
+                if fp:
+                    params.append(f"fp={fp}")
+                if alpn:
+                    params.append(f"alpn={urllib.parse.quote(alpn, safe='')}")
+                # FLOW: Strictly only for TCP transport!
+                if net == "tcp":
+                    params.append("flow=xtls-rprx-vision")
+            else:
+                # security == "none"
+                pass
+
+            query_string = "&".join(params)
+            return f"vless://{client_uuid}@{ext_host}:{inbound_port}?{query_string}#{node_title}"
+
         elif protocol == "vmess":
+            vmess_type = header_type if net in ["tcp", "kcp", "quic"] else "none"
+            vmess_host = host_header if net in ["ws", "http", "h2", "xhttp", "splithttp"] else ""
+            vmess_path = path if net in ["ws", "http", "h2", "grpc", "xhttp", "splithttp"] else ""
+            vmess_tls = security if security in ["tls", "reality"] else ""
+            vmess_sni = sni if security in ["tls", "reality"] else ""
+            vmess_alpn = alpn if security == "tls" and alpn else ""
+            vmess_fp = fp if security in ["tls", "reality"] else ""
+
             vmess_dic = {
                 "v": "2",
                 "ps": node_title,
@@ -432,25 +573,46 @@ def generate_inbound_access_url(
                 "aid": "0",
                 "scy": "auto",
                 "net": net,
-                "type": "none",
-                "host": host_header,
-                "path": path,
-                "tls": security if security != "none" else "",
-                "sni": sni if security == "tls" else ""
+                "type": vmess_type,
+                "host": vmess_host,
+                "path": vmess_path,
+                "tls": vmess_tls,
+                "sni": vmess_sni,
+                "alpn": vmess_alpn,
+                "fp": vmess_fp
             }
-            return "vmess://" + base64.b64encode(json.dumps(vmess_dic).encode()).decode()
+            return "vmess://" + base64.b64encode(json.dumps(vmess_dic, separators=(',', ':')).encode()).decode()
+
         elif protocol == "trojan":
-            return f"trojan://{client_uuid}@{ext_host}:{inbound_port}?type={net}&security={security}&sni={sni}&path={path_enc}#{node_title}"
+            params = []
+            params.append(f"type={net}")
+            if security and security != "none":
+                params.append(f"security={security}")
+            if sni and security != "none":
+                params.append(f"sni={urllib.parse.quote(sni, safe='')}")
+            if fp and security != "none":
+                params.append(f"fp={fp}")
+            if alpn and security == "tls":
+                params.append(f"alpn={urllib.parse.quote(alpn, safe='')}")
+            if path:
+                if net == "grpc":
+                    params.append(f"serviceName={urllib.parse.quote(path, safe='')}")
+                else:
+                    params.append(f"path={urllib.parse.quote(path, safe='')}")
+            if host_header and net in ["ws", "http", "h2", "xhttp"]:
+                params.append(f"host={urllib.parse.quote(host_header, safe='')}")
+            if net == "grpc" and grpc_mode:
+                params.append(f"mode={grpc_mode}")
+            
+            query_string = "&".join(params)
+            return f"trojan://{client_uuid}@{ext_host}:{inbound_port}?{query_string}#{node_title}"
+
         elif protocol in ["shadowsocks", "ss"]:
-            ss_settings_raw = target_inbound.get("settings", "{}")
-            try:
-                ss_settings = json.loads(ss_settings_raw) if isinstance(ss_settings_raw, str) else (ss_settings_raw or {})
-            except Exception:
-                ss_settings = {}
-            method = ss_settings.get("method", "aes-256-gcm")
-            password = ss_settings.get("password") or client_uuid
+            method = inb_settings.get("method", "aes-256-gcm")
+            password = inb_settings.get("password") or client_uuid
             user_info = base64.b64encode(f"{method}:{password}".encode()).decode()
             return f"ss://{user_info}@{ext_host}:{inbound_port}#{node_title}"
+
         elif protocol in ["hysteria", "hysteria2", "hy2"]:
             tls_settings = stream.get("tlsSettings", {})
             sni_val = tls_settings.get("serverName") or tls_settings.get("sni") or sni or ext_host
@@ -462,12 +624,6 @@ def generate_inbound_access_url(
                     alpn_val = ",".join(tls_alpn)
                 elif isinstance(tls_alpn, str):
                     alpn_val = tls_alpn
-
-            inb_settings_raw = target_inbound.get("settings", "{}")
-            try:
-                inb_settings = json.loads(inb_settings_raw) if isinstance(inb_settings_raw, str) else (inb_settings_raw or {})
-            except Exception:
-                inb_settings = {}
 
             hy_stream = stream.get("hysteriaSettings") or stream.get("hysteria2Settings") or {}
             
@@ -521,12 +677,15 @@ def generate_inbound_access_url(
 
             q_str = "&".join(query_parts)
             return f"hysteria2://{auth_to_use}@{ext_host}:{inbound_port}?{q_str}#{node_title}"
+
         elif protocol == "tuic":
             tls_settings = stream.get("tlsSettings", {})
             sni_val = tls_settings.get("serverName") or sni or ext_host
             return f"tuic://{client_uuid}:{client_uuid}@{ext_host}:{inbound_port}?congestion_control=bbr&sni={sni_val}#{node_title}"
+
         else:
             return f"vless://{client_uuid}@{ext_host}:{inbound_port}?type={net}&security={security}#{node_title}"
+
     except Exception as e:
         logger.error(f"3x-ui generate_inbound_access_url error: {e}")
         return None
@@ -649,9 +808,14 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
 
                 # Build client data payload strictly matching protocol schema
                 if protocol == "vless":
+                    flow_val = ""
+                    if net == "tcp" and security in ["reality", "tls"]:
+                        existing_flows = [cl.get("flow") for cl in existing_clients if cl.get("flow")]
+                        flow_val = existing_flows[0] if existing_flows else "xtls-rprx-vision"
+
                     c_data = {
                         "id": client_uuid,
-                        "flow": "xtls-rprx-vision" if security == "reality" else "",
+                        "flow": flow_val,
                         "email": client_email,
                         "limitIp": 0,
                         "totalGB": total_bytes,
@@ -1215,9 +1379,14 @@ async def sync_3xui_server_all_clients(server: Server, clients: List[Client], db
                     total_bytes = int(client.data_limit_gb * 1024 * 1024 * 1024) if client.data_limit_gb else 0
                     
                     if protocol == "vless":
+                        flow_val = ""
+                        if net == "tcp" and security in ["reality", "tls"]:
+                            existing_flows = [cl.get("flow") for cl in existing_clients if cl.get("flow")]
+                            flow_val = existing_flows[0] if existing_flows else "xtls-rprx-vision"
+
                         c_data = {
                             "id": client_uuid,
-                            "flow": "xtls-rprx-vision" if security == "reality" else "",
+                            "flow": flow_val,
                             "email": client_email,
                             "limitIp": 0,
                             "totalGB": total_bytes,
