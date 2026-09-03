@@ -775,6 +775,7 @@ async def add_3xui_client_all_inbounds(server: Server, client: Client, client_uu
 
                 protocol = (target_inbound.get("protocol") or "vless").lower()
                 security = stream.get("security", "none")
+                net = stream.get("network", "tcp")
 
                 # Build client email and traffic limits
                 client_email = f"{client.name}_{ib_id_int}" if len(target_inbounds) > 1 else client.name
@@ -1359,6 +1360,7 @@ async def sync_3xui_server_all_clients(server: Server, clients: List[Client], db
                 
                 protocol = (full_inb.get("protocol") or "vless").lower()
                 security = stream.get("security", "none")
+                net = stream.get("network", "tcp")
                 
                 inb_settings_raw = full_inb.get("settings", "{}")
                 try:

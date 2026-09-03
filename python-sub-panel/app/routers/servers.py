@@ -514,6 +514,7 @@ async def sync_server_keys(server_id: str, request: Request, db: Session = Depen
                 ClientKey.server_id == server_id,
                 ClientKey.client_id.in_([c.id for c in target_clients]),
             ).count()
+            err_msg = batch_res.get("error")
             return {
                 "ok": batch_res.get("ok", False),
                 "server_name": server.name,
@@ -521,7 +522,8 @@ async def sync_server_keys(server_id: str, request: Request, db: Session = Depen
                 "created_keys": keys_after,
                 "total_clients": len(target_clients),
                 "failed_clients": batch_res.get("failed_clients", []),
-                "warning": batch_res.get("error")
+                "warning": err_msg,
+                "detail": err_msg
             }
 
         successful_clients = []
@@ -589,13 +591,15 @@ async def rebuild_server_keys(server_id: str, db: Session = Depends(get_db)):
             from app.services.three_xui import sync_3xui_server_all_clients
             batch_res = await sync_3xui_server_all_clients(server, active_clients, db)
             keys_after = db.query(ClientKey).filter(ClientKey.server_id == server_id).count()
+            err_msg = batch_res.get("error")
             return {
                 "ok": batch_res.get("ok", False),
                 "server_name": server.name,
                 "created_keys": keys_after,
                 "total_clients": len(active_clients),
                 "failed_clients": batch_res.get("failed_clients", []),
-                "warning": batch_res.get("error")
+                "warning": err_msg,
+                "detail": err_msg
             }
 
         failed_clients = []

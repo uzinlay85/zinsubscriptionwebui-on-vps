@@ -481,7 +481,7 @@
                     }
                     loadServers();
                 } else {
-                    showError(`Failed to sync keys: ${data.detail || 'Unknown error'}`);
+                    showError(`Failed to sync keys: ${data.detail || data.warning || data.error || 'Unknown error'}`);
                 }
             } catch (e) {
                 showError(`Sync error: ${e.message}`);
